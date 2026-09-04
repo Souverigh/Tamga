@@ -1,0 +1,9 @@
+{
+  "name": "tamga",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Тамга — распознавание кыргызских и русских документов. Статический фронтенд + Vercel Functions бекенд, прячущий Gemini API-ключ.",
+  "engines": {
+    "node": ">=18"
+  }
+}

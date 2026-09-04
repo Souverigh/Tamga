@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Тамга — распознавание кыргызских документов</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --paper:#E8E4D9;
+    --paper-card:#F3F0E7;
+    --ink:#1E2433;
+    --ink-soft:#5B5F52;
+    --line:#C9C2AE;
+    --gold:#B1852B;
+    --gold-deep:#8C6720;
+    --stamp-red:#9C3B2E;
+    --good:#3F6E5A;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    line-height:1.5;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:36px 20px 90px;}
+  h1,h2,h3{font-family:'Newsreader', serif; font-weight:500; margin:0;}
+
+  header{display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:6px;}
+  .brand{font-family:'Newsreader', serif; font-size:1.7rem; font-weight:600; display:flex; align-items:center; gap:10px;}
+  .brand .seal{
+    width:30px; height:30px; border-radius:50%; border:2px solid var(--stamp-red);
+    display:flex; align-items:center; justify-content:center; color:var(--stamp-red);
+    font-size:0.75rem; font-weight:700; transform:rotate(-8deg); flex-shrink:0;
+  }
+  .tagline{color:var(--ink-soft); font-size:0.98rem; max-width:50ch; margin:14px 0 32px;}
+
+  .panel{
+    background:var(--paper-card); border:1px solid var(--line); border-radius:4px;
+    padding:26px; margin-bottom:22px;
+  }
+
+  .dropzone{
+    display:block;
+    border:1.5px dashed var(--line); border-radius:4px; padding:44px 24px;
+    text-align:center; cursor:pointer; transition:border-color .15s, background .15s;
+    background:var(--paper-card);
+  }
+  .dropzone.drag{ border-color:var(--gold); background:#EFE9D6; }
+  .dropzone .icon{ font-size:2rem; margin-bottom:10px; }
+  .dropzone .main{ font-size:1.02rem; margin-bottom:4px; }
+  .dropzone .sub{ font-size:0.85rem; color:var(--ink-soft); }
+  .camera-row{ margin-top:10px; text-align:center; }
+  .camera-btn{ display:inline-block; font-size:0.85rem; padding:8px 16px; }
+  #cameraInput{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+  input[type=file]{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+
+  .file-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:12px 16px; background:var(--paper-card); border:1px solid var(--line); border-radius:4px;
+  }
+  .file-row .name{ font-size:0.92rem; }
+  .file-row .size{ color:var(--ink-soft); font-size:0.8rem; }
+  .file-row .remove-file{
+    background:transparent; border:none; color:var(--ink-soft); font-size:1.1rem;
+    cursor:pointer; padding:2px 8px; line-height:1;
+  }
+  .file-row .remove-file:hover{ color:var(--stamp-red); }
+
+  .file-list{ margin-top:16px; }
+  .file-list-header{
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:0.88rem; color:var(--ink-soft); margin-bottom:10px;
+  }
+  .file-list-items{ display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; }
+
+  .file-group{ margin-bottom:14px; }
+  .file-group-title{ font-size:0.92rem; font-weight:600; margin-bottom:8px; }
+  .file-group .pages{ margin:0 0 0 8px; }
+
+  .file-result-group{ margin-bottom:32px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .file-result-group:last-child{ border-bottom:none; }
+  .file-result-title{
+    font-size:1.05rem; margin-bottom:6px; cursor:pointer; display:flex;
+    align-items:center; gap:8px; user-select:none;
+  }
+  .file-result-title .chevron{ font-size:0.75rem; color:var(--ink-soft); transition:transform .15s; }
+  .file-result-group.collapsed .file-result-title .chevron{ transform:rotate(-90deg); }
+  .file-result-group.collapsed .collapsible{ display:none; }
+  .doc-type-badge{
+    display:inline-block; font-size:0.8rem; font-weight:600; color:var(--stamp-red);
+    background:#F1E3DE; border:1px solid var(--stamp-red); border-radius:100px;
+    padding:3px 12px; margin-bottom:14px;
+  }
+
+  .doc-type-row{
+    display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;
+    font-size:0.88rem; color:var(--ink-soft);
+  }
+  .doc-type-select{
+    font-family:'Inter', sans-serif; font-size:0.85rem; font-weight:600; color:var(--stamp-red);
+    background:#F1E3DE; border:1px solid var(--stamp-red); border-radius:100px;
+    padding:4px 12px; cursor:pointer;
+  }
+
+  .fields-table{
+    display:flex; flex-direction:column; gap:6px; margin-bottom:20px;
+    padding:14px; background:#fff; border:1px solid var(--line); border-radius:4px;
+  }
+  .fields-row{ display:grid; grid-template-columns:38% 62%; gap:10px; align-items:center; }
+  .fields-label{ font-size:0.85rem; color:var(--ink-soft); }
+  .fields-input{
+    padding:7px 10px; border:1px solid var(--line); border-radius:4px;
+    font-family:'Inter', sans-serif; font-size:0.9rem; background:#fff; width:100%;
+  }
+
+  button{
+    font-family:'Inter', sans-serif; font-size:0.92rem; font-weight:600;
+    border:none; border-radius:3px; padding:11px 20px; cursor:pointer;
+  }
+  .btn-primary{ background:var(--stamp-red); color:#fff; }
+  .btn-primary:disabled{ background:#C7A99F; cursor:not-allowed; }
+  .btn-secondary{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+  .btn-row{ display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
+
+  .lang-note{
+    font-size:0.85rem; color:var(--ink-soft); margin-top:14px; padding-top:14px;
+    border-top:1px solid var(--line);
+  }
+
+  .lang-select{ margin-top:16px; }
+  .lang-select-label{ font-size:0.85rem; color:var(--ink-soft); margin-bottom:8px; }
+  .lang-options{ display:flex; gap:8px; flex-wrap:wrap; }
+  .lang-option{
+    display:flex; align-items:center; gap:7px; padding:8px 14px;
+    border:1px solid var(--line); border-radius:100px; cursor:pointer;
+    font-size:0.88rem; background:var(--paper-card); transition:border-color .15s, background .15s;
+  }
+  .lang-option input{ accent-color:var(--stamp-red); margin:0; }
+  .lang-option:has(input:checked){ border-color:var(--stamp-red); background:#F1E3DE; font-weight:600; }
+
+  .pages{ display:flex; flex-direction:column; gap:8px; margin:18px 0; }
+  .page-row{
+    display:flex; align-items:center; gap:12px; padding:10px 14px;
+    background:var(--paper-card); border:1px solid var(--line); border-radius:4px;
+    font-size:0.9rem;
+  }
+  .page-row .num{
+    width:24px; height:24px; border-radius:50%; background:var(--ink); color:var(--paper);
+    display:flex; align-items:center; justify-content:center; font-size:0.75rem; flex-shrink:0;
+  }
+  .page-row.done .num{ background:var(--good); }
+  .page-row .status{ margin-left:auto; color:var(--ink-soft); font-size:0.82rem; }
+  .page-row.done .status{ color:var(--good); }
+
+  .results h2{ font-size:1.4rem; margin-bottom:4px; }
+  .results .hint{ color:var(--ink-soft); font-size:0.88rem; margin-bottom:18px; }
+
+  .page-result{ margin-bottom:22px; }
+  .page-result .label{ font-size:0.85rem; color:var(--ink-soft); margin-bottom:6px; }
+  .page-result textarea{
+    width:100%; min-height:140px; padding:14px; border:1px solid var(--line); border-radius:4px;
+    background:#fff; font-family:'Inter', sans-serif; font-size:0.95rem; line-height:1.6;
+    resize:vertical;
+  }
+
+  .empty{ text-align:center; color:var(--ink-soft); padding:30px 0; font-size:0.92rem; }
+
+  footer{ margin-top:40px; font-size:0.8rem; color:var(--ink-soft); max-width:60ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand"><span class="seal">ТМ</span>Тамга</div>
+  </header>
+  <p class="tagline">Распознавание кыргызских документов — сфотографируйте, отсканируйте или загрузите PDF, получите редактируемый текст.</p>
+
+  <div class="panel">
+    <label class="dropzone" id="dropzone" for="fileInput">
+      <div class="icon">📄</div>
+      <div class="main">Перетащите файлы сюда или нажмите, чтобы выбрать</div>
+      <div class="sub">Фото (JPG, PNG) или PDF — до 50 файлов, до 20 страниц в каждом PDF</div>
+      <input type="file" id="fileInput" accept="image/jpeg,image/png,application/pdf" multiple>
+    </label>
+
+    <div class="camera-row">
+      <label class="btn-secondary camera-btn" for="cameraInput">📷 Сфотографировать документ</label>
+      <input type="file" id="cameraInput" accept="image/*" capture="environment">
+    </div>
+
+    <div class="file-list" id="fileList" style="display:none">
+      <div class="file-list-header">
+        <span id="fileCountLabel"></span>
+        <button class="btn-secondary" id="clearAllBtn">Убрать все</button>
+      </div>
+      <div class="file-list-items" id="fileListItems"></div>
+    </div>
+
+    <div class="btn-row" id="actionRow" style="display:none">
+      <button class="btn-primary" id="recognizeBtn">Распознать текст</button>
+    </div>
+
+    <div class="lang-note">Если документ целиком на кыргызском, выбери «Только кыргызский» — так движок не будет путать похожие буквы с русскими и правильно распознает Ң, Ө, Үй.</div>
+
+    <div class="lang-select" id="modeSelect">
+      <div class="lang-select-label">Способ распознавания</div>
+      <div class="lang-options">
+        <label class="lang-option">
+          <input type="radio" name="mode" value="tesseract" checked>
+          <span>Быстро, офлайн (Tesseract)</span>
+        </label>
+        <label class="lang-option">
+          <input type="radio" name="mode" value="gemini">
+          <span>Точнее, через Gemini (документ уходит на сервер Тамги и Google)</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="lang-select" id="langSelect">
+      <div class="lang-select-label">Язык документа</div>
+      <div class="lang-options">
+        <label class="lang-option">
+          <input type="radio" name="lang" value="kir+rus" checked>
+          <span>Оба языка</span>
+        </label>
+        <label class="lang-option">
+          <input type="radio" name="lang" value="kir">
+          <span>Только кыргызский</span>
+        </label>
+        <label class="lang-option">
+          <input type="radio" name="lang" value="rus">
+          <span>Только русский</span>
+        </label>
+      </div>
+    </div>
+
+    <label class="lang-option" id="postProcessRow" style="margin-top:14px; width:fit-content;">
+      <input type="checkbox" id="postProcessCheckbox" checked>
+      <span>Приводить числа и даты к единому виду (12.5 / 12,5 → 12,5; 12.01 → 12 января)</span>
+    </label>
+  </div>
+
+  <div class="panel" id="restoreBanner" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <span style="font-size:0.9rem;">Найдены несохранённые результаты с прошлого раза.</span>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn-primary" id="restoreBtn">Восстановить</button>
+        <button class="btn-secondary" id="dismissRestoreBtn">Убрать</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="progressPanel" style="display:none">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h3 style="font-size:1.1rem;">Ход распознавания</h3>
+      <button class="btn-secondary" id="cancelProgressBtn" style="padding:6px 14px; font-size:0.85rem;">Отменить</button>
+    </div>
+    <div class="pages" id="pagesList" style="margin-top:14px;"></div>
+  </div>
+
+  <div class="panel results" id="resultsPanel" style="display:none">
+    <div style="display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+      <h2>Результат</h2>
+      <button class="btn-secondary" id="toggleCollapseBtn" style="padding:6px 14px; font-size:0.85rem;">Свернуть все</button>
+    </div>
+    <div class="hint">Текст можно редактировать прямо здесь — распознавание не всегда идеально, особенно на нечётких сканах.</div>
+    <div id="pageResults"></div>
+    <div class="btn-row">
+      <button class="btn-secondary" id="copyAllBtn">Скопировать весь текст</button>
+      <button class="btn-secondary" id="downloadBtn">Скачать .txt</button>
+      <button class="btn-secondary" id="downloadXlsxBtn">Скачать Excel</button>
+      <button class="btn-secondary" id="downloadPdfBtn">Скачать PDF</button>
+    </div>
+  </div>
+
+  <footer>
+    Прототип на клиентских библиотеках распознавания текста, работает прямо в браузере — файлы никуда не отправляются на сервер. Качество распознавания зависит от чёткости скана и почерка/шрифта в оригинале.
+  </footer>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/2.1.5/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+const MONTHS_GENITIVE = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+
+// Даты вида Д.М, ДД/ММ, ДД-ММ[.ГГГГ] — считаем первое число днём, второе месяцем (стандарт КР/РФ)
+function normalizeDates(text){
+  return text.replace(/\b(\d{1,2})[.\/-](\d{1,2})(?:[.\/-](\d{2,4}))?\b/g, (match, d, m, y) => {
+    const day = parseInt(d, 10);
+    const month = parseInt(m, 10);
+    if (day < 1 || day > 31 || month < 1 || month > 12) return match; // не похоже на дату — не трогаем
+    let result = `${day} ${MONTHS_GENITIVE[month - 1]}`;
+    if (y){
+      const year = y.length === 2 ? '20' + y : y; // упрощение: считаем двузначный год 2000-ми
+      result += ` ${year}`;
+    }
+    return result;
+  });
+}
+
+// Дробные числа с точкой или запятой (12.5 / 12,5) — приводим к запятой, стандарт для КР/РФ
+function normalizeNumbers(text){
+  return text.replace(/\b(\d+)\.(\d{1,2})\b/g, '$1,$2');
+}
+
+function postProcessText(text){
+  // Сначала даты — иначе точка в дате (12.01) будет по ошибке принята за десятичное число
+  let out = normalizeDates(text);
+  out = normalizeNumbers(out);
+  return out;
+}
+
+const postProcessCheckbox = document.getElementById('postProcessCheckbox');
+
+const DOC_TYPES = [
+  'Паспорт / удостоверение личности',
+  'Свидетельство о рождении',
+  'Свидетельство о браке',
+  'Диплом / аттестат',
+  'Справка',
+  'Договор',
+  'Банковский документ',
+  'Квитанция / чек',
+  'Другое'
+];
+
+// Набор полей, которые нужно извлечь для каждого типа документа
+const DOC_FIELDS = {
+  'Паспорт / удостоверение личности': ['ФИО', 'Дата рождения', 'Пол', 'Гражданство', 'Серия и номер', 'ПИН (ИНН)', 'Дата выдачи', 'Дата окончания', 'Орган выдачи'],
+  'Свидетельство о рождении': ['ФИО ребёнка', 'Дата рождения', 'Место рождения', 'ФИО матери', 'ФИО отца', 'Серия и номер', 'Дата выдачи', 'Орган ЗАГС'],
+  'Свидетельство о браке': ['ФИО супруга', 'ФИО супруги', 'Дата заключения брака', 'Серия и номер', 'Орган ЗАГС'],
+  'Диплом / аттестат': ['ФИО', 'Учебное заведение', 'Специальность / квалификация', 'Дата выдачи', 'Регистрационный номер'],
+  'Справка': ['Кому выдана', 'Тип справки', 'Номер', 'Дата выдачи', 'Организация', 'Срок действия'],
+  'Договор': ['Стороны', 'Предмет договора', 'Дата заключения', 'Номер договора', 'Сумма'],
+  'Банковский документ': ['Владелец счёта', 'Номер счёта / IBAN', 'Банк', 'Сумма', 'Дата операции'],
+  'Квитанция / чек': ['Продавец', 'Дата', 'Сумма итого', 'Номер чека'],
+  'Другое': ['Краткое содержание', 'Дата', 'Номер']
+};
+
+// Классификация по ключевым словам — для офлайн-режима, где Tesseract не понимает смысл текста, только буквы
+function classifyByKeywords(text){
+  const t = text.toLowerCase();
+  const rules = [
+    { type: 'Паспорт / удостоверение личности', keywords: ['паспорт', 'жеке күбөлүк', 'id card', 'паспорттук'] },
+    { type: 'Свидетельство о рождении', keywords: ['свидетельство о рождении', 'туулгандыгы жөнүндө'] },
+    { type: 'Свидетельство о браке', keywords: ['свидетельство о заключении брака', 'никеге туруу'] },
+    { type: 'Диплом / аттестат', keywords: ['диплом', 'аттестат', 'квалификация', 'выпускник'] },
+    { type: 'Справка', keywords: ['справка', 'маалымкат'] },
+    { type: 'Договор', keywords: ['договор', 'келишим', 'стороны настоящего'] },
+    { type: 'Банковский документ', keywords: ['iban', 'выписка по счёту', 'лицевой счёт', 'реквизиты'] },
+    { type: 'Квитанция / чек', keywords: ['квитанция', 'итого к оплате', 'чек №'] },
+  ];
+  let best = null, bestScore = 0;
+  for (const rule of rules){
+    const score = rule.keywords.reduce((n, kw) => n + (t.includes(kw) ? 1 : 0), 0);
+    if (score > bestScore){ bestScore = score; best = rule.type; }
+  }
+  return best || 'Не определено';
+}
+
+// Офлайн-эвристика извлечения полей — без понимания смысла текста, только по regex-паттернам.
+// Заведомо менее надёжна, чем Gemini; поля, которые не удалось найти, остаются пустыми — заполняются вручную.
+function extractFieldsHeuristic(text, docType){
+  const fieldNames = DOC_FIELDS[docType] || DOC_FIELDS['Другое'];
+  const dateMatches = [...text.matchAll(/\b\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4}\b/g)].map(m => m[0]);
+  const amountMatches = [...text.matchAll(/\b\d{1,3}(?:[ .,]\d{3})*(?:[.,]\d{2})?\s?(?:сом|KGS|руб|₽|\$|USD)\b/gi)].map(m => m[0]);
+  const idMatches = [...text.matchAll(/\b[A-ZА-Я]{1,3}\s?\d{6,9}\b/g)].map(m => m[0]);
+  const ibanMatches = [...text.matchAll(/\bKG\d{2}[A-Z0-9]{16,20}\b/gi)].map(m => m[0]);
+
+  let dateIdx = 0, amountIdx = 0;
+
+  return fieldNames.map(label => {
+    const l = label.toLowerCase();
+    let value = '';
+    if (l.includes('дата')){
+      value = dateMatches[dateIdx] || '';
+      if (value) dateIdx++;
+    } else if (l.includes('сумма')){
+      value = amountMatches[amountIdx] || '';
+      if (value) amountIdx++;
+    } else if (l.includes('iban') || l.includes('счёт')){
+      value = ibanMatches[0] || '';
+    } else if (l.includes('серия') || l.includes('номер') || l.includes('пин') || l.includes('инн')){
+      value = idMatches[0] || '';
+    }
+    return { label, value };
+  });
+}
+
+function pageImageToBase64(pageImage){
+  let canvas;
+  if (pageImage instanceof HTMLCanvasElement){
+    canvas = pageImage;
+  } else {
+    canvas = document.createElement('canvas');
+    canvas.width = pageImage.naturalWidth || pageImage.width;
+    canvas.height = pageImage.naturalHeight || pageImage.height;
+    canvas.getContext('2d').drawImage(pageImage, 0, 0);
+  }
+  return canvas.toDataURL('image/png').split(',')[1];
+}
+
+// Распознавание через Gemini теперь идёт через собственный бекенд (/api/recognize) —
+// ключ Google больше не хранится и не вводится в браузере, см. api/recognize.js.
+async function recognizeWithGemini(pageImage){
+  const base64 = pageImageToBase64(pageImage);
+  const res = await fetch('/api/recognize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: base64, mimeType: 'image/png' })
+  });
+
+  let data;
+  try{ data = await res.json(); }catch(_){ data = null; }
+
+  if (!res.ok){
+    throw new Error(data?.error || `Сервер распознавания вернул ошибку ${res.status}`);
+  }
+
+  return {
+    text: data.text || '',
+    docType: data.documentType || 'Другое',
+    fields: Array.isArray(data.fields) && data.fields.length ? data.fields : null
+  };
+}
+
+const MAX_FILES = 50;
+let selectedFiles = []; // File[]
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileList = document.getElementById('fileList');
+const fileCountLabel = document.getElementById('fileCountLabel');
+const fileListItems = document.getElementById('fileListItems');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const actionRow = document.getElementById('actionRow');
+const recognizeBtn = document.getElementById('recognizeBtn');
+const progressPanel = document.getElementById('progressPanel');
+const pagesList = document.getElementById('pagesList');
+const resultsPanel = document.getElementById('resultsPanel');
+const pageResults = document.getElementById('pageResults');
+const copyAllBtn = document.getElementById('copyAllBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const downloadXlsxBtn = document.getElementById('downloadXlsxBtn');
+const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+const langSelect = document.getElementById('langSelect');
+const modeSelect = document.getElementById('modeSelect');
+const cameraInput = document.getElementById('cameraInput');
+const restoreBanner = document.getElementById('restoreBanner');
+const restoreBtn = document.getElementById('restoreBtn');
+const dismissRestoreBtn = document.getElementById('dismissRestoreBtn');
+const cancelProgressBtn = document.getElementById('cancelProgressBtn');
+const toggleCollapseBtn = document.getElementById('toggleCollapseBtn');
+
+const STORAGE_KEY_RESULTS = 'tamga_last_results';
+
+modeSelect.querySelectorAll('input[name="mode"]').forEach(el => {
+  el.addEventListener('change', () => {
+    const isGemini = document.querySelector('input[name="mode"]:checked').value === 'gemini';
+    langSelect.style.display = isGemini ? 'none' : 'block'; // Gemini сам разбирает язык, выбор не нужен
+  });
+});
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) addFiles(e.target.files);
+  fileInput.value = ''; // позволяет выбрать те же файлы повторно, если убрали и передумали
+});
+cameraInput.addEventListener('change', e => {
+  if (e.target.files.length) addFiles(e.target.files);
+  cameraInput.value = '';
+});
+
+function formatSize(bytes){
+  if (bytes < 1024*1024) return Math.round(bytes/1024) + ' КБ';
+  return (bytes/1024/1024).toFixed(1) + ' МБ';
+}
+
+function addFiles(fileListObj){
+  const incoming = Array.from(fileListObj);
+  let combined = selectedFiles.concat(incoming);
+  let truncated = false;
+  if (combined.length > MAX_FILES){
+    combined = combined.slice(0, MAX_FILES);
+    truncated = true;
+  }
+  selectedFiles = combined;
+  renderFileList(truncated);
+}
+
+function renderFileList(truncated){
+  if (selectedFiles.length === 0){
+    fileList.style.display = 'none';
+    actionRow.style.display = 'none';
+    return;
+  }
+  fileList.style.display = 'block';
+  actionRow.style.display = 'flex';
+  fileCountLabel.textContent = `Выбрано файлов: ${selectedFiles.length} из ${MAX_FILES}` + (truncated ? ' (лишние не добавлены)' : '');
+  recognizeBtn.textContent = `Распознать текст (${selectedFiles.length})`;
+
+  fileListItems.innerHTML = '';
+  selectedFiles.forEach((file, idx) => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+
+    const info = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = file.name;
+    const size = document.createElement('div');
+    size.className = 'size';
+    size.textContent = formatSize(file.size);
+    info.appendChild(name);
+    info.appendChild(size);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-file';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Убрать этот файл';
+    removeBtn.addEventListener('click', () => {
+      if (recognizeBtn.disabled) return; // идёт распознавание
+      selectedFiles.splice(idx, 1);
+      renderFileList(false);
+    });
+
+    row.appendChild(info);
+    row.appendChild(removeBtn);
+    fileListItems.appendChild(row);
+  });
+
+  progressPanel.style.display = 'none';
+  resultsPanel.style.display = 'none';
+  pagesList.innerHTML = '';
+  pageResults.innerHTML = '';
+}
+
+clearAllBtn.addEventListener('click', () => {
+  if (recognizeBtn.disabled) return; // идёт распознавание — отмена сейчас недоступна
+  selectedFiles = [];
+  renderFileList(false);
+});
+
+async function loadPdfPages(file){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const maxPages = Math.min(pdf.numPages, 20);
+  const canvases = [];
+  for (let i = 1; i <= maxPages; i++){
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    canvases.push(canvas);
+  }
+  return canvases;
+}
+
+function loadImageFile(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve([img]);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function renderFieldsTable(container, fields){
+  container.innerHTML = '';
+  fields.forEach(({ label, value }) => {
+    const row = document.createElement('div');
+    row.className = 'fields-row';
+    const l = document.createElement('div');
+    l.className = 'fields-label';
+    l.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'fields-input';
+    input.value = value || '';
+    row.appendChild(l);
+    row.appendChild(input);
+    container.appendChild(row);
+  });
+}
+
+function renderResultGroup({ fileName, pages, docType, fields }){
+  const group = document.createElement('div');
+  group.className = 'file-result-group';
+
+  const title = document.createElement('div');
+  title.className = 'file-result-title';
+  const chevron = document.createElement('span');
+  chevron.className = 'chevron';
+  chevron.textContent = '▾';
+  const titleText = document.createElement('span');
+  titleText.className = 'title-text';
+  titleText.textContent = fileName;
+  title.appendChild(chevron);
+  title.appendChild(titleText);
+  title.addEventListener('click', () => group.classList.toggle('collapsed'));
+  group.appendChild(title);
+
+  const collapsible = document.createElement('div');
+  collapsible.className = 'collapsible';
+  group.appendChild(collapsible);
+
+  const typeRow = document.createElement('div');
+  typeRow.className = 'doc-type-row';
+  const typeLabel = document.createElement('span');
+  typeLabel.textContent = 'Тип документа: ';
+  const typeSelect = document.createElement('select');
+  typeSelect.className = 'doc-type-select';
+  DOC_TYPES.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    if (t === docType) opt.selected = true;
+    typeSelect.appendChild(opt);
+  });
+  typeRow.appendChild(typeLabel);
+  typeRow.appendChild(typeSelect);
+  collapsible.appendChild(typeRow);
+
+  const fieldsTable = document.createElement('div');
+  fieldsTable.className = 'fields-table';
+  renderFieldsTable(fieldsTable, fields);
+  collapsible.appendChild(fieldsTable);
+
+  typeSelect.addEventListener('change', () => {
+    const areas = collapsible.querySelectorAll('.page-result textarea');
+    const currentText = Array.from(areas).map(a => a.value).join('\n');
+    const newFields = extractFieldsHeuristic(currentText, typeSelect.value);
+    renderFieldsTable(fieldsTable, newFields);
+  });
+
+  pages.forEach((text, i) => {
+    const block = document.createElement('div');
+    block.className = 'page-result';
+
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = pages.length > 1 ? `Страница ${i + 1}` : 'Текст';
+
+    const textarea = document.createElement('textarea');
+    textarea.dataset.page = i;
+    textarea.value = text || '(текст не распознан на этой странице)';
+
+    block.appendChild(label);
+    block.appendChild(textarea);
+    collapsible.appendChild(block);
+  });
+
+  return group;
+}
+
+let allCollapsed = false;
+toggleCollapseBtn.addEventListener('click', () => {
+  allCollapsed = !allCollapsed;
+  pageResults.querySelectorAll('.file-result-group').forEach(g => g.classList.toggle('collapsed', allCollapsed));
+  toggleCollapseBtn.textContent = allCollapsed ? 'Развернуть все' : 'Свернуть все';
+});
+
+function saveResultsToStorage(results){
+  try{
+    localStorage.setItem(STORAGE_KEY_RESULTS, JSON.stringify(results));
+  }catch(_){} // например, превышен лимит localStorage — молча пропускаем, это не критично
+}
+
+function clearSavedResults(){
+  try{ localStorage.removeItem(STORAGE_KEY_RESULTS); }catch(_){}
+}
+
+// При открытии страницы проверяем, не остались ли результаты с прошлого раза (например, вкладку закрыли случайно)
+try{
+  const savedResultsRaw = localStorage.getItem(STORAGE_KEY_RESULTS);
+  if (savedResultsRaw){
+    const savedResults = JSON.parse(savedResultsRaw);
+    if (Array.isArray(savedResults) && savedResults.length){
+      restoreBanner.style.display = 'block';
+    }
+  }
+}catch(_){}
+
+restoreBtn.addEventListener('click', () => {
+  try{
+    const savedResults = JSON.parse(localStorage.getItem(STORAGE_KEY_RESULTS) || '[]');
+    pageResults.innerHTML = '';
+    savedResults.forEach(fr => pageResults.appendChild(renderResultGroup(fr)));
+    resultsPanel.style.display = 'block';
+    toggleCollapseBtn.textContent = 'Свернуть все';
+    allCollapsed = false;
+  }catch(_){
+    alert('Не удалось восстановить результаты — данные повреждены.');
+  }
+  restoreBanner.style.display = 'none';
+});
+
+dismissRestoreBtn.addEventListener('click', () => {
+  clearSavedResults();
+  restoreBanner.style.display = 'none';
+});
+
+recognizeBtn.addEventListener('click', async () => {
+  if (selectedFiles.length === 0) return;
+
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+
+  restoreBanner.style.display = 'none';
+  let cancelled = false;
+  cancelProgressBtn.onclick = () => { cancelled = true; };
+
+  recognizeBtn.disabled = true;
+  clearAllBtn.disabled = true;
+  fileListItems.querySelectorAll('.remove-file').forEach(el => el.disabled = true);
+  langSelect.querySelectorAll('input').forEach(el => el.disabled = true);
+  modeSelect.querySelectorAll('input').forEach(el => el.disabled = true);
+  postProcessCheckbox.disabled = true;
+  progressPanel.style.display = 'block';
+  cancelProgressBtn.style.display = 'inline-block';
+  resultsPanel.style.display = 'none';
+  pagesList.innerHTML = '';
+  pageResults.innerHTML = '';
+
+  const selectedLang = document.querySelector('input[name="lang"]:checked').value;
+
+  function unlockControls(){
+    recognizeBtn.disabled = false;
+    clearAllBtn.disabled = false;
+    fileListItems.querySelectorAll('.remove-file').forEach(el => el.disabled = false);
+    langSelect.querySelectorAll('input').forEach(el => el.disabled = false);
+    modeSelect.querySelectorAll('input').forEach(el => el.disabled = false);
+    postProcessCheckbox.disabled = false;
+    cancelProgressBtn.style.display = 'none';
+  }
+
+  const fileResults = []; // { fileName, pages: string[] }
+
+  for (let f = 0; f < selectedFiles.length; f++){
+    if (cancelled) break;
+    const file = selectedFiles[f];
+
+    const groupTitle = document.createElement('div');
+    groupTitle.className = 'file-group-title';
+    groupTitle.textContent = `${f+1}. ${file.name}`;
+    const group = document.createElement('div');
+    group.className = 'file-group';
+    group.appendChild(groupTitle);
+    const pagesWrap = document.createElement('div');
+    pagesWrap.className = 'pages';
+    group.appendChild(pagesWrap);
+    pagesList.appendChild(group);
+
+    let pageImages;
+    try{
+      pageImages = file.type === 'application/pdf'
+        ? await loadPdfPages(file)
+        : await loadImageFile(file);
+    }catch(e){
+      const errRow = document.createElement('div');
+      errRow.className = 'empty';
+      errRow.textContent = 'Не удалось открыть файл — пропускаем. Проверьте, что это корректный PDF или изображение.';
+      pagesWrap.appendChild(errRow);
+      continue;
+    }
+
+    pageImages.forEach((_, i) => {
+      const row = document.createElement('div');
+      row.className = 'page-row';
+      row.id = `page-row-${f}-${i}`;
+      row.innerHTML = `<div class="num">${i+1}</div><div>Страница ${i+1}</div><div class="status">В очереди</div>`;
+      pagesWrap.appendChild(row);
+    });
+
+    const pageTexts = [];
+    let fileDocType = null;
+    let fileFields = null;
+    for (let i = 0; i < pageImages.length; i++){
+      if (cancelled) break;
+      const row = document.getElementById(`page-row-${f}-${i}`);
+      row.querySelector('.status').textContent = 'Распознаём…';
+      recognizeBtn.textContent = `Файл ${f+1} из ${selectedFiles.length}, страница ${i+1} из ${pageImages.length}…`;
+
+      try{
+        let rawText;
+        if (mode === 'gemini'){
+          const result = await recognizeWithGemini(pageImages[i]);
+          rawText = result.text;
+          if (fileDocType === null) fileDocType = result.docType; // берём тип по первой странице файла — дальше страницы того же документа
+          if (fileFields === null && result.fields) fileFields = result.fields;
+        } else {
+          const { data } = await Tesseract.recognize(pageImages[i], selectedLang, {
+            logger: m => {
+              if (m.status && m.progress !== undefined){
+                const pct = Math.round(m.progress * 100);
+                const stage = (m.status.includes('loading') || m.status.includes('load')) ? 'Загружаем движок' : 'Распознаём';
+                recognizeBtn.textContent = `${stage}… файл ${f+1}/${selectedFiles.length}, стр. ${i+1}/${pageImages.length} — ${pct}%`;
+              }
+            }
+          });
+          rawText = data.text.trim();
+        }
+        pageTexts.push(postProcessCheckbox.checked ? postProcessText(rawText) : rawText);
+        row.classList.add('done');
+        row.querySelector('.status').textContent = 'Готово';
+      }catch(e){
+        pageTexts.push('');
+        const msg = e && e.message ? e.message : String(e);
+        row.querySelector('.status').textContent = 'Ошибка';
+        const errLine = document.createElement('div');
+        errLine.className = 'empty';
+        errLine.style.textAlign = 'left';
+        errLine.style.padding = '4px 0 0';
+        errLine.textContent = msg;
+        row.after(errLine);
+      }
+    }
+
+    if (mode === 'tesseract'){
+      fileDocType = classifyByKeywords(pageTexts.join('\n'));
+    }
+    fileDocType = fileDocType || 'Другое';
+    const joinedText = pageTexts.join('\n');
+    const fields = fileFields || extractFieldsHeuristic(joinedText, fileDocType);
+
+    fileResults.push({ fileName: file.name, pages: pageTexts, docType: fileDocType, fields });
+  }
+
+  fileResults.forEach(fr => {
+    pageResults.appendChild(renderResultGroup(fr));
+  });
+
+  if (fileResults.length){
+    resultsPanel.style.display = 'block';
+    toggleCollapseBtn.textContent = 'Свернуть все';
+    allCollapsed = false;
+    saveResultsToStorage(fileResults);
+  }
+  unlockControls();
+  recognizeBtn.textContent = cancelled
+    ? `Распознавание отменено — распознать заново (${selectedFiles.length})`
+    : `Распознать заново (${selectedFiles.length})`;
+});
+
+function getFileGroups(){
+  const groups = pageResults.querySelectorAll('.file-result-group');
+  return Array.from(groups).map(group => {
+    const fileName = group.querySelector('.title-text').textContent;
+    const docType = group.querySelector('.doc-type-select').value;
+    const areas = group.querySelectorAll('.page-result textarea');
+    const text = Array.from(areas).map((a, i) => areas.length > 1 ? `[Страница ${i+1}]\n${a.value}` : a.value).join('\n\n');
+    const fieldRows = group.querySelectorAll('.fields-row');
+    const fields = Array.from(fieldRows).map(row => ({
+      label: row.querySelector('.fields-label').textContent,
+      value: row.querySelector('.fields-input').value
+    }));
+    return { fileName, docType, text, fields };
+  });
+}
+
+function getAllText(){
+  return getFileGroups().map(({ fileName, docType, text }) => {
+    return `=== ${fileName} (Тип документа: ${docType}) ===\n${text}`;
+  }).join('\n\n\n');
+}
+
+copyAllBtn.addEventListener('click', async () => {
+  try{
+    await navigator.clipboard.writeText(getAllText());
+    copyAllBtn.textContent = 'Скопировано';
+    setTimeout(() => copyAllBtn.textContent = 'Скопировать весь текст', 1500);
+  }catch(e){
+    alert('Не удалось скопировать — выделите текст вручную.');
+  }
+});
+
+downloadBtn.addEventListener('click', () => {
+  const blob = new Blob([getAllText()], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const stamp = new Date().toISOString().slice(0,10);
+  a.download = `tamga_${stamp}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+downloadXlsxBtn.addEventListener('click', () => {
+  const groups = getFileGroups();
+  if (groups.length === 0) return;
+
+  const rows = [['Файл', 'Тип документа', 'Поле', 'Значение']];
+  groups.forEach(({ fileName, docType, fields }) => {
+    if (fields.length === 0){
+      rows.push([fileName, docType, '', '']);
+    } else {
+      fields.forEach(({ label, value }) => rows.push([fileName, docType, label, value]));
+    }
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 40 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Тамга');
+  const stamp = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `tamga_${stamp}.xlsx`);
+});
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+downloadPdfBtn.addEventListener('click', () => {
+  const groups = getFileGroups();
+  if (groups.length === 0) return;
+
+  downloadPdfBtn.disabled = true;
+  const originalLabel = downloadPdfBtn.textContent;
+  downloadPdfBtn.textContent = 'Готовим PDF…';
+
+  // Строим офскрин-контейнер с реальным DOM и шрифтом браузера, затем рендерим его
+  // напрямую через html2canvas в картинку (кириллица корректна, т.к. это реальный рендер браузера),
+  // и уже картинку нарезаем на страницы PDF вручную — это надёжнее, чем встроенный doc.html() jsPDF,
+  // который плохо работает с элементами, вынесенными за пределы экрана (даёт пустой PDF).
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed; left:0; top:0; z-index:99999; width:520px; padding:24px; font-family:Arial, sans-serif; color:#1E2433; background:#fff;';
+
+  const titleEl = document.createElement('h1');
+  titleEl.textContent = 'Тамга — извлечённые данные';
+  titleEl.style.cssText = 'font-size:18px; margin:0 0 16px;';
+  container.appendChild(titleEl);
+
+  groups.forEach(({ fileName, docType, fields }) => {
+    const card = document.createElement('div');
+    card.style.cssText = 'margin-bottom:22px; padding-bottom:14px; border-bottom:1px solid #C9C2AE;';
+
+    const nameEl = document.createElement('div');
+    nameEl.textContent = fileName;
+    nameEl.style.cssText = 'font-size:13px; font-weight:bold; margin-bottom:4px;';
+    card.appendChild(nameEl);
+
+    const typeEl = document.createElement('div');
+    typeEl.textContent = `Тип документа: ${docType}`;
+    typeEl.style.cssText = 'font-size:11px; color:#5B5F52; margin-bottom:10px;';
+    card.appendChild(typeEl);
+
+    if (fields.length === 0){
+      const emptyEl = document.createElement('div');
+      emptyEl.textContent = 'Поля не заполнены';
+      emptyEl.style.cssText = 'font-size:11px; color:#5B5F52;';
+      card.appendChild(emptyEl);
+    } else {
+      const table = document.createElement('table');
+      table.style.cssText = 'width:100%; border-collapse:collapse; font-size:11px;';
+      fields.forEach(({ label, value }) => {
+        const tr = document.createElement('tr');
+        const tdLabel = document.createElement('td');
+        tdLabel.textContent = label;
+        tdLabel.style.cssText = 'padding:3px 8px 3px 0; color:#5B5F52; vertical-align:top; width:40%;';
+        const tdValue = document.createElement('td');
+        tdValue.textContent = value || '—';
+        tdValue.style.cssText = 'padding:3px 0; vertical-align:top;';
+        tr.appendChild(tdLabel);
+        tr.appendChild(tdValue);
+        table.appendChild(tr);
+      });
+      card.appendChild(table);
+    }
+
+    container.appendChild(card);
+  });
+
+  document.body.appendChild(container);
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+  html2canvas(container, { scale: 2, backgroundColor: '#ffffff' }).then(canvas => {
+    document.body.removeChild(container);
+
+    if (canvas.width === 0 || canvas.height === 0){
+      throw new Error('Не удалось отрисовать содержимое для PDF (пустой холст)');
+    }
+
+    const pdfWidth = 595.28; // A4 в pt
+    const pdfHeight = 841.89;
+    const margin = 30;
+    const usableWidth = pdfWidth - margin * 2;
+    const usableHeight = pdfHeight - margin * 2;
+    const scaleFactor = usableWidth / canvas.width;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+
+    const pageCanvasHeightPx = Math.floor(usableHeight / scaleFactor);
+    let renderedHeight = 0;
+    let first = true;
+    while (renderedHeight < canvas.height){
+      const sliceHeightPx = Math.min(pageCanvasHeightPx, canvas.height - renderedHeight);
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = sliceHeightPx;
+      sliceCanvas.getContext('2d').drawImage(
+        canvas, 0, renderedHeight, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx
+      );
+      if (!first) doc.addPage();
+      doc.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, usableWidth, sliceHeightPx * scaleFactor);
+      renderedHeight += sliceHeightPx;
+      first = false;
+    }
+
+    const stamp = new Date().toISOString().slice(0,10);
+    doc.save(`tamga_${stamp}.pdf`);
+    downloadPdfBtn.disabled = false;
+    downloadPdfBtn.textContent = originalLabel;
+  }).catch(err => {
+    if (document.body.contains(container)) document.body.removeChild(container);
+    alert('Не удалось создать PDF: ' + (err && err.message ? err.message : String(err)));
+    downloadPdfBtn.disabled = false;
+    downloadPdfBtn.textContent = originalLabel;
+  });
+  }));
+});
+</script>
+</body>
+</html>
