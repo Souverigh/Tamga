@@ -4,57 +4,113 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Тамга — распознавание кыргызских документов</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Crect x='1' y='1' width='42' height='42' rx='9' fill='%23F6F6F3' stroke='%2316171C' stroke-width='2'/%3E%3Cpath d='M6 14V7h7M38 14V7h-7M6 30v7h7M38 30v7h-7' stroke='%232A4FE0' stroke-width='2.4' fill='none' stroke-linecap='square'/%3E%3Ctext x='22' y='28' text-anchor='middle' font-family='monospace' font-size='16' font-weight='600' fill='%2316171C'%3E%D0%A2%3C/text%3E%3C/svg%3E">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
   :root{
-    --paper:#E8E4D9;
-    --paper-card:#F3F0E7;
-    --ink:#1E2433;
-    --ink-soft:#5B5F52;
-    --line:#C9C2AE;
-    --gold:#B1852B;
-    --gold-deep:#8C6720;
-    --stamp-red:#9C3B2E;
-    --good:#3F6E5A;
+    --bg:#F6F6F3;
+    --surface:#FFFFFF;
+    --ink:#16171C;
+    --ink-soft:#6B6E76;
+    --line:#E3E2DC;
+    --line-strong:#C8C6BD;
+    --accent:#2A4FE0;
+    --accent-tint:#EAEFFD;
+    --accent-deep:#1E3BB8;
+    --good:#1C8A5C;
+    --good-tint:#E4F3EC;
+    --danger:#C23B2E;
   }
   *{box-sizing:border-box;}
   body{
     margin:0;
-    background:var(--paper);
+    background:var(--bg);
     color:var(--ink);
     font-family:'Inter', sans-serif;
     line-height:1.5;
+    -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:920px; margin:0 auto; padding:36px 20px 90px;}
-  h1,h2,h3{font-family:'Newsreader', serif; font-weight:500; margin:0;}
+  .wrap{max-width:720px; margin:0 auto; padding:36px 18px 100px;}
+  h1,h2,h3{font-family:'Space Grotesk', sans-serif; font-weight:600; margin:0;}
 
-  header{display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:6px;}
-  .brand{font-family:'Newsreader', serif; font-size:1.7rem; font-weight:600; display:flex; align-items:center; gap:10px;}
-  .brand .seal{
-    width:30px; height:30px; border-radius:50%; border:2px solid var(--stamp-red);
-    display:flex; align-items:center; justify-content:center; color:var(--stamp-red);
-    font-size:0.75rem; font-weight:700; transform:rotate(-8deg); flex-shrink:0;
+  header{display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:2px;}
+  .brand{font-family:'Space Grotesk', sans-serif; font-size:1.5rem; font-weight:700; display:flex; align-items:center; gap:10px; letter-spacing:-0.01em;}
+  .brand .seal{ flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border:1.5px solid var(--ink); border-radius:8px; position:relative;
   }
-  .tagline{color:var(--ink-soft); font-size:0.98rem; max-width:50ch; margin:14px 0 32px;}
+  .brand .seal::before, .brand .seal::after{
+    content:''; position:absolute; width:8px; height:8px; border:1.5px solid var(--accent);
+  }
+  .brand .seal::before{ top:-1.5px; left:-1.5px; border-right:none; border-bottom:none; }
+  .brand .seal::after{ bottom:-1.5px; right:-1.5px; border-left:none; border-top:none; }
+  .brand .seal span{ font-size:0.62rem; font-family:'IBM Plex Mono', monospace; color:var(--accent); font-weight:500; }
+  .tagline{color:var(--ink-soft); font-size:0.98rem; max-width:46ch; margin:14px 0 32px; line-height:1.55;}
 
   .panel{
-    background:var(--paper-card); border:1px solid var(--line); border-radius:4px;
-    padding:26px; margin-bottom:22px;
+    background:var(--surface); border:1px solid var(--line); border-radius:6px;
+    padding:22px; margin-bottom:16px;
   }
 
   .dropzone{
-    display:block;
-    border:1.5px dashed var(--line); border-radius:4px; padding:44px 24px;
+    display:block; position:relative; overflow:hidden;
+    border:1px solid var(--line); border-radius:4px; padding:38px 22px;
     text-align:center; cursor:pointer; transition:border-color .15s, background .15s;
-    background:var(--paper-card);
+    background:var(--bg);
   }
-  .dropzone.drag{ border-color:var(--gold); background:#EFE9D6; }
-  .dropzone .icon{ font-size:2rem; margin-bottom:10px; }
-  .dropzone .main{ font-size:1.02rem; margin-bottom:4px; }
-  .dropzone .sub{ font-size:0.85rem; color:var(--ink-soft); }
-  .camera-row{ margin-top:10px; text-align:center; }
-  .camera-btn{ display:inline-block; font-size:0.85rem; padding:8px 16px; }
+  .scan-line{
+    position:absolute; left:8px; right:8px; top:8px; height:2px;
+    background:linear-gradient(90deg, transparent, var(--accent) 20%, var(--accent) 80%, transparent);
+    opacity:0; pointer-events:none;
+  }
+  .dropzone.scanning .scan-line{
+    opacity:1;
+    animation:scan-sweep 1.7s ease-in-out infinite;
+  }
+  .dropzone.scanning{ border-color:var(--accent); background:var(--accent-tint); }
+  @keyframes scan-sweep{
+    0%{ top:8px; }
+    50%{ top:calc(100% - 10px); }
+    100%{ top:8px; }
+  }
+  @media (prefers-reduced-motion:reduce){
+    .dropzone.scanning .scan-line{ animation:none; opacity:0.6; top:50%; }
+  }
+  .dropzone::before, .dropzone::after,
+  .dropzone .corner-br, .dropzone .corner-bl{ content:''; }
+  .dropzone{ --bracket:14px; }
+  .dropzone::before{
+    position:absolute; top:8px; left:8px; width:var(--bracket); height:var(--bracket);
+    border-left:2px solid var(--accent); border-top:2px solid var(--accent);
+  }
+  .dropzone::after{
+    position:absolute; bottom:8px; right:8px; width:var(--bracket); height:var(--bracket);
+    border-right:2px solid var(--accent); border-bottom:2px solid var(--accent);
+  }
+  .dropzone.drag{ border-color:var(--accent); background:var(--accent-tint); }
+  .dropzone .icon{ font-size:2.1rem; margin-bottom:10px; opacity:0.7; }
+  .dropzone .main{ font-size:1.08rem; margin-bottom:5px; font-weight:600; }
+  .dropzone .sub{ font-size:0.85rem; color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; }
+  .camera-row{ margin-top:12px; text-align:center; }
+  .camera-btn{ display:inline-block; font-size:0.9rem; padding:11px 20px; }
+  .fine-print{ text-align:center; font-size:0.78rem; color:var(--ink-soft); margin-top:10px; }
+
+  .step-label{ display:flex; align-items:center; gap:10px; font-family:'Space Grotesk', sans-serif;
+    font-weight:600; font-size:1.02rem; margin-bottom:16px; }
+  .step-num{ width:25px; height:25px; border-radius:50%; background:var(--ink); color:#fff;
+    font-family:'Inter', sans-serif; font-size:0.8rem; font-weight:600;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .step-optional{ font-family:'Inter', sans-serif; font-weight:400; font-size:0.82rem; color:var(--ink-soft); }
+
+  .settings-details{ margin-top:22px; border-top:1px solid var(--line); padding-top:16px; }
+  .settings-details summary{
+    cursor:pointer; font-size:0.88rem; font-weight:600; color:var(--ink-soft);
+    list-style:none; display:flex; align-items:center; gap:7px; user-select:none;
+  }
+  .settings-details summary::-webkit-details-marker{ display:none; }
+  .settings-details summary::before{ content:'⚙'; font-size:0.95rem; }
+  .settings-details[open] summary{ margin-bottom:16px; }
+  .settings-details summary:hover{ color:var(--ink); }
   #cameraInput{
     position:absolute; width:1px; height:1px; padding:0; margin:-1px;
     overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
@@ -65,190 +121,239 @@
   }
 
   .file-row{
-    display:flex; align-items:center; justify-content:space-between; gap:12px;
-    padding:12px 16px; background:var(--paper-card); border:1px solid var(--line); border-radius:4px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    padding:11px 4px; border-bottom:1px solid var(--line);
   }
-  .file-row .name{ font-size:0.92rem; }
-  .file-row .size{ color:var(--ink-soft); font-size:0.8rem; }
+  .file-list-items .file-row:last-child{ border-bottom:none; }
+  .file-row-main{ min-width:0; }
+  .file-row .name{ font-size:0.87rem; font-family:'IBM Plex Mono', monospace; overflow-wrap:anywhere; }
+  .file-row .size{ color:var(--ink-soft); font-size:0.78rem; font-family:'IBM Plex Mono', monospace; }
+  .file-row-controls{ display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .file-type-select{
+    font-family:'IBM Plex Mono', monospace; font-size:0.76rem; color:var(--ink-soft);
+    background:var(--bg); border:1px solid var(--line-strong); border-radius:4px;
+    padding:6px 8px; max-width:168px; cursor:pointer;
+  }
+  .file-type-select.is-set{ color:var(--accent-deep); background:var(--accent-tint); border-color:var(--accent); font-weight:500; }
   .file-row .remove-file{
-    background:transparent; border:none; color:var(--ink-soft); font-size:1.1rem;
-    cursor:pointer; padding:2px 8px; line-height:1;
+    background:transparent; border:none; color:var(--ink-soft); font-size:1.15rem;
+    cursor:pointer; padding:4px 8px; line-height:1; border-radius:4px; flex-shrink:0;
   }
-  .file-row .remove-file:hover{ color:var(--stamp-red); }
+  .file-row .remove-file:hover{ color:var(--danger); background:#FBEAE8; }
 
   .file-list{ margin-top:16px; }
   .file-list-header{
     display:flex; align-items:center; justify-content:space-between;
-    font-size:0.88rem; color:var(--ink-soft); margin-bottom:10px;
+    font-size:0.85rem; color:var(--ink-soft); margin-bottom:6px; font-family:'IBM Plex Mono', monospace;
   }
-  .file-list-items{ display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; }
+  .file-list-items{ display:flex; flex-direction:column; max-height:280px; overflow-y:auto; border-top:1px solid var(--line); }
 
   .file-group{ margin-bottom:14px; }
-  .file-group-title{ font-size:0.92rem; font-weight:600; margin-bottom:8px; }
+  .file-group-title{ font-size:0.87rem; font-weight:600; margin-bottom:8px; font-family:'IBM Plex Mono', monospace; }
   .file-group .pages{ margin:0 0 0 8px; }
 
-  .file-result-group{ margin-bottom:32px; padding-bottom:8px; border-bottom:1px solid var(--line); }
-  .file-result-group:last-child{ border-bottom:none; }
+  .file-result-group{ margin-bottom:28px; padding-bottom:24px; border-bottom:1px solid var(--line); }
+  .file-result-group:last-child{ margin-bottom:0; padding-bottom:0; border-bottom:none; }
   .file-result-title{
-    font-size:1.05rem; margin-bottom:6px; cursor:pointer; display:flex;
-    align-items:center; gap:8px; user-select:none;
+    font-family:'Space Grotesk', sans-serif; font-size:1.08rem; font-weight:600; margin-bottom:10px; cursor:pointer; display:flex;
+    align-items:center; gap:9px; user-select:none;
   }
-  .file-result-title .chevron{ font-size:0.75rem; color:var(--ink-soft); transition:transform .15s; }
+  .file-result-title .chevron{ font-size:0.7rem; color:var(--ink-soft); transition:transform .15s; }
   .file-result-group.collapsed .file-result-title .chevron{ transform:rotate(-90deg); }
   .file-result-group.collapsed .collapsible{ display:none; }
   .doc-type-badge{
-    display:inline-block; font-size:0.8rem; font-weight:600; color:var(--stamp-red);
-    background:#F1E3DE; border:1px solid var(--stamp-red); border-radius:100px;
-    padding:3px 12px; margin-bottom:14px;
+    display:inline-block; font-size:0.78rem; font-weight:500; color:var(--accent-deep);
+    background:var(--accent-tint); border:none; border-radius:4px;
+    padding:3px 10px; margin-bottom:12px; font-family:'IBM Plex Mono', monospace;
   }
 
   .doc-type-row{
     display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;
-    font-size:0.88rem; color:var(--ink-soft);
+    font-size:0.85rem; color:var(--ink-soft);
   }
   .doc-type-select{
-    font-family:'Inter', sans-serif; font-size:0.85rem; font-weight:600; color:var(--stamp-red);
-    background:#F1E3DE; border:1px solid var(--stamp-red); border-radius:100px;
-    padding:4px 12px; cursor:pointer;
+    font-family:'IBM Plex Mono', monospace; font-size:0.8rem; font-weight:500; color:var(--accent-deep);
+    background:var(--accent-tint); border:none; border-radius:4px;
+    padding:5px 11px; cursor:pointer;
   }
 
   .fields-table{
-    display:flex; flex-direction:column; gap:6px; margin-bottom:20px;
-    padding:14px; background:#fff; border:1px solid var(--line); border-radius:4px;
+    display:flex; flex-direction:column; gap:0; margin-bottom:18px;
+    border:1px solid var(--line); border-radius:4px; overflow:hidden;
   }
-  .fields-row{ display:grid; grid-template-columns:38% 62%; gap:10px; align-items:center; }
-  .fields-label{ font-size:0.85rem; color:var(--ink-soft); }
+  .fields-row{ display:grid; grid-template-columns:36% 64%; gap:10px; align-items:center;
+    padding:9px 12px; border-bottom:1px solid var(--line); }
+  .fields-row:last-child{ border-bottom:none; }
+  .fields-row:nth-child(odd){ background:#FAFAF8; }
+  .fields-label{ font-size:0.82rem; color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; }
   .fields-input{
-    padding:7px 10px; border:1px solid var(--line); border-radius:4px;
-    font-family:'Inter', sans-serif; font-size:0.9rem; background:#fff; width:100%;
+    padding:6px 9px; border:1px solid transparent; border-radius:4px;
+    font-family:'IBM Plex Mono', monospace; font-size:0.87rem; background:transparent; width:100%;
+    transition:border-color .15s, background .15s;
   }
+  .fields-input:focus{ outline:none; border-color:var(--accent); background:#fff; }
 
   button{
-    font-family:'Inter', sans-serif; font-size:0.92rem; font-weight:600;
-    border:none; border-radius:3px; padding:11px 20px; cursor:pointer;
+    font-family:'Inter', sans-serif; font-size:0.9rem; font-weight:600;
+    border:none; border-radius:5px; padding:12px 20px; cursor:pointer;
+    transition:background .12s, border-color .12s, transform .05s;
+    min-height:44px;
   }
-  .btn-primary{ background:var(--stamp-red); color:#fff; }
-  .btn-primary:disabled{ background:#C7A99F; cursor:not-allowed; }
-  .btn-secondary{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+  button:active{ transform:scale(0.98); }
+  #recognizeBtn{ font-size:1rem; padding:15px 24px; min-height:52px; }
+  .btn-primary{ background:var(--ink); color:#fff; }
+  .btn-primary:hover:not(:disabled){ background:var(--accent); }
+  .btn-primary:disabled{ background:#C9C9C4; cursor:not-allowed; }
+  .btn-secondary{ background:transparent; color:var(--ink); border:1px solid var(--line-strong); }
+  .btn-secondary:hover{ border-color:var(--ink); background:#F4F4F1; }
   .btn-row{ display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
 
   .lang-note{
-    font-size:0.85rem; color:var(--ink-soft); margin-top:14px; padding-top:14px;
-    border-top:1px solid var(--line);
+    font-size:0.83rem; color:var(--ink-soft); margin-top:14px; padding:10px 12px;
+    background:var(--bg); border-left:2px solid var(--accent); border-radius:0 4px 4px 0;
   }
 
   .lang-select{ margin-top:16px; }
-  .lang-select-label{ font-size:0.85rem; color:var(--ink-soft); margin-bottom:8px; }
-  .lang-options{ display:flex; gap:8px; flex-wrap:wrap; }
-  .lang-option{
-    display:flex; align-items:center; gap:7px; padding:8px 14px;
-    border:1px solid var(--line); border-radius:100px; cursor:pointer;
-    font-size:0.88rem; background:var(--paper-card); transition:border-color .15s, background .15s;
+  .lang-select-label{ font-size:0.83rem; color:var(--ink-soft); margin-bottom:8px; font-weight:500; }
+  .lang-options{
+    display:flex; gap:2px; flex-wrap:wrap; background:var(--bg);
+    border:1px solid var(--line); border-radius:6px; padding:3px;
   }
-  .lang-option input{ accent-color:var(--stamp-red); margin:0; }
-  .lang-option:has(input:checked){ border-color:var(--stamp-red); background:#F1E3DE; font-weight:600; }
+  .lang-option{
+    display:flex; align-items:center; gap:7px; padding:8px 14px; min-height:38px; flex:1;
+    border-radius:4px; cursor:pointer; justify-content:center;
+    font-size:0.85rem; background:transparent; transition:background .15s, color .15s;
+  }
+  .lang-option input{ accent-color:var(--accent); margin:0; position:absolute; opacity:0; width:0; }
+  .lang-option:has(input:checked){ background:var(--surface); font-weight:600; box-shadow:0 1px 2px rgba(22,23,28,0.08); }
 
-  .pages{ display:flex; flex-direction:column; gap:8px; margin:18px 0; }
+  .pages{ display:flex; flex-direction:column; gap:0; margin:16px 0; border-top:1px solid var(--line); }
   .page-row{
-    display:flex; align-items:center; gap:12px; padding:10px 14px;
-    background:var(--paper-card); border:1px solid var(--line); border-radius:4px;
-    font-size:0.9rem;
+    display:flex; align-items:center; gap:12px; padding:10px 4px;
+    background:transparent; border-bottom:1px solid var(--line);
+    font-size:0.87rem; font-family:'IBM Plex Mono', monospace;
   }
   .page-row .num{
-    width:24px; height:24px; border-radius:50%; background:var(--ink); color:var(--paper);
-    display:flex; align-items:center; justify-content:center; font-size:0.75rem; flex-shrink:0;
+    width:20px; height:20px; border-radius:3px; background:var(--line-strong); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:0.68rem; flex-shrink:0;
   }
   .page-row.done .num{ background:var(--good); }
-  .page-row .status{ margin-left:auto; color:var(--ink-soft); font-size:0.82rem; }
+  .page-row .status{ margin-left:auto; color:var(--ink-soft); font-size:0.8rem; }
   .page-row.done .status{ color:var(--good); }
 
-  .results h2{ font-size:1.4rem; margin-bottom:4px; }
-  .results .hint{ color:var(--ink-soft); font-size:0.88rem; margin-bottom:18px; }
+  .results h2{ font-size:1.3rem; margin-bottom:4px; }
+  .results .hint{ color:var(--ink-soft); font-size:0.86rem; margin-bottom:18px; }
 
-  .page-result{ margin-bottom:22px; }
-  .page-result .label{ font-size:0.85rem; color:var(--ink-soft); margin-bottom:6px; }
+  .page-result{ margin-bottom:20px; }
+  .page-result .label{ font-size:0.8rem; color:var(--ink-soft); margin-bottom:6px; font-family:'IBM Plex Mono', monospace; }
   .page-result textarea{
-    width:100%; min-height:140px; padding:14px; border:1px solid var(--line); border-radius:4px;
-    background:#fff; font-family:'Inter', sans-serif; font-size:0.95rem; line-height:1.6;
-    resize:vertical;
+    width:100%; min-height:140px; padding:13px; border:1px solid var(--line); border-radius:4px;
+    background:var(--bg); font-family:'Inter', sans-serif; font-size:0.94rem; line-height:1.6;
+    resize:vertical; transition:border-color .15s, background .15s;
   }
+  .page-result textarea:focus{ outline:none; border-color:var(--accent); background:#fff; }
 
-  .empty{ text-align:center; color:var(--ink-soft); padding:30px 0; font-size:0.92rem; }
+  .empty{ text-align:center; color:var(--ink-soft); padding:26px 0; font-size:0.9rem; }
 
-  footer{ margin-top:40px; font-size:0.8rem; color:var(--ink-soft); max-width:60ch; }
+  .progress-track{ height:4px; background:var(--line); border-radius:2px; overflow:hidden; margin:16px 0 2px; }
+  .progress-fill{ height:100%; width:0%; background:var(--accent); border-radius:2px; transition:width .25s ease; }
+
+  footer{ margin-top:40px; font-size:0.8rem; color:var(--ink-soft); max-width:58ch; line-height:1.6; }
+
+  @media (max-width:700px){
+    .btn-row#actionRow{
+      position:fixed; left:0; right:0; bottom:0; margin:0; z-index:20;
+      background:var(--surface); border-top:1px solid var(--line);
+      padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+      box-shadow:0 -4px 14px rgba(22,23,28,0.08);
+    }
+    .btn-row#actionRow .btn-primary{ width:100%; }
+    body.has-action-bar .wrap{ padding-bottom:110px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header>
-    <div class="brand"><span class="seal">ТМ</span>Тамга</div>
+    <div class="brand">
+      <span class="seal"><span>Т</span></span>
+      Тамга
+    </div>
   </header>
   <p class="tagline">Распознавание кыргызских документов — сфотографируйте, отсканируйте или загрузите PDF, получите редактируемый текст.</p>
 
   <div class="panel">
+    <div class="step-label"><span class="step-num">1</span>Добавьте документ</div>
     <label class="dropzone" id="dropzone" for="fileInput">
+      <div class="scan-line" id="scanLine"></div>
       <div class="icon">📄</div>
-      <div class="main">Перетащите файлы сюда или нажмите, чтобы выбрать</div>
-      <div class="sub">Фото (JPG, PNG) или PDF — до 50 файлов, до 20 страниц в каждом PDF</div>
+      <div class="main">Нажмите здесь или перетащите файл</div>
+      <div class="sub">Фото, скан или PDF — можно сразу несколько</div>
       <input type="file" id="fileInput" accept="image/jpeg,image/png,application/pdf" multiple>
     </label>
 
     <div class="camera-row">
-      <label class="btn-secondary camera-btn" for="cameraInput">📷 Сфотографировать документ</label>
+      <label class="btn-secondary camera-btn" for="cameraInput">📷 Сделать фото</label>
       <input type="file" id="cameraInput" accept="image/*" capture="environment">
     </div>
+    <div class="fine-print">До 50 файлов за раз, до 20 страниц в каждом PDF</div>
 
     <div class="file-list" id="fileList" style="display:none">
+      <div class="step-label" style="margin-top:26px;"><span class="step-num">2</span>Что это за документ? <span class="step-optional">необязательно</span></div>
       <div class="file-list-header">
         <span id="fileCountLabel"></span>
         <button class="btn-secondary" id="clearAllBtn">Убрать все</button>
       </div>
       <div class="file-list-items" id="fileListItems"></div>
+      <div class="lang-note" style="margin-top:12px;">Знаете, что это за документ — выберите его тип, тогда поля получатся точнее. Не уверены — оставьте «Определить автоматически».</div>
     </div>
 
     <div class="btn-row" id="actionRow" style="display:none">
       <button class="btn-primary" id="recognizeBtn">Распознать текст</button>
     </div>
 
-    <div class="lang-note">Если документ целиком на кыргызском, выбери «Только кыргызский» — так движок не будет путать похожие буквы с русскими и правильно распознает Ң, Ө, Үй.</div>
+    <details class="settings-details">
+      <summary>Настройки распознавания</summary>
+      <div class="lang-note">Если документ целиком на кыргызском, выбери «Только кыргызский» — так движок не будет путать похожие буквы с русскими и правильно распознает Ң, Ө, Үй.</div>
 
-    <div class="lang-select" id="modeSelect">
-      <div class="lang-select-label">Способ распознавания</div>
-      <div class="lang-options">
-        <label class="lang-option">
-          <input type="radio" name="mode" value="tesseract" checked>
-          <span>Быстро, офлайн (Tesseract)</span>
-        </label>
-        <label class="lang-option">
-          <input type="radio" name="mode" value="gemini">
-          <span>Точнее, через Gemini (документ уходит на сервер Тамги и Google)</span>
-        </label>
+      <div class="lang-select" id="modeSelect">
+        <div class="lang-select-label">Способ распознавания</div>
+        <div class="lang-options">
+          <label class="lang-option">
+            <input type="radio" name="mode" value="tesseract" checked>
+            <span>Быстро (без интернета)</span>
+          </label>
+          <label class="lang-option">
+            <input type="radio" name="mode" value="gemini">
+            <span>Точнее (нужен интернет)</span>
+          </label>
+        </div>
       </div>
-    </div>
 
-    <div class="lang-select" id="langSelect">
-      <div class="lang-select-label">Язык документа</div>
-      <div class="lang-options">
-        <label class="lang-option">
-          <input type="radio" name="lang" value="kir+rus" checked>
-          <span>Оба языка</span>
-        </label>
-        <label class="lang-option">
-          <input type="radio" name="lang" value="kir">
-          <span>Только кыргызский</span>
-        </label>
-        <label class="lang-option">
-          <input type="radio" name="lang" value="rus">
-          <span>Только русский</span>
-        </label>
+      <div class="lang-select" id="langSelect">
+        <div class="lang-select-label">Язык документа</div>
+        <div class="lang-options">
+          <label class="lang-option">
+            <input type="radio" name="lang" value="kir+rus" checked>
+            <span>Оба языка</span>
+          </label>
+          <label class="lang-option">
+            <input type="radio" name="lang" value="kir">
+            <span>Только кыргызский</span>
+          </label>
+          <label class="lang-option">
+            <input type="radio" name="lang" value="rus">
+            <span>Только русский</span>
+          </label>
+        </div>
       </div>
-    </div>
 
-    <label class="lang-option" id="postProcessRow" style="margin-top:14px; width:fit-content;">
-      <input type="checkbox" id="postProcessCheckbox" checked>
-      <span>Приводить числа и даты к единому виду (12.5 / 12,5 → 12,5; 12.01 → 12 января)</span>
-    </label>
+      <label class="lang-option" id="postProcessRow" style="margin-top:14px; width:fit-content;">
+        <input type="checkbox" id="postProcessCheckbox" checked>
+        <span>Приводить числа и даты к единому виду (12.5 / 12,5 → 12,5; 12.01 → 12 января)</span>
+      </label>
+    </details>
   </div>
 
   <div class="panel" id="restoreBanner" style="display:none;">
@@ -266,15 +371,16 @@
       <h3 style="font-size:1.1rem;">Ход распознавания</h3>
       <button class="btn-secondary" id="cancelProgressBtn" style="padding:6px 14px; font-size:0.85rem;">Отменить</button>
     </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
     <div class="pages" id="pagesList" style="margin-top:14px;"></div>
   </div>
 
   <div class="panel results" id="resultsPanel" style="display:none">
     <div style="display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-      <h2>Результат</h2>
+      <h2><span class="step-num" style="display:inline-flex; vertical-align:middle; margin-right:6px; background:var(--good);">✓</span>Готово</h2>
       <button class="btn-secondary" id="toggleCollapseBtn" style="padding:6px 14px; font-size:0.85rem;">Свернуть все</button>
     </div>
-    <div class="hint">Текст можно редактировать прямо здесь — распознавание не всегда идеально, особенно на нечётких сканах.</div>
+    <div class="hint">Текст можно поправить прямо здесь — распознавание не всегда идеально, особенно на нечётких сканах.</div>
     <div id="pageResults"></div>
     <div class="btn-row">
       <button class="btn-secondary" id="copyAllBtn">Скопировать весь текст</button>
@@ -443,6 +549,7 @@ async function recognizeWithGemini(pageImage){
 
 const MAX_FILES = 50;
 let selectedFiles = []; // File[]
+let selectedDocTypes = []; // string[], параллельно selectedFiles — 'auto' или значение из DOC_TYPES, выбирается пользователем сразу после загрузки
 
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
@@ -468,6 +575,8 @@ const restoreBtn = document.getElementById('restoreBtn');
 const dismissRestoreBtn = document.getElementById('dismissRestoreBtn');
 const cancelProgressBtn = document.getElementById('cancelProgressBtn');
 const toggleCollapseBtn = document.getElementById('toggleCollapseBtn');
+const progressFill = document.getElementById('progressFill');
+const scanLine = document.getElementById('scanLine');
 
 const STORAGE_KEY_RESULTS = 'tamga_last_results';
 
@@ -502,12 +611,15 @@ function formatSize(bytes){
 function addFiles(fileListObj){
   const incoming = Array.from(fileListObj);
   let combined = selectedFiles.concat(incoming);
+  let combinedTypes = selectedDocTypes.concat(incoming.map(() => 'auto'));
   let truncated = false;
   if (combined.length > MAX_FILES){
     combined = combined.slice(0, MAX_FILES);
+    combinedTypes = combinedTypes.slice(0, MAX_FILES);
     truncated = true;
   }
   selectedFiles = combined;
+  selectedDocTypes = combinedTypes;
   renderFileList(truncated);
 }
 
@@ -515,10 +627,12 @@ function renderFileList(truncated){
   if (selectedFiles.length === 0){
     fileList.style.display = 'none';
     actionRow.style.display = 'none';
+    document.body.classList.remove('has-action-bar');
     return;
   }
   fileList.style.display = 'block';
   actionRow.style.display = 'flex';
+  document.body.classList.add('has-action-bar');
   fileCountLabel.textContent = `Выбрано файлов: ${selectedFiles.length} из ${MAX_FILES}` + (truncated ? ' (лишние не добавлены)' : '');
   recognizeBtn.textContent = `Распознать текст (${selectedFiles.length})`;
 
@@ -528,6 +642,7 @@ function renderFileList(truncated){
     row.className = 'file-row';
 
     const info = document.createElement('div');
+    info.className = 'file-row-main';
     const name = document.createElement('div');
     name.className = 'name';
     name.textContent = file.name;
@@ -537,6 +652,28 @@ function renderFileList(truncated){
     info.appendChild(name);
     info.appendChild(size);
 
+    const controls = document.createElement('div');
+    controls.className = 'file-row-controls';
+
+    const typeSelect = document.createElement('select');
+    typeSelect.className = 'file-type-select';
+    const autoOpt = document.createElement('option');
+    autoOpt.value = 'auto';
+    autoOpt.textContent = 'Определить автоматически';
+    typeSelect.appendChild(autoOpt);
+    DOC_TYPES.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      typeSelect.appendChild(opt);
+    });
+    typeSelect.value = selectedDocTypes[idx] || 'auto';
+    typeSelect.classList.toggle('is-set', typeSelect.value !== 'auto');
+    typeSelect.addEventListener('change', () => {
+      selectedDocTypes[idx] = typeSelect.value;
+      typeSelect.classList.toggle('is-set', typeSelect.value !== 'auto');
+    });
+
     const removeBtn = document.createElement('button');
     removeBtn.className = 'remove-file';
     removeBtn.textContent = '×';
@@ -544,11 +681,15 @@ function renderFileList(truncated){
     removeBtn.addEventListener('click', () => {
       if (recognizeBtn.disabled) return; // идёт распознавание
       selectedFiles.splice(idx, 1);
+      selectedDocTypes.splice(idx, 1);
       renderFileList(false);
     });
 
+    controls.appendChild(typeSelect);
+    controls.appendChild(removeBtn);
+
     row.appendChild(info);
-    row.appendChild(removeBtn);
+    row.appendChild(controls);
     fileListItems.appendChild(row);
   });
 
@@ -561,6 +702,7 @@ function renderFileList(truncated){
 clearAllBtn.addEventListener('click', () => {
   if (recognizeBtn.disabled) return; // идёт распознавание — отмена сейчас недоступна
   selectedFiles = [];
+  selectedDocTypes = [];
   renderFileList(false);
 });
 
@@ -738,6 +880,7 @@ recognizeBtn.addEventListener('click', async () => {
   recognizeBtn.disabled = true;
   clearAllBtn.disabled = true;
   fileListItems.querySelectorAll('.remove-file').forEach(el => el.disabled = true);
+  fileListItems.querySelectorAll('.file-type-select').forEach(el => el.disabled = true);
   langSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   modeSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   postProcessCheckbox.disabled = true;
@@ -746,6 +889,8 @@ recognizeBtn.addEventListener('click', async () => {
   resultsPanel.style.display = 'none';
   pagesList.innerHTML = '';
   pageResults.innerHTML = '';
+  progressFill.style.width = '0%';
+  dropzone.classList.add('scanning');
 
   const selectedLang = document.querySelector('input[name="lang"]:checked').value;
 
@@ -753,10 +898,12 @@ recognizeBtn.addEventListener('click', async () => {
     recognizeBtn.disabled = false;
     clearAllBtn.disabled = false;
     fileListItems.querySelectorAll('.remove-file').forEach(el => el.disabled = false);
+    fileListItems.querySelectorAll('.file-type-select').forEach(el => el.disabled = false);
     langSelect.querySelectorAll('input').forEach(el => el.disabled = false);
     modeSelect.querySelectorAll('input').forEach(el => el.disabled = false);
     postProcessCheckbox.disabled = false;
     cancelProgressBtn.style.display = 'none';
+    dropzone.classList.remove('scanning');
   }
 
   const fileResults = []; // { fileName, pages: string[] }
@@ -798,7 +945,8 @@ recognizeBtn.addEventListener('click', async () => {
     });
 
     const pageTexts = [];
-    let fileDocType = null;
+    const presetType = selectedDocTypes[f] && selectedDocTypes[f] !== 'auto' ? selectedDocTypes[f] : null;
+    let fileDocType = presetType; // если пользователь выбрал тип заранее — классификация не запускается вообще
     let fileFields = null;
     for (let i = 0; i < pageImages.length; i++){
       if (cancelled) break;
@@ -811,8 +959,10 @@ recognizeBtn.addEventListener('click', async () => {
         if (mode === 'gemini'){
           const result = await recognizeWithGemini(pageImages[i]);
           rawText = result.text;
-          if (fileDocType === null) fileDocType = result.docType; // берём тип по первой странице файла — дальше страницы того же документа
-          if (fileFields === null && result.fields) fileFields = result.fields;
+          // Тип уже задан пользователем — не даём Gemini-классификации его переопределить
+          if (!presetType && fileDocType === null) fileDocType = result.docType;
+          // Поля от Gemini берём только если тип не переопределён вручную — иначе набор полей не совпадёт с выбранным типом
+          if (!presetType && fileFields === null && result.fields) fileFields = result.fields;
         } else {
           const { data } = await Tesseract.recognize(pageImages[i], selectedLang, {
             logger: m => {
@@ -839,9 +989,12 @@ recognizeBtn.addEventListener('click', async () => {
         errLine.textContent = msg;
         row.after(errLine);
       }
+
+      const overall = (f + (i + 1) / pageImages.length) / selectedFiles.length;
+      progressFill.style.width = `${Math.round(overall * 100)}%`;
     }
 
-    if (mode === 'tesseract'){
+    if (!presetType && mode === 'tesseract'){
       fileDocType = classifyByKeywords(pageTexts.join('\n'));
     }
     fileDocType = fileDocType || 'Другое';
@@ -854,6 +1007,8 @@ recognizeBtn.addEventListener('click', async () => {
   fileResults.forEach(fr => {
     pageResults.appendChild(renderResultGroup(fr));
   });
+
+  if (!cancelled) progressFill.style.width = '100%';
 
   if (fileResults.length){
     resultsPanel.style.display = 'block';
