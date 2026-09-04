@@ -10,8 +10,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType } = req.body || {};
-    const result = await recognizeDocument({ base64: image, mimeType });
+    const { image, mimeType, docType } = req.body || {};
+    const result = await recognizeDocument({ base64: image, mimeType, docType });
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {

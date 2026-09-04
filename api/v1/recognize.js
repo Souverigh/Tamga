@@ -5,8 +5,11 @@ const { checkApiKey } = require('../../lib/apiKeyAuth');
 //
 // POST /api/v1/recognize
 // Заголовки: x-api-key: <ваш ключ>, Content-Type: application/json
-// Тело:      { "image": "<base64>", "mimeType": "image/png" }
+// Тело:      { "image": "<base64>", "mimeType": "image/png", "docType": "Справка" (опционально) }
 // Ответ:     { "documentType": "...", "text": "...", "fields": [{label, value}, ...] }
+//
+// Если docType передан и совпадает с одним из известных типов — классификация
+// не выполняется, поля извлекаются сразу под этот тип (короче и точнее запрос).
 //
 // Поддерживаемые mimeType: image/png, image/jpeg, image/webp, application/pdf
 // (для application/pdf документ передаётся Gemini напрямую, постраничная
@@ -34,8 +37,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType } = req.body || {};
-    const result = await recognizeDocument({ base64: image, mimeType });
+    const { image, mimeType, docType } = req.body || {};
+    const result = await recognizeDocument({ base64: image, mimeType, docType });
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {
