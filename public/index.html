@@ -127,16 +127,32 @@
     padding:11px 4px; border-bottom:1px solid var(--line);
   }
   .file-list-items .file-row:last-child{ border-bottom:none; }
+  .file-thumb{
+    width:30px; height:30px; border-radius:4px; overflow:hidden; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--bg); border:1px solid var(--line);
+  }
+  .file-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .file-thumb-pdf{
+    font-family:'IBM Plex Mono', monospace; font-size:0.58rem; font-weight:600;
+    color:var(--accent-deep); background:var(--accent-tint); border-color:var(--accent);
+  }
   .file-row-main{ min-width:0; flex:1 1 auto; overflow:hidden; }
   .file-row .name{
     font-size:0.85rem; font-family:'IBM Plex Mono', monospace;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;
   }
-  .file-row-controls{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .file-row-controls{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
+  .file-download{
+    display:flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:4px; color:var(--ink-soft); font-size:0.92rem;
+    text-decoration:none; flex-shrink:0;
+  }
+  .file-download:hover{ background:rgba(35,36,54,0.06); color:var(--ink); }
   .file-type-select{
     font-family:'IBM Plex Mono', monospace; font-size:0.72rem; color:var(--ink-soft);
     background:var(--bg); border:1px solid var(--line-strong); border-radius:4px;
-    padding:6px 6px; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    padding:6px 6px; max-width:100px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     cursor:pointer;
   }
   .file-type-select.is-set{ color:var(--accent-deep); background:var(--accent-tint); border-color:var(--accent); font-weight:500; }
@@ -146,7 +162,8 @@
   }
   .file-row .remove-file:hover{ color:var(--danger); background:#FBEAE8; }
   @media (max-width:400px){
-    .file-type-select{ max-width:92px; font-size:0.68rem; }
+    .file-type-select{ max-width:76px; font-size:0.65rem; }
+    .file-thumb{ width:26px; height:26px; }
   }
 
   .file-list{ margin-top:16px; }
@@ -361,7 +378,12 @@
         </div>
       </div>
 
-      <label class="lang-option" id="postProcessRow" style="margin-top:14px; width:fit-content;">
+      <label class="lang-option" id="cleanupRow" style="margin-top:14px; width:fit-content;">
+        <input type="checkbox" id="cleanupCheckbox" checked>
+        <span>Убирать мусор распознавания (лишние точки, тире, повторы знаков, пустые строки)</span>
+      </label>
+
+      <label class="lang-option" id="postProcessRow" style="margin-top:10px; width:fit-content;">
         <input type="checkbox" id="postProcessCheckbox" checked>
         <span>Приводить числа и даты к единому виду (12.5 / 12,5 → 12,5; 12.01 → 12 января)</span>
       </label>
@@ -448,14 +470,37 @@ function normalizeNumbers(text){
   return text.replace(/\b(\d+)\.(\d{1,2})\b/g, '$1,$2');
 }
 
-function postProcessText(text){
+// Типичный мусор OCR: невидимые управляющие символы, следы линий/рамок таблицы на скане,
+// повторяющаяся пунктуация от артефактов распознавания, лишние пробелы и пустые строки.
+// Делает текст читаемым, не трогая сами буквы и цифры.
+function cleanupOcrNoise(text){
+  let out = text;
+  out = out.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ''); // непечатаемые символы
+  out = out.replace(/[\u00A6\u00AC\u2020\u2021~|]+/g, '');                  // одиночный мусор вроде |, ~, ¦, †
+  out = out.replace(/\.{4,}/g, '…');    // длинные ряды точек (следы линий на скане) → многоточие
+  out = out.replace(/-{4,}/g, '—');     // длинные ряды дефисов → тире
+  out = out.replace(/_{3,}/g, '');      // подчёркивания от рамок/полей для заполнения
+  out = out.replace(/={3,}/g, '');
+  out = out.replace(/([!?,;:])\1{1,}/g, '$1'); // повторы пунктуации: "!!!" → "!", ",," → ","
+  out = out.replace(/[ \t]{2,}/g, ' ');
+  out = out.replace(/[ \t]+\n/g, '\n');
+  out = out.replace(/\n{3,}/g, '\n\n');
+  return out.trim();
+}
+
+function postProcessText(text, { cleanup, normalize }){
+  let out = text;
+  if (cleanup) out = cleanupOcrNoise(out);
   // Сначала даты — иначе точка в дате (12.01) будет по ошибке принята за десятичное число
-  let out = normalizeDates(text);
-  out = normalizeNumbers(out);
+  if (normalize){
+    out = normalizeDates(out);
+    out = normalizeNumbers(out);
+  }
   return out;
 }
 
 const postProcessCheckbox = document.getElementById('postProcessCheckbox');
+const cleanupCheckbox = document.getElementById('cleanupCheckbox');
 
 const DOC_TYPES = [
   'Паспорт / удостоверение личности',
@@ -572,6 +617,7 @@ async function recognizeWithGemini(pageImage){
 const MAX_FILES = 50;
 let selectedFiles = []; // File[]
 let selectedDocTypes = []; // string[], параллельно selectedFiles — 'auto' или значение из DOC_TYPES, выбирается пользователем сразу после загрузки
+let previewUrls = []; // string[], object URL на каждый файл — для просмотра/скачивания оригинала до распознавания
 
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
@@ -646,6 +692,9 @@ function addFiles(fileListObj){
 }
 
 function renderFileList(truncated){
+  previewUrls.forEach(u => { if (u) URL.revokeObjectURL(u); }); // освобождаем память от предыдущего рендера
+  previewUrls = selectedFiles.map(f => URL.createObjectURL(f));
+
   if (selectedFiles.length === 0){
     fileList.style.display = 'none';
     actionRow.style.display = 'none';
@@ -663,6 +712,23 @@ function renderFileList(truncated){
     const row = document.createElement('div');
     row.className = 'file-row';
 
+    const thumb = document.createElement('a');
+    thumb.className = 'file-thumb';
+    thumb.href = previewUrls[idx];
+    thumb.target = '_blank';
+    thumb.rel = 'noopener';
+    thumb.title = 'Открыть оригинал в новой вкладке';
+    if (file.type === 'application/pdf'){
+      thumb.classList.add('file-thumb-pdf');
+      thumb.textContent = 'PDF';
+    } else {
+      const img = document.createElement('img');
+      img.src = previewUrls[idx];
+      img.alt = '';
+      thumb.appendChild(img);
+    }
+    row.appendChild(thumb);
+
     const info = document.createElement('div');
     info.className = 'file-row-main';
     const name = document.createElement('div');
@@ -673,6 +739,14 @@ function renderFileList(truncated){
 
     const controls = document.createElement('div');
     controls.className = 'file-row-controls';
+
+    const downloadFileBtn = document.createElement('a');
+    downloadFileBtn.className = 'file-download';
+    downloadFileBtn.href = previewUrls[idx];
+    downloadFileBtn.download = file.name;
+    downloadFileBtn.title = 'Скачать оригинал файла';
+    downloadFileBtn.textContent = '⬇';
+    controls.appendChild(downloadFileBtn);
 
     const typeSelect = document.createElement('select');
     typeSelect.className = 'file-type-select';
@@ -903,6 +977,7 @@ recognizeBtn.addEventListener('click', async () => {
   langSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   modeSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   postProcessCheckbox.disabled = true;
+  cleanupCheckbox.disabled = true;
   progressPanel.style.display = 'block';
   cancelProgressBtn.style.display = 'inline-block';
   resultsPanel.style.display = 'none';
@@ -921,6 +996,7 @@ recognizeBtn.addEventListener('click', async () => {
     langSelect.querySelectorAll('input').forEach(el => el.disabled = false);
     modeSelect.querySelectorAll('input').forEach(el => el.disabled = false);
     postProcessCheckbox.disabled = false;
+    cleanupCheckbox.disabled = false;
     cancelProgressBtn.style.display = 'none';
     dropzone.classList.remove('scanning');
   }
@@ -994,7 +1070,7 @@ recognizeBtn.addEventListener('click', async () => {
           });
           rawText = data.text.trim();
         }
-        pageTexts.push(postProcessCheckbox.checked ? postProcessText(rawText) : rawText);
+        pageTexts.push(postProcessText(rawText, { cleanup: cleanupCheckbox.checked, normalize: postProcessCheckbox.checked }));
         row.classList.add('done');
         row.querySelector('.status').textContent = 'Готово';
       }catch(e){
