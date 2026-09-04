@@ -20,6 +20,7 @@ import {
 } from './ui/progress.js';
 import { showResults, hideResults, initResultsCollapseToggle, getFileGroups } from './ui/results.js';
 import { initSettings, getSelectedMode, getSelectedLang } from './ui/settings.js';
+import { isTableType } from './config/docSchema.js';
 
 const recognizeBtn = document.getElementById('recognizeBtn');
 const langSelect = document.getElementById('langSelect');
@@ -89,15 +90,15 @@ async function loadPageImages(file) {
   return file.type === 'application/pdf' ? loadPdfPages(file) : loadImageFile(file);
 }
 
-// Распознаёт одну страницу выбранным движком. Возвращает { rawText, docType, fields }.
-// docType/fields заполняются только Gemini-режимом (Tesseract их не знает — см. классификацию ниже).
+// Распознаёт одну страницу выбранным движком. Возвращает { rawText, docType, fields, items }.
+// docType/fields/items заполняются только Gemini-режимом (Tesseract их не знает — см. классификацию ниже).
 async function recognizePage(pageImage, mode, lang, presetType, onTesseractProgress) {
   if (mode === 'gemini') {
     const result = await recognizeWithGemini(pageImage, presetType);
-    return { rawText: result.text, docType: result.docType, fields: result.fields };
+    return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items };
   }
   const rawText = await recognizeWithTesseract(pageImage, lang, onTesseractProgress);
-  return { rawText, docType: null, fields: null };
+  return { rawText, docType: null, fields: null, items: null };
 }
 
 async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType) {
@@ -116,13 +117,14 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
   const pageTexts = [];
   let fileDocType = presetType; // если пользователь выбрал тип заранее — классификация не запускается вообще
   let fileFields = null;
+  let fileItems = null;
 
   for (let i = 0; i < pageImages.length; i++) {
     setPageStatus(fileIndex, i, 'Распознаём…');
     recognizeBtn.textContent = `Файл ${fileIndex + 1} из ${totalFiles}, страница ${i + 1} из ${pageImages.length}…`;
 
     try {
-      const { rawText, docType, fields } = await recognizePage(pageImages[i], mode, lang, presetType, m => {
+      const { rawText, docType, fields, items } = await recognizePage(pageImages[i], mode, lang, presetType, m => {
         const pct = Math.round(m.progress * 100);
         const stage = (m.status.includes('loading') || m.status.includes('load')) ? 'Загружаем движок' : 'Распознаём';
         recognizeBtn.textContent = `${stage}… файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length} — ${pct}%`;
@@ -130,10 +132,12 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
 
       // Тип уже задан пользователем — не даём Gemini-классификации его переопределить.
       if (!presetType && fileDocType === null && docType) fileDocType = docType;
-      // Поля от Gemini берём в любом случае (даже если тип задан вручную): бэкенд теперь
-      // извлекает их именно под этот тип (см. lib/extraction.js), так что они надёжнее
-      // локальной regex-эвристики ниже, которая остаётся только запасным вариантом.
+      // Поля/товарные строки от Gemini берём в любом случае (даже если тип задан вручную):
+      // бэкенд теперь извлекает их именно под этот тип (см. lib/extraction.js), так что они
+      // надёжнее локальной regex-эвристики ниже, которая остаётся только запасным вариантом
+      // (и для табличных типов вообще недоступна — см. heuristicExtractor.js).
       if (fileFields === null && fields) fileFields = fields;
+      if (fileItems === null && items) fileItems = items;
 
       pageTexts.push(postProcessText(rawText, { cleanup: cleanupCheckbox.checked, normalize: postProcessCheckbox.checked }));
       markPageDone(fileIndex, i, 'Готово');
@@ -153,9 +157,12 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
 
   // Извлечение полей (независимый модуль) — только если Gemini их ещё не вернул в этом же запросе.
   const joinedText = pageTexts.join('\n');
-  const fields = fileFields || extractFieldsHeuristic(joinedText, fileDocType);
+  const fields = isTableType(fileDocType) ? [] : (fileFields || extractFieldsHeuristic(joinedText, fileDocType));
+  // Товарные строки: офлайн-эвристика их не производит (см. heuristicExtractor.js) —
+  // без Gemini таблица придёт пустой, пользователь заполнит вручную в интерфейсе.
+  const items = fileItems || [];
 
-  return { fileName: file.name, pages: pageTexts, docType: fileDocType, fields };
+  return { fileName: file.name, pages: pageTexts, docType: fileDocType, fields, items };
 }
 
 recognizeBtn.addEventListener('click', async () => {
@@ -165,6 +172,16 @@ recognizeBtn.addEventListener('click', async () => {
 
   const mode = getSelectedMode();
   const lang = getSelectedLang();
+
+  // Офлайн-режим (Tesseract) не умеет строить таблицу товаров построчно
+  // (см. heuristicExtractor.js) — предупреждаем, а не тихо отдаём пустую таблицу.
+  if (mode === 'tesseract' && selectedDocTypes.some(t => isTableType(t))) {
+    const proceed = confirm(
+      'Для типа «Накладная / УПД» офлайн-режим (Tesseract) не распознаёт товарные строки — таблица придётся заполнять вручную.\n\n' +
+      'Рекомендуем переключиться на режим Gemini. Продолжить в офлайн-режиме?'
+    );
+    if (!proceed) return;
+  }
 
   restoreBanner.style.display = 'none';
   let cancelled = false;

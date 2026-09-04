@@ -26,6 +26,7 @@ export async function recognizeWithGemini(pageImage, presetDocType) {
   return {
     text: data.text || '',
     docType: data.documentType || 'Другое',
-    fields: Array.isArray(data.fields) && data.fields.length ? data.fields : null
+    fields: Array.isArray(data.fields) && data.fields.length ? data.fields : null,
+    items: Array.isArray(data.items) && data.items.length ? data.items : null
   };
 }

@@ -4,9 +4,14 @@
 // Заведомо менее надёжна, чем извлечение через Gemini; поля, которые не удалось
 // найти, остаются пустыми — заполняются вручную в интерфейсе.
 
-import { DOC_FIELDS } from '../config/docSchema.js';
+import { DOC_FIELDS, isTableType } from '../config/docSchema.js';
 
+// Табличные типы (накладная/УПД) через regex не извлечь построчно — это
+// уже фиксировали раньше (см. хендовер). Возвращаем пустой список полей,
+// а не бросаем — интерфейс покажет пустую таблицу товаров, которую
+// пользователь заполнит вручную (см. ui/results.js).
 export function extractFieldsHeuristic(text, docType) {
+  if (isTableType(docType)) return [];
   const fieldNames = DOC_FIELDS[docType] || DOC_FIELDS['Другое'];
   const dateMatches = [...text.matchAll(/\b\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4}\b/g)].map(m => m[0]);
   const amountMatches = [...text.matchAll(/\b\d{1,3}(?:[ .,]\d{3})*(?:[.,]\d{2})?\s?(?:сом|KGS|руб|₽|\$|USD)\b/gi)].map(m => m[0]);

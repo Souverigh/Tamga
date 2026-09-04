@@ -8,6 +8,41 @@
 // чем встроенный doc.html() jsPDF, который плохо работает с элементами, вынесенными
 // за пределы экрана (даёт пустой PDF).
 
+const LINE_ITEM_COLUMNS = [
+  ['name', 'Наименование', '32%'],
+  ['id', 'Артикул', '16%'],
+  ['price', 'Цена', '14%'],
+  ['qty', 'Кол-во', '14%'],
+  ['sum', 'Сумма', '14%']
+];
+
+function buildLineItemsTable(items) {
+  const table = document.createElement('table');
+  table.style.cssText = 'width:100%; border-collapse:collapse; font-size:10px;';
+
+  const headRow = document.createElement('tr');
+  LINE_ITEM_COLUMNS.forEach(([, label, width]) => {
+    const th = document.createElement('td');
+    th.textContent = label;
+    th.style.cssText = `padding:3px 6px 3px 0; color:#5B5F52; font-weight:bold; border-bottom:1px solid #C9C2AE; width:${width};`;
+    headRow.appendChild(th);
+  });
+  table.appendChild(headRow);
+
+  items.forEach(item => {
+    const tr = document.createElement('tr');
+    LINE_ITEM_COLUMNS.forEach(([key]) => {
+      const td = document.createElement('td');
+      td.textContent = item[key] || '—';
+      td.style.cssText = 'padding:3px 6px 3px 0; vertical-align:top;';
+      tr.appendChild(td);
+    });
+    table.appendChild(tr);
+  });
+
+  return table;
+}
+
 function buildOffscreenContainer(groups) {
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed; left:0; top:0; z-index:99999; width:520px; padding:24px; font-family:Arial, sans-serif; color:#1E2433; background:#fff;';
@@ -17,7 +52,7 @@ function buildOffscreenContainer(groups) {
   titleEl.style.cssText = 'font-size:18px; margin:0 0 16px;';
   container.appendChild(titleEl);
 
-  groups.forEach(({ fileName, docType, fields }) => {
+  groups.forEach(({ fileName, docType, fields, items }) => {
     const card = document.createElement('div');
     card.style.cssText = 'margin-bottom:22px; padding-bottom:14px; border-bottom:1px solid #C9C2AE;';
 
@@ -31,7 +66,9 @@ function buildOffscreenContainer(groups) {
     typeEl.style.cssText = 'font-size:11px; color:#5B5F52; margin-bottom:10px;';
     card.appendChild(typeEl);
 
-    if (fields.length === 0) {
+    if (items && items.length > 0) {
+      card.appendChild(buildLineItemsTable(items));
+    } else if (fields.length === 0) {
       const emptyEl = document.createElement('div');
       emptyEl.textContent = 'Поля не заполнены';
       emptyEl.style.cssText = 'font-size:11px; color:#5B5F52;';

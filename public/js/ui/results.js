@@ -2,7 +2,7 @@
 // (текст + поля), сворачивание, чтение текущего (уже отредактированного
 // пользователем) состояния для экспорта. Не знает, как текст был распознан.
 
-import { DOC_TYPES } from '../config/docSchema.js';
+import { DOC_TYPES, LINE_ITEM_KEYS, isTableType, columnsForType } from '../config/docSchema.js';
 import { extractFieldsHeuristic } from '../extraction/heuristicExtractor.js';
 
 const resultsPanel = document.getElementById('resultsPanel');
@@ -29,7 +29,70 @@ function renderFieldsTable(container, fields) {
   });
 }
 
-export function renderResultGroup({ fileName, pages, docType, fields }) {
+// Таблица товарных строк для накладных/УПД — вместо карточки {label, value}
+// это N строк из одинаковых колонок (см. columnsForType в docSchema.js).
+// items: массив объектов {name, id, price, qty, sum}. Строки редактируемые,
+// плюс кнопка «Добавить строку», т.к. Gemini редко распознаёт накладную
+// идеально построчно (см. хендовер).
+function renderLineItemsRow(container, columns, item) {
+  const row = document.createElement('div');
+  row.className = 'line-items-row';
+  LINE_ITEM_KEYS.forEach((key, i) => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'line-items-input';
+    input.dataset.key = key;
+    input.placeholder = columns[i];
+    input.value = (item && item[key]) || '';
+    row.appendChild(input);
+  });
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'line-items-remove';
+  removeBtn.textContent = '✕';
+  removeBtn.title = 'Удалить строку';
+  removeBtn.addEventListener('click', () => row.remove());
+  row.appendChild(removeBtn);
+  container.appendChild(row);
+}
+
+function renderLineItemsTable(container, docType, items) {
+  container.innerHTML = '';
+  const columns = columnsForType(docType);
+
+  const header = document.createElement('div');
+  header.className = 'line-items-row line-items-header';
+  columns.forEach(col => {
+    const h = document.createElement('div');
+    h.className = 'line-items-header-cell';
+    h.textContent = col;
+    header.appendChild(h);
+  });
+  container.appendChild(header);
+
+  const rows = document.createElement('div');
+  rows.className = 'line-items-rows';
+  container.appendChild(rows);
+
+  (items.length ? items : [null]).forEach(item => renderLineItemsRow(rows, columns, item));
+
+  const addRowBtn = document.createElement('button');
+  addRowBtn.type = 'button';
+  addRowBtn.className = 'line-items-add-row';
+  addRowBtn.textContent = '+ Добавить строку';
+  addRowBtn.addEventListener('click', () => renderLineItemsRow(rows, columns, null));
+  container.appendChild(addRowBtn);
+}
+
+function readLineItemsTable(container) {
+  return Array.from(container.querySelectorAll('.line-items-rows .line-items-row')).map(row => {
+    const item = {};
+    row.querySelectorAll('.line-items-input').forEach(input => { item[input.dataset.key] = input.value; });
+    return item;
+  }).filter(item => LINE_ITEM_KEYS.some(k => (item[k] || '').trim() !== ''));
+}
+
+export function renderResultGroup({ fileName, pages, docType, fields, items }) {
   const group = document.createElement('div');
   group.className = 'file-result-group';
 
@@ -68,17 +131,33 @@ export function renderResultGroup({ fileName, pages, docType, fields }) {
   collapsible.appendChild(typeRow);
 
   const fieldsTable = document.createElement('div');
-  fieldsTable.className = 'fields-table';
-  renderFieldsTable(fieldsTable, fields);
+  const tableMode = isTableType(docType);
+  fieldsTable.className = tableMode ? 'line-items-table' : 'fields-table';
+  group.dataset.mode = tableMode ? 'table' : 'fields';
+  if (tableMode) {
+    renderLineItemsTable(fieldsTable, docType, items || []);
+  } else {
+    renderFieldsTable(fieldsTable, fields);
+  }
   collapsible.appendChild(fieldsTable);
 
-  // Смена типа документа вручную в результатах пересчитывает поля локально (эвристикой) —
-  // это уже после распознавания, лишний вызов Gemini здесь не нужен.
+  // Смена типа документа вручную в результатах пересчитывает поля локально —
+  // это уже после распознавания, лишний вызов Gemini здесь не нужен. Для табличных
+  // типов эвристика недоступна (см. heuristicExtractor.js) — таблица начинается пустой,
+  // пользователь заполняет вручную кнопкой «Добавить строку».
   typeSelect.addEventListener('change', () => {
-    const areas = collapsible.querySelectorAll('.page-result textarea');
-    const currentText = Array.from(areas).map(a => a.value).join('\n');
-    const newFields = extractFieldsHeuristic(currentText, typeSelect.value);
-    renderFieldsTable(fieldsTable, newFields);
+    const newType = typeSelect.value;
+    const newTableMode = isTableType(newType);
+    group.dataset.mode = newTableMode ? 'table' : 'fields';
+    fieldsTable.className = newTableMode ? 'line-items-table' : 'fields-table';
+    if (newTableMode) {
+      renderLineItemsTable(fieldsTable, newType, []);
+    } else {
+      const areas = collapsible.querySelectorAll('.page-result textarea');
+      const currentText = Array.from(areas).map(a => a.value).join('\n');
+      const newFields = extractFieldsHeuristic(currentText, newType);
+      renderFieldsTable(fieldsTable, newFields);
+    }
   });
 
   pages.forEach((text, i) => {
@@ -131,11 +210,12 @@ export function getFileGroups() {
     const docType = group.querySelector('.doc-type-select').value;
     const areas = group.querySelectorAll('.page-result textarea');
     const text = Array.from(areas).map((a, i) => areas.length > 1 ? `[Страница ${i + 1}]\n${a.value}` : a.value).join('\n\n');
-    const fieldRows = group.querySelectorAll('.fields-row');
-    const fields = Array.from(fieldRows).map(row => ({
+    const tableMode = group.dataset.mode === 'table';
+    const fields = tableMode ? [] : Array.from(group.querySelectorAll('.fields-row')).map(row => ({
       label: row.querySelector('.fields-label').textContent,
       value: row.querySelector('.fields-input').value
     }));
-    return { fileName, docType, text, fields };
+    const items = tableMode ? readLineItemsTable(group.querySelector('.line-items-table')) : [];
+    return { fileName, docType, text, fields, items };
   });
 }

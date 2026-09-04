@@ -6,10 +6,14 @@ const { checkApiKey } = require('../../lib/apiKeyAuth');
 // POST /api/v1/recognize
 // Заголовки: x-api-key: <ваш ключ>, Content-Type: application/json
 // Тело:      { "image": "<base64>", "mimeType": "image/png", "docType": "Справка" (опционально) }
-// Ответ:     { "documentType": "...", "text": "...", "fields": [{label, value}, ...] }
+// Ответ:     { "documentType": "...", "text": "...", "fields": [{label, value}, ...], "items": [] }
 //
 // Если docType передан и совпадает с одним из известных типов — классификация
 // не выполняется, поля извлекаются сразу под этот тип (короче и точнее запрос).
+// Для табличных типов (сейчас — "Накладная / УПД") заполняется "items"
+// (массив товарных строк {name, id, price, qty, sum}), а "fields" остаётся
+// пустым; для остальных типов — наоборот. Табличные типы поддерживаются
+// только если docType передан явно (см. lib/recognize.js).
 //
 // Поддерживаемые mimeType: image/png, image/jpeg, image/webp, application/pdf
 // (для application/pdf документ передаётся Gemini напрямую, постраничная
