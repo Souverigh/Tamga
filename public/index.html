@@ -23,6 +23,7 @@
     --danger:#C23B2E;
   }
   *{box-sizing:border-box;}
+  html{ overflow-x:hidden; width:100%; }
   body{
     margin:0;
     background:var(--bg);
@@ -30,6 +31,7 @@
     font-family:'Inter', sans-serif;
     line-height:1.5;
     -webkit-font-smoothing:antialiased;
+    overflow-x:hidden; width:100%;
   }
   .wrap{max-width:720px; margin:0 auto; padding:36px 18px 100px;}
   h1,h2,h3{font-family:'Space Grotesk', sans-serif; font-weight:600; margin:0;}
@@ -121,25 +123,31 @@
   }
 
   .file-row{
-    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:nowrap;
     padding:11px 4px; border-bottom:1px solid var(--line);
   }
   .file-list-items .file-row:last-child{ border-bottom:none; }
-  .file-row-main{ min-width:0; }
-  .file-row .name{ font-size:0.87rem; font-family:'IBM Plex Mono', monospace; overflow-wrap:anywhere; }
-  .file-row .size{ color:var(--ink-soft); font-size:0.78rem; font-family:'IBM Plex Mono', monospace; }
-  .file-row-controls{ display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .file-row-main{ min-width:0; flex:1 1 auto; overflow:hidden; }
+  .file-row .name{
+    font-size:0.85rem; font-family:'IBM Plex Mono', monospace;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;
+  }
+  .file-row-controls{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
   .file-type-select{
-    font-family:'IBM Plex Mono', monospace; font-size:0.76rem; color:var(--ink-soft);
+    font-family:'IBM Plex Mono', monospace; font-size:0.72rem; color:var(--ink-soft);
     background:var(--bg); border:1px solid var(--line-strong); border-radius:4px;
-    padding:6px 8px; max-width:168px; cursor:pointer;
+    padding:6px 6px; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    cursor:pointer;
   }
   .file-type-select.is-set{ color:var(--accent-deep); background:var(--accent-tint); border-color:var(--accent); font-weight:500; }
   .file-row .remove-file{
     background:transparent; border:none; color:var(--ink-soft); font-size:1.15rem;
-    cursor:pointer; padding:4px 8px; line-height:1; border-radius:4px; flex-shrink:0;
+    cursor:pointer; padding:4px 6px; line-height:1; border-radius:4px; flex-shrink:0;
   }
   .file-row .remove-file:hover{ color:var(--danger); background:#FBEAE8; }
+  @media (max-width:400px){
+    .file-type-select{ max-width:92px; font-size:0.68rem; }
+  }
 
   .file-list{ margin-top:16px; }
   .file-list-header{
@@ -149,16 +157,17 @@
   .file-list-items{ display:flex; flex-direction:column; max-height:280px; overflow-y:auto; border-top:1px solid var(--line); }
 
   .file-group{ margin-bottom:14px; }
-  .file-group-title{ font-size:0.87rem; font-weight:600; margin-bottom:8px; font-family:'IBM Plex Mono', monospace; }
+  .file-group-title{ font-size:0.87rem; font-weight:600; margin-bottom:8px; font-family:'IBM Plex Mono', monospace; overflow-wrap:anywhere; }
   .file-group .pages{ margin:0 0 0 8px; }
 
   .file-result-group{ margin-bottom:28px; padding-bottom:24px; border-bottom:1px solid var(--line); }
   .file-result-group:last-child{ margin-bottom:0; padding-bottom:0; border-bottom:none; }
   .file-result-title{
     font-family:'Space Grotesk', sans-serif; font-size:1.08rem; font-weight:600; margin-bottom:10px; cursor:pointer; display:flex;
-    align-items:center; gap:9px; user-select:none;
+    align-items:flex-start; gap:9px; user-select:none;
   }
-  .file-result-title .chevron{ font-size:0.7rem; color:var(--ink-soft); transition:transform .15s; }
+  .file-result-title .chevron{ font-size:0.7rem; color:var(--ink-soft); transition:transform .15s; margin-top:3px; flex-shrink:0; }
+  .file-result-title .title-text{ min-width:0; overflow-wrap:anywhere; }
   .file-result-group.collapsed .file-result-title .chevron{ transform:rotate(-90deg); }
   .file-result-group.collapsed .collapsible{ display:none; }
   .doc-type-badge{
@@ -254,6 +263,9 @@
   .page-result textarea:focus{ outline:none; border-color:var(--accent); background:#fff; }
 
   .empty{ text-align:center; color:var(--ink-soft); padding:26px 0; font-size:0.9rem; }
+
+  .export-group{ margin-top:22px; padding-top:16px; border-top:1px solid var(--line); }
+  .export-group-label{ font-size:0.82rem; color:var(--ink-soft); }
 
   .progress-track{ height:4px; background:var(--line); border-radius:2px; overflow:hidden; margin:16px 0 2px; }
   .progress-fill{ height:100%; width:0%; background:var(--accent); border-radius:2px; transition:width .25s ease; }
@@ -382,11 +394,21 @@
     </div>
     <div class="hint">Текст можно поправить прямо здесь — распознавание не всегда идеально, особенно на нечётких сканах.</div>
     <div id="pageResults"></div>
-    <div class="btn-row">
-      <button class="btn-secondary" id="copyAllBtn">Скопировать весь текст</button>
-      <button class="btn-secondary" id="downloadBtn">Скачать .txt</button>
-      <button class="btn-secondary" id="downloadXlsxBtn">Скачать Excel</button>
-      <button class="btn-secondary" id="downloadPdfBtn">Скачать PDF</button>
+
+    <div class="export-group">
+      <div class="export-group-label">Весь распознанный текст</div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn-secondary" id="copyAllBtn">Скопировать весь текст</button>
+        <button class="btn-secondary" id="downloadBtn">Скачать .txt</button>
+      </div>
+    </div>
+
+    <div class="export-group">
+      <div class="export-group-label">Только извлечённые поля (без текста целиком)</div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn-secondary" id="downloadXlsxBtn">Скачать Excel</button>
+        <button class="btn-secondary" id="downloadPdfBtn">Скачать PDF</button>
+      </div>
     </div>
   </div>
 
@@ -646,11 +668,8 @@ function renderFileList(truncated){
     const name = document.createElement('div');
     name.className = 'name';
     name.textContent = file.name;
-    const size = document.createElement('div');
-    size.className = 'size';
-    size.textContent = formatSize(file.size);
+    name.title = `${file.name} (${formatSize(file.size)})`; // полное имя и размер — по наведению/долгому нажатию, чтобы не занимать место в строке
     info.appendChild(name);
-    info.appendChild(size);
 
     const controls = document.createElement('div');
     controls.className = 'file-row-controls';
