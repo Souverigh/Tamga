@@ -3,3 +3,10 @@
 .vercel
 node_modules
 .DS_Store
+
+# Инструмент оценки точности (eval/) — реальные фото документов и эталонные
+# значения полей (ФИО, даты, номера) не должны попасть в публичный репозиторий.
+# Коммитятся только eval/README.md и eval/ground-truth.example.json.
+eval/documents/
+eval/ground-truth.json
+eval/results/

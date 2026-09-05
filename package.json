@@ -5,5 +5,8 @@
   "description": "Тамга — распознавание кыргызских и русских документов. Статический фронтенд + Vercel Functions бекенд, прячущий Gemini API-ключ.",
   "engines": {
     "node": ">=18"
+  },
+  "scripts": {
+    "eval": "node scripts/eval-accuracy.js"
   }
 }
