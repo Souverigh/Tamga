@@ -2,13 +2,17 @@
 // ключ Google не хранится и не вводится в браузере, см. api/recognize.js и lib/recognize.js.
 // Если presetDocType передан (пользователь выбрал тип вручную), бекенд пропускает
 // классификацию и сразу извлекает поля под этот тип — см. lib/recognize.js.
+// options.skipOcr — не запрашивать text заново (используется для follow-up
+// запроса при авто-детекте табличного типа в app.js: text уже есть с первого
+// запроса, повторно запрашивать его — чистая избыточность).
 
 import { pageImageToBase64 } from '../ocr/imageLoader.js';
 
-export async function recognizeWithGemini(pageImage, presetDocType) {
+export async function recognizeWithGemini(pageImage, presetDocType, options) {
   const base64 = pageImageToBase64(pageImage);
   const body = { image: base64, mimeType: 'image/jpeg' };
   if (presetDocType) body.docType = presetDocType;
+  if (options && options.skipOcr) body.skipOcr = true;
 
   const res = await fetch('/api/recognize', {
     method: 'POST',

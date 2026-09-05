@@ -5,15 +5,20 @@ const { checkApiKey } = require('../../lib/apiKeyAuth');
 //
 // POST /api/v1/recognize
 // Заголовки: x-api-key: <ваш ключ>, Content-Type: application/json
-// Тело:      { "image": "<base64>", "mimeType": "image/png", "docType": "Справка" (опционально) }
+// Тело:      { "image": "<base64>", "mimeType": "image/png", "docType": "Справка" (опционально), "skipOcr": false (опционально) }
 // Ответ:     { "documentType": "...", "text": "...", "fields": [{label, value}, ...], "items": [] }
 //
 // Если docType передан и совпадает с одним из известных типов — классификация
 // не выполняется, поля извлекаются сразу под этот тип (короче и точнее запрос).
-// Для табличных типов (сейчас — "Накладная / УПД") заполняется "items"
-// (массив товарных строк {name, id, price, qty, sum}), а "fields" остаётся
+// Для табличных типов (сейчас — "Накладная / УПД", "Справочник номенклатуры")
+// заполняется "items" (массив строк по колонкам этого типа), а "fields" остаётся
 // пустым; для остальных типов — наоборот. Табличные типы поддерживаются
 // только если docType передан явно (см. lib/recognize.js).
+//
+// skipOcr: true — не запрашивать "text" в ответе (вернётся пустой строкой).
+// Полезно, если text уже получен отдельным запросом (например, для табличного
+// типа, если у вас уже есть текст с предыдущего вызова без docType) — экономит
+// объём ответа модели.
 //
 // Поддерживаемые mimeType: image/png, image/jpeg, image/webp, application/pdf
 // (для application/pdf документ передаётся Gemini напрямую, постраничная
@@ -41,8 +46,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType, docType } = req.body || {};
-    const result = await recognizeDocument({ base64: image, mimeType, docType });
+    const { image, mimeType, docType, skipOcr } = req.body || {};
+    const result = await recognizeDocument({ base64: image, mimeType, docType, skipOcr });
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {

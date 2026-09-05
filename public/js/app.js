@@ -107,7 +107,10 @@ async function recognizePage(pageImage, mode, lang, presetType, onTesseractProgr
     if (needsTableFollowUp) {
       if (onStage) onStage();
       try {
-        const tableResult = await recognizeWithGemini(pageImage, result.docType);
+        // skipOcr: true — text уже есть от первого запроса (result.text), повторно
+        // просить у Gemini полную OCR-расшифровку в этом запросе незачем: это
+        // чистая избыточность, раздувающая объём ответа без пользы (см. лог рефакторинга).
+        const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true });
         return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items };
       } catch (e) {
         // Второй запрос не удался (например, 504) — не роняем страницу целиком: текст
