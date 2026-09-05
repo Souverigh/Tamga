@@ -9,11 +9,12 @@ export function normalizeDates(text) {
     const day = parseInt(d, 10);
     const month = parseInt(m, 10);
     if (day < 1 || day > 31 || month < 1 || month > 12) return match; // не похоже на дату — не трогаем
+    // Двузначный год не трогаем вообще (раньше здесь было '20' + y — баг: "12/1/90"
+    // превращалось в 2090 вместо 1990. Гадать век по двум цифрам рискованнее, чем
+    // оставить исходную запись как есть — см. тот же принцип в lib/fieldFormat.js.
+    if (y && y.length !== 4) return match;
     let result = `${day} ${MONTHS_GENITIVE[month - 1]}`;
-    if (y) {
-      const year = y.length === 2 ? '20' + y : y; // упрощение: считаем двузначный год 2000-ми
-      result += ` ${year}`;
-    }
+    if (y) result += ` ${y}`;
     return result;
   });
 }
