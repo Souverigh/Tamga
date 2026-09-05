@@ -181,11 +181,14 @@ recognizeBtn.addEventListener('click', async () => {
   const mode = getSelectedMode();
   const lang = getSelectedLang();
 
-  // Офлайн-режим (Tesseract) не умеет строить таблицу товаров построчно
-  // (см. heuristicExtractor.js) — предупреждаем, а не тихо отдаём пустую таблицу.
-  if (mode === 'tesseract' && selectedDocTypes.some(t => isTableType(t))) {
+  // Офлайн-режим (Tesseract) не умеет строить таблицу построчно ни для одного
+  // табличного типа (см. heuristicExtractor.js) — предупреждаем, а не тихо
+  // отдаём пустую таблицу.
+  const selectedTableTypes = selectedDocTypes.filter(t => isTableType(t));
+  if (mode === 'tesseract' && selectedTableTypes.length > 0) {
+    const typesList = selectedTableTypes.map(t => `«${t}»`).join(', ');
     const proceed = confirm(
-      'Для типа «Накладная / УПД» офлайн-режим (Tesseract) не распознаёт товарные строки — таблица придётся заполнять вручную.\n\n' +
+      `Для типа(ов) ${typesList} офлайн-режим (Tesseract) не распознаёт строки таблицы — таблицу придётся заполнять вручную.\n\n` +
       'Рекомендуем переключиться на режим Gemini. Продолжить в офлайн-режиме?'
     );
     if (!proceed) return;

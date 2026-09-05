@@ -8,20 +8,21 @@
 // чем встроенный doc.html() jsPDF, который плохо работает с элементами, вынесенными
 // за пределы экрана (даёт пустой PDF).
 
-const LINE_ITEM_COLUMNS = [
-  ['name', 'Наименование', '32%'],
-  ['id', 'Артикул', '16%'],
-  ['price', 'Цена', '14%'],
-  ['qty', 'Кол-во', '14%'],
-  ['sum', 'Сумма', '14%']
-];
+import { columnsForType, keysForType } from '../config/docSchema.js';
 
-function buildLineItemsTable(items) {
+// Ширины колонок распределяются поровну — у разных табличных типов разное
+// число колонок (накладная — 5, справочник номенклатуры — 6 и т.д.), поэтому
+// фиксированные проценты под конкретный набор колонок здесь не подходят.
+function buildLineItemsTable(docType, items) {
+  const columns = columnsForType(docType);
+  const keys = keysForType(docType);
+  const width = `${(100 / columns.length).toFixed(1)}%`;
+
   const table = document.createElement('table');
   table.style.cssText = 'width:100%; border-collapse:collapse; font-size:10px;';
 
   const headRow = document.createElement('tr');
-  LINE_ITEM_COLUMNS.forEach(([, label, width]) => {
+  columns.forEach(label => {
     const th = document.createElement('td');
     th.textContent = label;
     th.style.cssText = `padding:3px 6px 3px 0; color:#5B5F52; font-weight:bold; border-bottom:1px solid #C9C2AE; width:${width};`;
@@ -31,7 +32,7 @@ function buildLineItemsTable(items) {
 
   items.forEach(item => {
     const tr = document.createElement('tr');
-    LINE_ITEM_COLUMNS.forEach(([key]) => {
+    keys.forEach(key => {
       const td = document.createElement('td');
       td.textContent = item[key] || '—';
       td.style.cssText = 'padding:3px 6px 3px 0; vertical-align:top;';
@@ -67,7 +68,7 @@ function buildOffscreenContainer(groups) {
     card.appendChild(typeEl);
 
     if (items && items.length > 0) {
-      card.appendChild(buildLineItemsTable(items));
+      card.appendChild(buildLineItemsTable(docType, items));
     } else if (fields.length === 0) {
       const emptyEl = document.createElement('div');
       emptyEl.textContent = 'Поля не заполнены';

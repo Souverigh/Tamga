@@ -2,7 +2,7 @@
 // (текст + поля), сворачивание, чтение текущего (уже отредактированного
 // пользователем) состояния для экспорта. Не знает, как текст был распознан.
 
-import { DOC_TYPES, LINE_ITEM_KEYS, isTableType, columnsForType } from '../config/docSchema.js';
+import { DOC_TYPES, isTableType, columnsForType, keysForType } from '../config/docSchema.js';
 import { extractFieldsHeuristic } from '../extraction/heuristicExtractor.js';
 
 const resultsPanel = document.getElementById('resultsPanel');
@@ -29,15 +29,15 @@ function renderFieldsTable(container, fields) {
   });
 }
 
-// Таблица товарных строк для накладных/УПД — вместо карточки {label, value}
-// это N строк из одинаковых колонок (см. columnsForType в docSchema.js).
-// items: массив объектов {name, id, price, qty, sum}. Строки редактируемые,
-// плюс кнопка «Добавить строку», т.к. Gemini редко распознаёт накладную
-// идеально построчно (см. хендовер).
-function renderLineItemsRow(container, columns, item) {
+// Таблица товарных строк для табличных типов (накладная/УПД, справочник
+// номенклатуры и т.д.) — вместо карточки {label, value} это N строк из
+// одинаковых колонок (columns/keys свои для каждого типа, см. docSchema.js).
+// Строки редактируемые, плюс кнопка «Добавить строку», т.к. Gemini редко
+// распознаёт такие таблицы идеально построчно (см. хендовер).
+function renderLineItemsRow(container, columns, keys, item) {
   const row = document.createElement('div');
   row.className = 'line-items-row';
-  LINE_ITEM_KEYS.forEach((key, i) => {
+  keys.forEach((key, i) => {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'line-items-input';
@@ -59,6 +59,7 @@ function renderLineItemsRow(container, columns, item) {
 function renderLineItemsTable(container, docType, items) {
   container.innerHTML = '';
   const columns = columnsForType(docType);
+  const keys = keysForType(docType);
 
   const header = document.createElement('div');
   header.className = 'line-items-row line-items-header';
@@ -74,22 +75,25 @@ function renderLineItemsTable(container, docType, items) {
   rows.className = 'line-items-rows';
   container.appendChild(rows);
 
-  (items.length ? items : [null]).forEach(item => renderLineItemsRow(rows, columns, item));
+  (items.length ? items : [null]).forEach(item => renderLineItemsRow(rows, columns, keys, item));
 
   const addRowBtn = document.createElement('button');
   addRowBtn.type = 'button';
   addRowBtn.className = 'line-items-add-row';
   addRowBtn.textContent = '+ Добавить строку';
-  addRowBtn.addEventListener('click', () => renderLineItemsRow(rows, columns, null));
+  addRowBtn.addEventListener('click', () => renderLineItemsRow(rows, columns, keys, null));
   container.appendChild(addRowBtn);
 }
 
-function readLineItemsTable(container) {
+// docType нужен, чтобы знать, какие ключи (keys) относятся к этому типу —
+// без этого пустая строка нового типа не отфильтровывалась бы корректно.
+function readLineItemsTable(container, docType) {
+  const keys = keysForType(docType);
   return Array.from(container.querySelectorAll('.line-items-rows .line-items-row')).map(row => {
     const item = {};
     row.querySelectorAll('.line-items-input').forEach(input => { item[input.dataset.key] = input.value; });
     return item;
-  }).filter(item => LINE_ITEM_KEYS.some(k => (item[k] || '').trim() !== ''));
+  }).filter(item => keys.some(k => (item[k] || '').trim() !== ''));
 }
 
 export function renderResultGroup({ fileName, pages, docType, fields, items }) {
@@ -215,7 +219,7 @@ export function getFileGroups() {
       label: row.querySelector('.fields-label').textContent,
       value: row.querySelector('.fields-input').value
     }));
-    const items = tableMode ? readLineItemsTable(group.querySelector('.line-items-table')) : [];
+    const items = tableMode ? readLineItemsTable(group.querySelector('.line-items-table'), docType) : [];
     return { fileName, docType, text, fields, items };
   });
 }

@@ -14,6 +14,7 @@ export const DOC_TYPES = [
   'Банковский документ',
   'Квитанция / чек',
   'Накладная / УПД',
+  'Справочник номенклатуры',
   'Другое'
 ];
 
@@ -26,18 +27,24 @@ export const DOC_FIELDS = {
   'Договор': ['Стороны', 'Предмет договора', 'Дата заключения', 'Номер договора', 'Сумма'],
   'Банковский документ': ['Владелец счёта', 'Номер счёта / IBAN', 'Банк', 'Сумма', 'Дата операции'],
   'Квитанция / чек': ['Продавец', 'Дата', 'Сумма итого', 'Номер чека'],
-  'Накладная / УПД': { mode: 'table', columns: ['Наименование', 'Артикул', 'Цена', 'Количество', 'Сумма'] },
+  'Накладная / УПД': {
+    mode: 'table',
+    columns: ['Наименование', 'Артикул', 'Цена', 'Количество', 'Сумма'],
+    keys: ['name', 'id', 'price', 'qty', 'sum'],
+    description: 'an invoice/goods delivery note with a table of line items'
+  },
+  'Справочник номенклатуры': {
+    mode: 'table',
+    columns: ['Код', 'Артикул', 'Наименование', 'Полное наименование', 'Вид номенклатуры', 'Базовая ед.'],
+    keys: ['code', 'article', 'name', 'fullName', 'kind', 'unit'],
+    description: 'a nomenclature/catalog reference list (e.g. accounting system item directory), not a transaction — no prices or quantities expected'
+  },
   'Другое': ['Краткое содержание', 'Дата', 'Номер']
 };
 
-// Ключи объекта товарной строки — в том же порядке, что и columns выше
-// (name соответствует «Наименование», id — «Артикул», и т.д.).
-export const LINE_ITEM_KEYS = ['name', 'id', 'price', 'qty', 'sum'];
-
-// Тип документа с табличной структурой (несколько строк товаров), а не
-// карточка {label, value}. Сейчас единственный такой тип — накладная/УПД,
-// но флаг в DOC_FIELDS[type] позволяет добавить другие табличные типы
-// в будущем без изменений в этой функции.
+// Тип документа с табличной структурой (несколько строк, а не карточка
+// {label, value}). Каждый табличный тип несёт СВОИ columns/keys/description —
+// это позволяет добавлять новые табличные типы без изменений в остальном коде.
 export function isTableType(docType) {
   const entry = DOC_FIELDS[docType];
   return !!entry && !Array.isArray(entry) && entry.mode === 'table';
@@ -46,4 +53,9 @@ export function isTableType(docType) {
 export function columnsForType(docType) {
   const entry = DOC_FIELDS[docType];
   return isTableType(docType) ? entry.columns : null;
+}
+
+export function keysForType(docType) {
+  const entry = DOC_FIELDS[docType];
+  return isTableType(docType) ? entry.keys : null;
 }
