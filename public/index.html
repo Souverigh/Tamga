@@ -31,13 +31,20 @@
     <div class="camera-row">
       <label class="btn-secondary camera-btn" for="cameraInput">📷 Сделать фото</label>
       <input type="file" id="cameraInput" accept="image/*" capture="environment">
+      <button class="btn-secondary" id="tryDemoBtn" type="button">🔍 Попробовать на примере</button>
     </div>
 
     <div class="file-list" id="fileList" style="display:none">
-      <div class="step-label" style="margin-top:26px;"><span class="step-num">2</span>Что это за документ? <span class="step-optional">необязательно</span></div>
+      <div class="step-label" style="margin-top:26px;"><span class="step-num">2</span>Файлы для распознавания</div>
       <div class="file-list-header">
         <span id="fileCountLabel"></span>
-        <button class="btn-secondary" id="clearAllBtn">Убрать все</button>
+        <div class="file-list-header-actions">
+          <label class="manual-type-toggle">
+            <input type="checkbox" id="manualTypeToggle">
+            <span>Указать тип документа вручную</span>
+          </label>
+          <button class="btn-secondary" id="clearAllBtn">Убрать все</button>
+        </div>
       </div>
       <div class="file-list-items" id="fileListItems"></div>
     </div>

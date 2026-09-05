@@ -20,6 +20,7 @@ const fileList = document.getElementById('fileList');
 const fileCountLabel = document.getElementById('fileCountLabel');
 const fileListItems = document.getElementById('fileListItems');
 const clearAllBtn = document.getElementById('clearAllBtn');
+const manualTypeToggle = document.getElementById('manualTypeToggle');
 const actionRow = document.getElementById('actionRow');
 const recognizeBtn = document.getElementById('recognizeBtn');
 
@@ -168,10 +169,21 @@ export function initFileList({ onChange: onChangeCallback }) {
     selectedDocTypes = [];
     render(false);
   });
+  // Выбор типа документа по умолчанию скрыт (см. .file-type-select в styles.css) —
+  // показываем его только если пользователь явно попросил уточнить тип вручную.
+  manualTypeToggle.addEventListener('change', () => {
+    fileListItems.classList.toggle('show-type-select', manualTypeToggle.checked);
+  });
 }
 
 export function getSelectedFiles() {
   return selectedFiles;
+}
+
+// Добавляет файл в список программно (не из <input>/drag&drop) — используется
+// кнопкой «Попробовать на примере» в app.js.
+export function addExternalFile(file) {
+  addFiles([file]);
 }
 
 export function getSelectedDocTypes() {

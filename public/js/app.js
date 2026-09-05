@@ -13,7 +13,7 @@ import { saveResultsToStorage, loadSavedResults, clearSavedResults } from './sto
 import { downloadTxt, buildAllText } from './export/txtExport.js';
 import { downloadXlsx } from './export/xlsxExport.js';
 import { downloadPdf } from './export/pdfExport.js';
-import { initFileList, getSelectedFiles, getSelectedDocTypes, setControlsDisabled } from './ui/fileList.js';
+import { initFileList, getSelectedFiles, getSelectedDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
 import {
   startProgress, finishProgress, setOverallProgress,
   createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError
@@ -34,6 +34,7 @@ const copyAllBtn = document.getElementById('copyAllBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const downloadXlsxBtn = document.getElementById('downloadXlsxBtn');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+const tryDemoBtn = document.getElementById('tryDemoBtn');
 
 // --- Загрузка файлов: при любом изменении списка прячем прогресс и старые результаты ---
 initFileList({
@@ -46,6 +47,27 @@ initFileList({
 
 initSettings();
 initResultsCollapseToggle();
+
+// --- Демо-документ одной кнопкой: синтетическая накладная (см. public/demo/),
+// чтобы человек мог сразу увидеть результат, не выбирая свой файл. ---
+tryDemoBtn.addEventListener('click', async () => {
+  const originalLabel = tryDemoBtn.textContent;
+  tryDemoBtn.disabled = true;
+  tryDemoBtn.textContent = 'Загружаем пример…';
+  try {
+    const res = await fetch('/demo/demo-nakladnaya.pdf');
+    if (!res.ok) throw new Error(`Не удалось загрузить пример (${res.status})`);
+    const blob = await res.blob();
+    const file = new File([blob], 'demo-nakladnaya.pdf', { type: 'application/pdf' });
+    addExternalFile(file);
+    recognizeBtn.click();
+  } catch (e) {
+    showToast('Не удалось загрузить пример: ' + (e && e.message ? e.message : String(e)), 'error');
+  } finally {
+    tryDemoBtn.disabled = false;
+    tryDemoBtn.textContent = originalLabel;
+  }
+});
 
 // --- Восстановление результатов с прошлого визита ---
 const savedResults = loadSavedResults();
