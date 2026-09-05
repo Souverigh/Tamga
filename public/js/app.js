@@ -20,6 +20,7 @@ import {
 } from './ui/progress.js';
 import { showResults, hideResults, initResultsCollapseToggle, getFileGroups } from './ui/results.js';
 import { initSettings, getSelectedMode, getSelectedLang } from './ui/settings.js';
+import { showToast, showConfirm } from './ui/notify.js';
 import { isTableType, DOC_TYPES } from './config/docSchema.js';
 
 const recognizeBtn = document.getElementById('recognizeBtn');
@@ -55,7 +56,7 @@ restoreBtn.addEventListener('click', () => {
   if (results) {
     showResults(results);
   } else {
-    alert('Не удалось восстановить результаты — данные повреждены.');
+    showToast('Не удалось восстановить результаты — данные повреждены.', 'error');
   }
   restoreBanner.style.display = 'none';
 });
@@ -220,9 +221,10 @@ recognizeBtn.addEventListener('click', async () => {
   const selectedTableTypes = selectedDocTypes.filter(t => isTableType(t));
   if (mode === 'tesseract' && selectedTableTypes.length > 0) {
     const typesList = selectedTableTypes.map(t => `«${t}»`).join(', ');
-    const proceed = confirm(
-      `Для типа(ов) ${typesList} офлайн-режим (Tesseract) не распознаёт строки таблицы — таблицу придётся заполнять вручную.\n\n` +
-      'Рекомендуем переключиться на режим Gemini. Продолжить в офлайн-режиме?'
+    const proceed = await showConfirm(
+      `Для типа(ов) ${typesList} офлайн-режим не распознаёт строки таблицы — таблицу придётся заполнять вручную.\n\n` +
+      'Рекомендуем переключиться на режим «Текст + поля».',
+      { confirmLabel: 'Продолжить офлайн', cancelLabel: 'Отмена' }
     );
     if (!proceed) return;
   }
@@ -246,7 +248,7 @@ recognizeBtn.addEventListener('click', async () => {
     // Не должно случаться (recognizeFile сам ловит свои ошибки), но если всё же
     // что-то пробьётся сюда — не оставляем интерфейс молча зависшим.
     console.error('Распознавание прервалось неожиданной ошибкой:', e);
-    alert('Распознавание остановилось из-за ошибки: ' + (e && e.message ? e.message : String(e)));
+    showToast('Распознавание остановилось из-за ошибки: ' + (e && e.message ? e.message : String(e)), 'error');
   }
 
   finishProgress(cancelled);
@@ -270,7 +272,7 @@ copyAllBtn.addEventListener('click', async () => {
     copyAllBtn.textContent = 'Скопировано';
     setTimeout(() => copyAllBtn.textContent = 'Скопировать весь текст', 1500);
   } catch (e) {
-    alert('Не удалось скопировать — выделите текст вручную.');
+    showToast('Не удалось скопировать — выделите текст вручную.', 'error');
   }
 });
 
@@ -283,7 +285,7 @@ downloadPdfBtn.addEventListener('click', () => {
   downloadPdfBtn.textContent = 'Готовим PDF…';
 
   downloadPdf(getFileGroups(), err => {
-    if (err) alert('Не удалось создать PDF: ' + (err.message || String(err)));
+    if (err) showToast('Не удалось создать PDF: ' + (err.message || String(err)), 'error');
     downloadPdfBtn.disabled = false;
     downloadPdfBtn.textContent = originalLabel;
   });

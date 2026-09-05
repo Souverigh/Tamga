@@ -54,12 +54,12 @@
         <div class="lang-select-label">Способ распознавания</div>
         <div class="lang-options">
           <label class="lang-option">
-            <input type="radio" name="mode" value="tesseract" checked>
-            <span>Быстро</span>
+            <input type="radio" name="mode" value="tesseract">
+            <span>Только текст (офлайн, без интернета)</span>
           </label>
           <label class="lang-option">
-            <input type="radio" name="mode" value="gemini">
-            <span>Точнее (нужен интернет)</span>
+            <input type="radio" name="mode" value="gemini" checked>
+            <span>Текст + тип документа + поля (нужен интернет)</span>
           </label>
         </div>
       </div>
@@ -134,7 +134,7 @@
   </div>
 
   <footer>
-    Прототип на клиентских библиотеках распознавания текста, работает прямо в браузере — файлы никуда не отправляются на сервер. Качество распознавания зависит от чёткости скана и почерка/шрифта в оригинале.
+    В режиме «Только текст» файл обрабатывается прямо в браузере и никуда не отправляется. В режиме «Текст + поля» файл отправляется на наш сервер и дальше в Gemini API для распознавания — на сервере не сохраняется, используется только для одного запроса. Качество распознавания зависит от чёткости скана и почерка/шрифта в оригинале.
   </footer>
 
 </div>

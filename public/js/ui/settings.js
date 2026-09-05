@@ -7,13 +7,20 @@ const langSelect = document.getElementById('langSelect');
 const langNote = document.getElementById('langNote');
 
 export function initSettings() {
+  function syncLangVisibility() {
+    const isGemini = document.querySelector('input[name="mode"]:checked').value === 'gemini';
+    langSelect.style.display = isGemini ? 'none' : 'block';
+    if (langNote) langNote.style.display = isGemini ? 'none' : 'block';
+  }
+
   modeSelect.querySelectorAll('input[name="mode"]').forEach(el => {
-    el.addEventListener('change', () => {
-      const isGemini = document.querySelector('input[name="mode"]:checked').value === 'gemini';
-      langSelect.style.display = isGemini ? 'none' : 'block';
-      if (langNote) langNote.style.display = isGemini ? 'none' : 'block';
-    });
+    el.addEventListener('change', syncLangVisibility);
   });
+
+  // Синхронизируем сразу при загрузке — раньше это делалось только по событию
+  // change, поэтому реальное состояние по умолчанию (какой режим отмечен
+  // checked в разметке) визуально игнорировалось до первого клика.
+  syncLangVisibility();
 }
 
 export function getSelectedMode() {
