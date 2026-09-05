@@ -100,9 +100,9 @@ async function loadPageImages(file) {
 // отдельный вызов serverless-функции со своим лимитом в 60 сек, так что риск 504
 // не удваивается на одном запросе. Второй запрос делаем только для табличных типов —
 // на обычных документах (паспорт, справка и т.д.) поведение не меняется.
-async function recognizePage(pageImage, mode, lang, presetType, onTesseractProgress, onStage) {
+async function recognizePage(pageImage, mode, lang, presetType, onTesseractProgress, onStage, onRetry) {
   if (mode === 'gemini') {
-    const result = await recognizeWithGemini(pageImage, presetType);
+    const result = await recognizeWithGemini(pageImage, presetType, { onRetry });
     const needsTableFollowUp = !presetType && isTableType(result.docType) && (!result.items || result.items.length === 0);
     if (needsTableFollowUp) {
       if (onStage) onStage();
@@ -110,7 +110,7 @@ async function recognizePage(pageImage, mode, lang, presetType, onTesseractProgr
         // skipOcr: true — text уже есть от первого запроса (result.text), повторно
         // просить у Gemini полную OCR-расшифровку в этом запросе незачем: это
         // чистая избыточность, раздувающая объём ответа без пользы (см. лог рефакторинга).
-        const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true });
+        const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true, onRetry });
         return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items };
       } catch (e) {
         // Второй запрос не удался (например, 504) — не роняем страницу целиком: текст
@@ -155,6 +155,9 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
         recognizeBtn.textContent = `${stage}… файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length} — ${pct}%`;
       }, () => {
         recognizeBtn.textContent = `Извлекаем таблицу… файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length}`;
+      }, ({ attempt, maxAttempts, delayMs }) => {
+        const sec = Math.ceil(delayMs / 1000);
+        recognizeBtn.textContent = `Превышен лимит запросов, ждём ${sec} сек… (попытка ${attempt}/${maxAttempts}) файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length}`;
       });
 
       // Тип уже задан пользователем — не даём Gemini-классификации его переопределить.

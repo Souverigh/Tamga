@@ -5,35 +5,68 @@
 // options.skipOcr — не запрашивать text заново (используется для follow-up
 // запроса при авто-детекте табличного типа в app.js: text уже есть с первого
 // запроса, повторно запрашивать его — чистая избыточность).
+// options.onRetry(info) — вызывается перед каждым повтором после 429, чтобы
+// вызывающий код мог показать пользователю, что и почему сейчас ждёт (см. app.js).
 
 import { pageImageToBase64 } from '../ocr/imageLoader.js';
+
+const MAX_RETRY_ATTEMPTS = 2; // всего до 3 попыток (исходная + 2 повтора)
+const DEFAULT_RETRY_DELAY_MS = 15000; // если Gemini не подсказала точное время ожидания
+const MAX_RETRY_DELAY_MS = 60000; // не ждём дольше минуты, даже если Gemini попросит больше
+
+// Free-tier 429 от Gemini обычно содержит "...Please retry in 36.536187226s" —
+// вытаскиваем эту рекомендацию, чтобы ждать ровно столько, сколько нужно, а не
+// гадать интервал самостоятельно.
+function parseRetryDelayMs(message) {
+  const m = /retry in ([\d.]+)\s*s/i.exec(message || '');
+  return m ? Math.ceil(parseFloat(m[1]) * 1000) : null;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export async function recognizeWithGemini(pageImage, presetDocType, options) {
   const base64 = pageImageToBase64(pageImage);
   const body = { image: base64, mimeType: 'image/jpeg' };
   if (presetDocType) body.docType = presetDocType;
   if (options && options.skipOcr) body.skipOcr = true;
+  const onRetry = options && options.onRetry;
 
-  const res = await fetch('/api/recognize', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch('/api/recognize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
 
-  let data;
-  try { data = await res.json(); } catch (_) { data = null; }
+    let data;
+    try { data = await res.json(); } catch (_) { data = null; }
 
-  if (!res.ok) {
+    if (res.ok) {
+      return {
+        text: data.text || '',
+        docType: data.documentType || 'Другое',
+        fields: Array.isArray(data.fields) && data.fields.length ? data.fields : null,
+        items: Array.isArray(data.items) && data.items.length ? data.items : null
+      };
+    }
+
+    // 429 (лимит бесплатного тарифа Gemini) — единственная ошибка, которую имеет
+    // смысл повторять автоматически: она временная и предсказуемо проходит после
+    // паузы. Остальные статусы (504, 500 и т.д.) отдаём вызывающему коду как есть —
+    // там уже есть свой fallback (например, в app.js follow-up просто не роняет
+    // страницу целиком, см. recognizePage).
+    if (res.status === 429 && attempt < MAX_RETRY_ATTEMPTS) {
+      const delayMs = parseRetryDelayMs(data?.error) ?? Math.min(DEFAULT_RETRY_DELAY_MS * (attempt + 1), MAX_RETRY_DELAY_MS);
+      if (onRetry) onRetry({ attempt: attempt + 1, maxAttempts: MAX_RETRY_ATTEMPTS, delayMs });
+      await sleep(delayMs);
+      continue;
+    }
+
     if (res.status === 504) {
       throw new Error('Gemini не успел ответить за отведённое время (504) — попробуйте ещё раз, обычно со второго раза проходит.');
     }
     throw new Error(data?.error || `Сервер распознавания вернул ошибку ${res.status}`);
   }
-
-  return {
-    text: data.text || '',
-    docType: data.documentType || 'Другое',
-    fields: Array.isArray(data.fields) && data.fields.length ? data.fields : null,
-    items: Array.isArray(data.items) && data.items.length ? data.items : null
-  };
 }
