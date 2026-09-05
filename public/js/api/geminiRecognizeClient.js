@@ -7,7 +7,7 @@ import { pageImageToBase64 } from '../ocr/imageLoader.js';
 
 export async function recognizeWithGemini(pageImage, presetDocType) {
   const base64 = pageImageToBase64(pageImage);
-  const body = { image: base64, mimeType: 'image/png' };
+  const body = { image: base64, mimeType: 'image/jpeg' };
   if (presetDocType) body.docType = presetDocType;
 
   const res = await fetch('/api/recognize', {
@@ -20,6 +20,9 @@ export async function recognizeWithGemini(pageImage, presetDocType) {
   try { data = await res.json(); } catch (_) { data = null; }
 
   if (!res.ok) {
+    if (res.status === 504) {
+      throw new Error('Gemini не успел ответить за отведённое время (504) — попробуйте ещё раз, обычно со второго раза проходит.');
+    }
     throw new Error(data?.error || `Сервер распознавания вернул ошибку ${res.status}`);
   }
 
