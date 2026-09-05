@@ -89,9 +89,34 @@ async function loadPageImages(file) {
 
 // Распознаёт одну страницу выбранным движком. Возвращает { rawText, docType, fields, items }.
 // docType/fields/items заполняются только Gemini-режимом (Tesseract их не знает — см. классификацию ниже).
-async function recognizePage(pageImage, mode, lang, presetType, onTesseractProgress) {
+//
+// Авто-извлечение таблиц без ручного выбора типа: если тип не был известен заранее
+// (пользователь оставил «Определить автоматически»), первый запрос не мог попросить
+// у Gemini построчные items — до классификации сервер ещё не знает, какие колонки
+// нужны (см. lib/recognize.js). Если результат классификации оказался табличным типом
+// (накладная, справочник номенклатуры и т.д.) — делаем второй запрос уже с известным
+// типом. Это тот же путь, что при ручном выборе типа в списке файлов, просто выбор
+// происходит не пользователем, а по результату первого запроса. Каждый запрос — это
+// отдельный вызов serverless-функции со своим лимитом в 60 сек, так что риск 504
+// не удваивается на одном запросе. Второй запрос делаем только для табличных типов —
+// на обычных документах (паспорт, справка и т.д.) поведение не меняется.
+async function recognizePage(pageImage, mode, lang, presetType, onTesseractProgress, onStage) {
   if (mode === 'gemini') {
     const result = await recognizeWithGemini(pageImage, presetType);
+    const needsTableFollowUp = !presetType && isTableType(result.docType) && (!result.items || result.items.length === 0);
+    if (needsTableFollowUp) {
+      if (onStage) onStage();
+      try {
+        const tableResult = await recognizeWithGemini(pageImage, result.docType);
+        return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items };
+      } catch (e) {
+        // Второй запрос не удался (например, 504) — не роняем страницу целиком: текст
+        // и определённый тип у нас уже есть, таблица просто останется пустой для
+        // ручного заполнения, как раньше при ручном выборе табличного типа.
+        console.error('Авто-извлечение таблицы не удалось, оставляем текст и тип без строк:', e);
+        return { rawText: result.text, docType: result.docType, fields: result.fields, items: null };
+      }
+    }
     return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items };
   }
   const rawText = await recognizeWithTesseract(pageImage, lang, onTesseractProgress);
@@ -125,6 +150,8 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
         const pct = Math.round(m.progress * 100);
         const stage = (m.status.includes('loading') || m.status.includes('load')) ? 'Загружаем движок' : 'Распознаём';
         recognizeBtn.textContent = `${stage}… файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length} — ${pct}%`;
+      }, () => {
+        recognizeBtn.textContent = `Извлекаем таблицу… файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length}`;
       });
 
       // Тип уже задан пользователем — не даём Gemini-классификации его переопределить.
