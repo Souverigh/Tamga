@@ -1,14 +1,17 @@
 // Настройки распознавания: переключение видимости выбора языка —
-// Gemini сам разбирает язык, ручной выбор ему не нужен.
+// Gemini сам разбирает язык, ручной выбор ему не нужен. Подсказка про
+// «Только кыргызский» тоже актуальна только для Tesseract — прячем вместе.
 
 const modeSelect = document.getElementById('modeSelect');
 const langSelect = document.getElementById('langSelect');
+const langNote = document.getElementById('langNote');
 
 export function initSettings() {
   modeSelect.querySelectorAll('input[name="mode"]').forEach(el => {
     el.addEventListener('change', () => {
       const isGemini = document.querySelector('input[name="mode"]:checked').value === 'gemini';
       langSelect.style.display = isGemini ? 'none' : 'block';
+      if (langNote) langNote.style.display = isGemini ? 'none' : 'block';
     });
   });
 }

@@ -16,7 +16,7 @@
       Тамга
     </div>
   </header>
-  <p class="tagline">Распознавание кыргызских документов — сфотографируйте, отсканируйте или загрузите PDF, получите редактируемый текст.</p>
+  <p class="tagline">Автоматическое извлечение данных из документов и классификация.</p>
 
   <div class="panel">
     <div class="step-label"><span class="step-num">1</span>Добавьте документ</div>
@@ -32,7 +32,6 @@
       <label class="btn-secondary camera-btn" for="cameraInput">📷 Сделать фото</label>
       <input type="file" id="cameraInput" accept="image/*" capture="environment">
     </div>
-    <div class="fine-print">До 50 файлов за раз, до 20 страниц в каждом PDF</div>
 
     <div class="file-list" id="fileList" style="display:none">
       <div class="step-label" style="margin-top:26px;"><span class="step-num">2</span>Что это за документ? <span class="step-optional">необязательно</span></div>
@@ -41,7 +40,6 @@
         <button class="btn-secondary" id="clearAllBtn">Убрать все</button>
       </div>
       <div class="file-list-items" id="fileListItems"></div>
-      <div class="lang-note" style="margin-top:12px;">Знаете, что это за документ — выберите его тип, тогда поля получатся точнее. Не уверены — оставьте «Определить автоматически».</div>
     </div>
 
     <div class="btn-row" id="actionRow" style="display:none">
@@ -50,14 +48,14 @@
 
     <details class="settings-details">
       <summary>Настройки распознавания</summary>
-      <div class="lang-note">Если документ целиком на кыргызском, выбери «Только кыргызский» — так движок не будет путать похожие буквы с русскими и правильно распознает Ң, Ө, Үй.</div>
+      <div class="lang-note" id="langNote">Если документ целиком на кыргызском, выбери «Только кыргызский» — так движок не будет путать похожие буквы с русскими и правильно распознает Ң, Ө, Үй.</div>
 
       <div class="lang-select" id="modeSelect">
         <div class="lang-select-label">Способ распознавания</div>
         <div class="lang-options">
           <label class="lang-option">
             <input type="radio" name="mode" value="tesseract" checked>
-            <span>Быстро (без интернета)</span>
+            <span>Быстро</span>
           </label>
           <label class="lang-option">
             <input type="radio" name="mode" value="gemini">
@@ -83,11 +81,6 @@
           </label>
         </div>
       </div>
-
-      <label class="lang-option" id="cleanupRow" style="margin-top:14px; width:fit-content;">
-        <input type="checkbox" id="cleanupCheckbox" checked>
-        <span>Убирать мусор распознавания (лишние точки, тире, повторы знаков, пустые строки)</span>
-      </label>
 
       <label class="lang-option" id="postProcessRow" style="margin-top:10px; width:fit-content;">
         <input type="checkbox" id="postProcessCheckbox" checked>

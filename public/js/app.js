@@ -7,7 +7,7 @@ import { extractFieldsHeuristic } from './extraction/heuristicExtractor.js';
 import { postProcessText } from './postprocess/textCleanup.js';
 import { loadPdfPages } from './ocr/pdfLoader.js';
 import { loadImageFile } from './ocr/imageLoader.js';
-import { recognizeWithTesseract } from './ocr/tesseractClient.js';
+import { recognizeWithTesseract, cancelTesseract } from './ocr/tesseractClient.js';
 import { recognizeWithGemini } from './api/geminiRecognizeClient.js';
 import { saveResultsToStorage, loadSavedResults, clearSavedResults } from './storage/resultsStorage.js';
 import { downloadTxt, buildAllText } from './export/txtExport.js';
@@ -20,13 +20,12 @@ import {
 } from './ui/progress.js';
 import { showResults, hideResults, initResultsCollapseToggle, getFileGroups } from './ui/results.js';
 import { initSettings, getSelectedMode, getSelectedLang } from './ui/settings.js';
-import { isTableType } from './config/docSchema.js';
+import { isTableType, DOC_TYPES } from './config/docSchema.js';
 
 const recognizeBtn = document.getElementById('recognizeBtn');
 const langSelect = document.getElementById('langSelect');
 const modeSelect = document.getElementById('modeSelect');
 const postProcessCheckbox = document.getElementById('postProcessCheckbox');
-const cleanupCheckbox = document.getElementById('cleanupCheckbox');
 const restoreBanner = document.getElementById('restoreBanner');
 const restoreBtn = document.getElementById('restoreBtn');
 const dismissRestoreBtn = document.getElementById('dismissRestoreBtn');
@@ -74,7 +73,6 @@ function lockControls() {
   langSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   modeSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   postProcessCheckbox.disabled = true;
-  cleanupCheckbox.disabled = true;
 }
 
 function unlockControls() {
@@ -83,7 +81,6 @@ function unlockControls() {
   langSelect.querySelectorAll('input').forEach(el => el.disabled = false);
   modeSelect.querySelectorAll('input').forEach(el => el.disabled = false);
   postProcessCheckbox.disabled = false;
-  cleanupCheckbox.disabled = false;
 }
 
 async function loadPageImages(file) {
@@ -139,7 +136,7 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
       if (fileFields === null && fields) fileFields = fields;
       if (fileItems === null && items) fileItems = items;
 
-      pageTexts.push(postProcessText(rawText, { cleanup: cleanupCheckbox.checked, normalize: postProcessCheckbox.checked }));
+      pageTexts.push(postProcessText(rawText, { cleanup: true, normalize: postProcessCheckbox.checked }));
       markPageDone(fileIndex, i, 'Готово');
     } catch (e) {
       pageTexts.push('');
@@ -149,18 +146,29 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
     setOverallProgress((fileIndex + (i + 1) / pageImages.length) / totalFiles);
   }
 
-  // Классификация (независимый модуль) — только если тип не был известен заранее и не пришёл от Gemini.
-  if (!presetType && mode === 'tesseract') {
-    fileDocType = classifyByKeywords(pageTexts.join('\n'));
-  }
-  fileDocType = fileDocType || 'Другое';
+  // Классификация и извлечение полей не должны молча ронять весь сценарий: если
+  // здесь что-то пойдёт не так (например, неожиданный формат от Gemini или
+  // classifyByKeywords), файл всё равно попадёт в результаты с распознанным
+  // текстом и типом «Другое» — лучше так, чем зависшая кнопка и пустой экран.
+  let fields = [];
+  let items = [];
+  try {
+    // Классификация (независимый модуль) — только если тип не был известен заранее и не пришёл от Gemini.
+    if (!presetType && !fileDocType && mode === 'tesseract') {
+      fileDocType = classifyByKeywords(pageTexts.join('\n'));
+    }
+    if (!fileDocType || !DOC_TYPES.includes(fileDocType)) fileDocType = 'Другое';
 
-  // Извлечение полей (независимый модуль) — только если Gemini их ещё не вернул в этом же запросе.
-  const joinedText = pageTexts.join('\n');
-  const fields = isTableType(fileDocType) ? [] : (fileFields || extractFieldsHeuristic(joinedText, fileDocType));
-  // Товарные строки: офлайн-эвристика их не производит (см. heuristicExtractor.js) —
-  // без Gemini таблица придёт пустой, пользователь заполнит вручную в интерфейсе.
-  const items = fileItems || [];
+    // Извлечение полей (независимый модуль) — только если Gemini их ещё не вернул в этом же запросе.
+    const joinedText = pageTexts.join('\n');
+    fields = isTableType(fileDocType) ? [] : (fileFields || extractFieldsHeuristic(joinedText, fileDocType));
+    // Товарные строки: офлайн-эвристика их не производит (см. heuristicExtractor.js) —
+    // без Gemini таблица придёт пустой, пользователь заполнит вручную в интерфейсе.
+    items = fileItems || [];
+  } catch (e) {
+    console.error('Классификация/извлечение полей упали, файл всё равно вернём с текстом:', e);
+    fileDocType = DOC_TYPES.includes(fileDocType) ? fileDocType : 'Другое';
+  }
 
   return { fileName: file.name, pages: pageTexts, docType: fileDocType, fields, items };
 }
@@ -188,14 +196,21 @@ recognizeBtn.addEventListener('click', async () => {
 
   lockControls();
   hideResults();
-  startProgress(() => { cancelled = true; });
+  startProgress(() => { cancelled = true; cancelTesseract(); });
 
   const fileResults = [];
-  for (let f = 0; f < selectedFiles.length; f++) {
-    if (cancelled) break;
-    const presetType = selectedDocTypes[f] && selectedDocTypes[f] !== 'auto' ? selectedDocTypes[f] : null;
-    const result = await recognizeFile(selectedFiles[f], f, selectedFiles.length, mode, lang, presetType);
-    if (result) fileResults.push(result);
+  try {
+    for (let f = 0; f < selectedFiles.length; f++) {
+      if (cancelled) break;
+      const presetType = selectedDocTypes[f] && selectedDocTypes[f] !== 'auto' ? selectedDocTypes[f] : null;
+      const result = await recognizeFile(selectedFiles[f], f, selectedFiles.length, mode, lang, presetType);
+      if (result) fileResults.push(result);
+    }
+  } catch (e) {
+    // Не должно случаться (recognizeFile сам ловит свои ошибки), но если всё же
+    // что-то пробьётся сюда — не оставляем интерфейс молча зависшим.
+    console.error('Распознавание прервалось неожиданной ошибкой:', e);
+    alert('Распознавание остановилось из-за ошибки: ' + (e && e.message ? e.message : String(e)));
   }
 
   finishProgress(cancelled);
