@@ -178,9 +178,12 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
         recognizeBtn.textContent = `${stage}… файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length} — ${pct}%`;
       }, () => {
         recognizeBtn.textContent = `Извлекаем таблицу… файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length}`;
-      }, ({ attempt, maxAttempts, delayMs }) => {
+      }, ({ attempt, maxAttempts, delayMs, status }) => {
         const sec = Math.ceil(delayMs / 1000);
-        recognizeBtn.textContent = `Превышен лимит запросов, ждём ${sec} сек… (попытка ${attempt}/${maxAttempts}) файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length}`;
+        // status === 429 — превышен лимит бесплатного тарифа; 503 — модель Gemini
+        // временно перегружена ("high demand"). Формулировка разная, повтор один и тот же.
+        const reason = status === 429 ? 'Превышен лимит запросов' : 'Сервис Gemini временно перегружен';
+        recognizeBtn.textContent = `${reason}, ждём ${sec} сек… (попытка ${attempt}/${maxAttempts}) файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length}`;
       });
 
       // Тип уже задан пользователем — не даём Gemini-классификации его переопределить.

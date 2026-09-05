@@ -14,6 +14,15 @@ const MAX_RETRY_ATTEMPTS = 2; // всего до 3 попыток (исходн�
 const DEFAULT_RETRY_DELAY_MS = 15000; // если Gemini не подсказала точное время ожидания
 const MAX_RETRY_DELAY_MS = 60000; // не ждём дольше минуты, даже если Gemini попросит больше
 
+// Статусы, которые имеет смысл повторять автоматически — это временные состояния
+// на стороне Gemini, обычно проходят сами после паузы:
+//   429 — превышен лимит бесплатного тарифа (в минуту)
+//   503 — модель временно перегружена ("currently experiencing high demand")
+// До фикса в lib/geminiClient.js сервер всегда отдавал 502 независимо от реального
+// статуса Gemini, поэтому проверка по res.status здесь ничего не ловила — теперь
+// сервер пробрасывает настоящий код, и оба случая обрабатываются одинаково.
+const RETRYABLE_STATUSES = new Set([429, 503]);
+
 // Free-tier 429 от Gemini обычно содержит "...Please retry in 36.536187226s" —
 // вытаскиваем эту рекомендацию, чтобы ждать ровно столько, сколько нужно, а не
 // гадать интервал самостоятельно.
@@ -52,14 +61,13 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
       };
     }
 
-    // 429 (лимит бесплатного тарифа Gemini) — единственная ошибка, которую имеет
-    // смысл повторять автоматически: она временная и предсказуемо проходит после
-    // паузы. Остальные статусы (504, 500 и т.д.) отдаём вызывающему коду как есть —
-    // там уже есть свой fallback (например, в app.js follow-up просто не роняет
-    // страницу целиком, см. recognizePage).
-    if (res.status === 429 && attempt < MAX_RETRY_ATTEMPTS) {
+    // 429/503 — временные состояния на стороне Gemini (см. RETRYABLE_STATUSES выше),
+    // предсказуемо проходят после паузы. Остальные статусы (504, 500 и т.д.) отдаём
+    // вызывающему коду как есть — там уже есть свой fallback (например, в app.js
+    // follow-up просто не роняет страницу целиком, см. recognizePage).
+    if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_RETRY_ATTEMPTS) {
       const delayMs = parseRetryDelayMs(data?.error) ?? Math.min(DEFAULT_RETRY_DELAY_MS * (attempt + 1), MAX_RETRY_DELAY_MS);
-      if (onRetry) onRetry({ attempt: attempt + 1, maxAttempts: MAX_RETRY_ATTEMPTS, delayMs });
+      if (onRetry) onRetry({ attempt: attempt + 1, maxAttempts: MAX_RETRY_ATTEMPTS, delayMs, status: res.status });
       await sleep(delayMs);
       continue;
     }
