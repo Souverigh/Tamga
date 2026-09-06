@@ -5,8 +5,16 @@
 // через колбэк onChange, который настраивает вызывающий код (app.js).
 
 import { DOC_TYPES } from '../config/docSchema.js';
+import { getClientSlug } from '../branding.js';
 
 const MAX_FILES = 50;
+// Для анонимного бесплатного сайта (без ?client=slug) — пачка меньше, чем для
+// настроенных клиентов. Это НЕ единственная защита (её легко обойти прямым
+// вызовом /api/recognize в обход интерфейса) — настоящий барьер это дневной
+// лимit по IP на сервере (см. lib/anonymousUsage.js). Здесь это просто честная
+// подсказка в интерфейсе: если нужны реальные объёмы — нужен платный пакет,
+// а не попытка незаметно засунуть туда же 50 файлов с бесплатного сайта.
+const FREE_MAX_FILES = 5;
 
 let selectedFiles = []; // File[]
 let selectedDocTypes = []; // string[], параллельно selectedFiles — 'auto' или значение из DOC_TYPES/extraDocTypes
@@ -38,9 +46,10 @@ function addFiles(fileListObj) {
   let combined = selectedFiles.concat(incoming);
   let combinedTypes = selectedDocTypes.concat(incoming.map(() => 'auto'));
   let truncated = false;
-  if (combined.length > MAX_FILES) {
-    combined = combined.slice(0, MAX_FILES);
-    combinedTypes = combinedTypes.slice(0, MAX_FILES);
+  const effectiveMax = getClientSlug() ? MAX_FILES : FREE_MAX_FILES;
+  if (combined.length > effectiveMax) {
+    combined = combined.slice(0, effectiveMax);
+    combinedTypes = combinedTypes.slice(0, effectiveMax);
     truncated = true;
   }
   selectedFiles = combined;
@@ -151,7 +160,11 @@ function render(truncated) {
   fileList.style.display = 'block';
   actionRow.style.display = 'flex';
   document.body.classList.add('has-action-bar');
-  fileCountLabel.textContent = `Выбрано файлов: ${selectedFiles.length} из ${MAX_FILES}` + (truncated ? ' (лишние не добавлены)' : '');
+  const effectiveMaxForLabel = getClientSlug() ? MAX_FILES : FREE_MAX_FILES;
+  const truncatedNote = truncated
+    ? (getClientSlug() ? ' (лишние не добавлены)' : ' — бесплатный лимит пачки, для больших объёмов нужен платный пакет')
+    : '';
+  fileCountLabel.textContent = `Выбрано файлов: ${selectedFiles.length} из ${effectiveMaxForLabel}` + truncatedNote;
   recognizeBtn.textContent = `Распознать текст (${selectedFiles.length})`;
 
   fileListItems.innerHTML = '';

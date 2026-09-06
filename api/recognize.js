@@ -1,6 +1,7 @@
 const { recognizeDocument, RecognizeError } = require('../lib/recognize');
 const { getClientConfig } = require('../lib/customFieldsLookup');
 const { checkClientGate } = require('../lib/clientAuth');
+const { extractClientIp } = require('../lib/anonymousUsage');
 
 // Эндпоинт для веб-интерфейса Тамги (public/index.html).
 // Ключа не требует — вызывается тем же сайтом. Ключ Gemini живёт только
@@ -40,7 +41,17 @@ module.exports = async (req, res) => {
       }
     }
 
-    const result = await recognizeDocument({ base64: image, mimeType, docType, skipOcr, clientSlug });
+    const result = await recognizeDocument({
+      base64: image,
+      mimeType,
+      docType,
+      skipOcr,
+      clientSlug,
+      // clientIp — только для анонимных запросов (без clientSlug): дневной
+      // лимит бесплатного сайта (см. lib/anonymousUsage.js). Для настроенных
+      // клиентов не нужен — у них свой лимит по разовому пакету (page_limit).
+      clientIp: clientSlug ? undefined : extractClientIp(req)
+    });
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {
