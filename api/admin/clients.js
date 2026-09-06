@@ -1,6 +1,7 @@
 const { checkAdminSecret } = require('../../lib/adminAuth');
 const { DOC_TYPES } = require('../../lib/docSchema');
 const { hashPassword } = require('../../lib/clientAuth');
+const { clearConfigCache } = require('../../lib/customFieldsLookup');
 
 // Админский CRUD над tamga_api_key_fields (конфиги клиентов — см. customFieldsLookup.js) —
 // заменяет ручную правку через Supabase Table Editor на простую форму (см. public/admin/).
@@ -171,6 +172,7 @@ module.exports = async (req, res) => {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(typeof data === 'object' ? JSON.stringify(data) : String(data));
+      clearConfigCache(); // новый клиент — следующий же recognize должен увидеть его настройки, не ждать TTL
       res.status(201).json(sanitizeClientRow(Array.isArray(data) ? data[0] : data));
       return;
     }
@@ -188,6 +190,10 @@ module.exports = async (req, res) => {
       const data = await r.json();
       if (!r.ok) throw new Error(typeof data === 'object' ? JSON.stringify(data) : String(data));
       if (!data.length) { res.status(404).json({ error: 'Клиент с таким id не найден' }); return; }
+      // Сброс кэша важен и для пароля гейта: если PATCH сменил/снял пароль,
+      // следующая попытка входа на сайт не должна ещё минуту проверяться
+      // по старому хешу из кэша.
+      clearConfigCache();
       res.status(200).json(sanitizeClientRow(data[0]));
       return;
     }
@@ -199,6 +205,7 @@ module.exports = async (req, res) => {
         headers: supabaseHeaders(serviceKey)
       });
       if (!r.ok) { const data = await r.json().catch(() => null); throw new Error(data ? JSON.stringify(data) : `Supabase вернул ${r.status}`); }
+      clearConfigCache(); // удалённый клиент не должен продолжать обслуживаться (включая гейт) из кэша ещё минуту
       res.status(204).end();
       return;
     }
