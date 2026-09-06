@@ -20,6 +20,11 @@ const { checkApiKey } = require('../../lib/apiKeyAuth');
 // типа, если у вас уже есть текст с предыдущего вызова без docType) — экономит
 // объём ответа модели.
 //
+// Кастомный список полей: если для вашего x-api-key настроена запись в таблице
+// tamga_api_key_fields (Supabase) — задаётся вручную по запросу, обратитесь к
+// администратору — извлекаются ТОЛЬКО эти поля вместо стандартного набора для
+// docType, при условии что docType передан явно и это не табличный тип.
+//
 // Поддерживаемые mimeType: image/png, image/jpeg, image/webp, application/pdf
 // (для application/pdf документ передаётся Gemini напрямую, постраничная
 // разбивка на сервере не выполняется — модель обрабатывает файл целиком).
@@ -47,7 +52,8 @@ module.exports = async (req, res) => {
 
   try {
     const { image, mimeType, docType, skipOcr } = req.body || {};
-    const result = await recognizeDocument({ base64: image, mimeType, docType, skipOcr });
+    const clientApiKey = req.headers['x-api-key'];
+    const result = await recognizeDocument({ base64: image, mimeType, docType, skipOcr, clientApiKey });
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {
