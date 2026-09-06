@@ -178,8 +178,7 @@
   .file-group .pages{ margin:0 0 0 8px; }
 
   .file-result-group{ margin-bottom:28px; padding-bottom:24px; border-bottom:1px solid var(--line); }
-  .file-result-group:last-child{ margin-bottom:0; padding-bottom:0; border-bottom:none; }
-  .file-result-title{
+  .file-result-group:last-child{ margin-bottom:0; padding-bottom:0; border-bottom:none; }  .file-result-title{
     font-family:'Space Grotesk', sans-serif; font-size:1.08rem; font-weight:600; margin-bottom:10px; cursor:pointer; display:flex;
     align-items:flex-start; gap:9px; user-select:none;
   }
@@ -292,6 +291,18 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 4px 14px;
+}
+/* Итоговые результаты (карточки файлов с текстом/полями) — при больших пачках
+   (см. showResults в results.js) сворачиваются по умолчанию, но даже свёрнутые
+   строки на 50+ файлов дают длинный список; фиксированная высота + скролл —
+   та же защита от бесконечной страницы, что и у #pagesList выше. Высота больше
+   (640 против 480), т.к. содержимое здесь заметно крупнее одной строки. */
+#pageResults{
+  max-height: 640px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 20px;
 }
 .pages{ display:flex; flex-direction:column; gap:0; margin:16px 0; border-top:1px solid var(--line); }
   .page-row{

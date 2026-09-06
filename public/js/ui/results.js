@@ -184,12 +184,24 @@ export function renderResultGroup({ fileName, pages, docType, fields, items }) {
   return group;
 }
 
+// При большом количестве файлов разворачивать все карточки сразу неудобно —
+// каждая карточка может содержать полный текст страницы плюс таблицу полей,
+// это быстро превращается в длиннющую страницу (см. также #pageResults со
+// скроллом в styles.css — это подстраховка на случай, если всё-таки развернули
+// много карточек сразу). Порог ниже, чем у setDefaultHideCompleted в progress.js
+// (20 страниц) — здесь каждая «строка» тяжелее, чем строка прогресса.
+const AUTO_COLLAPSE_THRESHOLD = 8;
+
 export function showResults(fileResults) {
   pageResults.innerHTML = '';
   fileResults.forEach(fr => pageResults.appendChild(renderResultGroup(fr)));
   resultsPanel.style.display = fileResults.length ? 'block' : 'none';
-  toggleCollapseBtn.textContent = 'Свернуть все';
-  allCollapsed = false;
+
+  allCollapsed = fileResults.length > AUTO_COLLAPSE_THRESHOLD;
+  if (allCollapsed) {
+    pageResults.querySelectorAll('.file-result-group').forEach(g => g.classList.add('collapsed'));
+  }
+  toggleCollapseBtn.textContent = allCollapsed ? 'Развернуть все' : 'Свернуть все';
 }
 
 export function hideResults() {
