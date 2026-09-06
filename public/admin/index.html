@@ -64,6 +64,19 @@
       </div>
       <div class="admin-note">Нужно задать хотя бы одно из двух полей выше — иначе на клиента не сослаться ни из API, ни с сайта.</div>
 
+      <h3 class="admin-section-title">Доступ к сайту <span class="admin-hint">— пароль для ?client=slug, без него весь сайт скрыт под формой входа</span></h3>
+      <div id="passwordStatusBadge" class="admin-note" style="display:none;"></div>
+      <div class="admin-field-group">
+        <label class="admin-label" id="fAccessPasswordLabel">Пароль</label>
+        <input type="password" id="fAccessPassword" class="admin-input" placeholder="Оставьте пустым, чтобы не менять" autocomplete="new-password">
+      </div>
+      <div id="removePasswordRow" style="display:none; margin-top:-10px; margin-bottom:16px;">
+        <label class="lang-option" style="width:fit-content;">
+          <input type="checkbox" id="fRemovePassword">
+          <span>Убрать текущий пароль (сайт станет доступен без входа)</span>
+        </label>
+      </div>
+
       <div class="admin-field-group">
         <label class="admin-label">Заметка <span class="admin-hint">— только для вас, клиент её не увидит</span></label>
         <input type="text" id="fLabel" class="admin-input" placeholder="напр. Пилот Акме, начали сентябрь 2026">

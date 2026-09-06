@@ -383,3 +383,24 @@
     .confirm-actions{ flex-direction:column-reverse; }
     .confirm-actions button{ width:100%; }
   }
+
+  /* Гейт клиентского пилота (?client=slug с паролем, см. public/js/branding.js) —
+     та же схема оверлея, что .confirm-overlay выше, но во весь экран поверх
+     полностью скрытого приложения (#appRoot скрыт через html.tamga-gate-pending,
+     см. index.html), а не поверх уже видимого контента. */
+  .client-gate{
+    position:fixed; inset:0; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; padding:20px; z-index:2000;
+  }
+  .client-gate-box{
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    padding:28px; max-width:320px; width:100%; box-shadow:0 20px 48px rgba(22,23,28,0.15);
+  }
+  .client-gate-title{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:1.1rem; margin-bottom:16px; }
+  .client-gate-input{
+    width:100%; padding:10px 12px; border:1px solid var(--line-strong); border-radius:6px;
+    font-family:inherit; font-size:0.95rem; margin-bottom:12px; box-sizing:border-box;
+  }
+  .client-gate-input:focus{ outline:none; border-color:var(--accent); }
+  .client-gate #clientGateBtn{ width:100%; }
+  .client-gate-error{ color:var(--danger); font-size:0.85rem; margin-top:10px; }

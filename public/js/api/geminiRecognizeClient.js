@@ -13,6 +13,10 @@
 // options.clientSlug — идентификатор клиентского пилота (?client=slug, см.
 // branding.js/getClientSlug) — сервер по нему найдёт конфиг клиента в Supabase
 // (кастомные поля/типы/форматирование), см. lib/recognize.js. Без него — как раньше.
+// options.clientToken — токен гейта паролем (см. branding.js/getClientToken,
+// lib/clientAuth.js) — обязателен, если у клиентского slug задан пароль
+// доступа к сайту; без него сервер откажет 401 (см. api/recognize.js), даже
+// если сам запрос как-то дошёл до этого эндпоинта в обход интерфейса.
 
 import { pageImageToBase64 } from '../ocr/imageLoader.js';
 
@@ -71,11 +75,13 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
   if (options && options.clientSlug) body.clientSlug = options.clientSlug;
   const onRetry = options && options.onRetry;
   const signal = options && options.signal;
+  const headers = { 'Content-Type': 'application/json' };
+  if (options && options.clientToken) headers['x-client-token'] = options.clientToken;
 
   for (let attempt = 0; ; attempt++) {
     const res = await fetch('/api/recognize', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
       signal
     });

@@ -1,5 +1,6 @@
 const { checkAdminSecret } = require('../../lib/adminAuth');
 const { DOC_TYPES } = require('../../lib/docSchema');
+const { hashPassword } = require('../../lib/clientAuth');
 
 // Админский CRUD над tamga_api_key_fields (конфиги клиентов — см. customFieldsLookup.js) —
 // заменяет ручную правку через Supabase Table Editor на простую форму (см. public/admin/).
@@ -16,9 +17,24 @@ const { DOC_TYPES } = require('../../lib/docSchema');
 // в проекте принципиально нет npm-зависимостей, клиентская библиотека не нужна.
 
 const WRITABLE_COLUMNS = ['api_key', 'client_slug', 'label', 'fields', 'field_overrides', 'custom_doc_types', 'formatting', 'display_name', 'logo_url', 'accent_color'];
+// access_password_hash НЕ в WRITABLE_COLUMNS — админка никогда не пишет туда
+// напрямую. Вместо этого тело запроса может содержать 'access_password'
+// (plaintext, только на вход) — validateAndNormalize хеширует его сюда же
+// (см. lib/clientAuth.js), или 'remove_access_password: true' — снять пароль.
+// Ни то, ни другое не колонка сама по себе, поэтому оба обрабатываются отдельно
+// от общего цикла по WRITABLE_COLUMNS ниже (см. validateAndNormalize).
 
 function supabaseHeaders(serviceKey, extra) {
   return { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', ...extra };
+}
+
+// access_password_hash никогда не должен попадать в браузер — даже как хеш:
+// незачем облегчать офлайн-подбор пароля тому, кто получит доступ к сетевой
+// вкладке. Вместо этого отдаём только факт "пароль задан" (has_password).
+// Используется и для GET (список), и для ответа POST/PATCH (return=representation).
+function sanitizeClientRow(row) {
+  const { access_password_hash, ...rest } = row;
+  return { ...rest, has_password: !!access_password_hash };
 }
 
 // Нормализует и проверяет тело запроса перед записью — та же логика, что
@@ -40,6 +56,21 @@ function validateAndNormalize(body) {
 
   if (!row.api_key && !row.client_slug) {
     return { error: 'Нужно задать хотя бы api_key или client_slug — иначе на клиента не сослаться ни из API, ни из веб-интерфейса' };
+  }
+
+  // Пароль гейта сайта (см. lib/clientAuth.js) — на входе всегда plaintext,
+  // хешируем перед записью, plaintext дальше нигде не хранится и не логируется.
+  // 'access_password' и 'remove_access_password' — взаимоисключающие сигналы:
+  // задать новый пароль или явно снять существующий. Отсутствие обоих —
+  // "не трогать" (PATCH не должен молча стирать пароль, если форма его просто
+  // не прислала, см. admin.js: поле всегда пустое при открытии карточки).
+  if (body.access_password) {
+    if (typeof body.access_password !== 'string' || body.access_password.length < 4) {
+      return { error: 'Пароль доступа к сайту должен быть строкой не короче 4 символов' };
+    }
+    row.access_password_hash = hashPassword(body.access_password);
+  } else if (body.remove_access_password) {
+    row.access_password_hash = null;
   }
 
   if (row.fields !== undefined && row.fields !== null) {
@@ -126,7 +157,7 @@ module.exports = async (req, res) => {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(typeof data === 'object' ? JSON.stringify(data) : String(data));
-      res.status(200).json(data);
+      res.status(200).json(data.map(sanitizeClientRow));
       return;
     }
 
@@ -140,7 +171,7 @@ module.exports = async (req, res) => {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(typeof data === 'object' ? JSON.stringify(data) : String(data));
-      res.status(201).json(Array.isArray(data) ? data[0] : data);
+      res.status(201).json(sanitizeClientRow(Array.isArray(data) ? data[0] : data));
       return;
     }
 
@@ -157,7 +188,7 @@ module.exports = async (req, res) => {
       const data = await r.json();
       if (!r.ok) throw new Error(typeof data === 'object' ? JSON.stringify(data) : String(data));
       if (!data.length) { res.status(404).json({ error: 'Клиент с таким id не найден' }); return; }
-      res.status(200).json(data[0]);
+      res.status(200).json(sanitizeClientRow(data[0]));
       return;
     }
 

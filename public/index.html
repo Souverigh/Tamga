@@ -4,11 +4,36 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Тамга — распознавание кыргызских документов</title>
+<!--
+  Анти-флэш для гейта клиентского пилота (?client=slug с паролем, см.
+  public/js/branding.js). Скрипт синхронный и стоит ДО остального контента —
+  чтобы страница не мигнула обычным видом на долю секунды, пока branding.js
+  ещё не успел спросить сервер, нужен ли пароль для этого slug. Сам факт
+  наличия slug в URL/localStorage не означает, что пароль реально нужен —
+  это выясняется асинхронно (см. initBranding), здесь только консервативная
+  подстраховка от "мигания" на время этой проверки.
+-->
+<style>html.tamga-gate-pending #appRoot { display: none; }</style>
+<script>
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var slug = params.get('client') || localStorage.getItem('tamga_client_slug');
+    if (slug) document.documentElement.classList.add('tamga-gate-pending');
+  })();
+</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Crect x='1' y='1' width='42' height='42' rx='9' fill='%23F6F6F3' stroke='%2316171C' stroke-width='2'/%3E%3Cpath d='M6 14V7h7M38 14V7h-7M6 30v7h7M38 30v7h-7' stroke='%232A4FE0' stroke-width='2.4' fill='none' stroke-linecap='square'/%3E%3Ctext x='22' y='28' text-anchor='middle' font-family='monospace' font-size='16' font-weight='600' fill='%2316171C'%3E%D0%A2%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-<div class="wrap">
+<div id="clientGate" class="client-gate" style="display:none">
+  <div class="client-gate-box">
+    <div class="client-gate-title">Доступ защищён паролем</div>
+    <input type="password" id="clientGatePassword" class="client-gate-input" placeholder="Пароль" autocomplete="current-password">
+    <button class="btn-primary" id="clientGateBtn" type="button">Войти</button>
+    <div class="client-gate-error" id="clientGateError" style="display:none"></div>
+  </div>
+</div>
+<div class="wrap" id="appRoot">
 
   <header>
     <div class="brand">

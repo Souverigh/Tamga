@@ -25,7 +25,7 @@ import { showToast, showConfirm } from './ui/notify.js';
 import { isTableType, DOC_TYPES } from './config/docSchema.js';
 import { runWithConcurrency } from './utils/concurrencyPool.js';
 import { createRateLimiter } from './utils/rateLimiter.js';
-import { initBranding, getClientSlug } from './branding.js';
+import { initBranding, getClientSlug, getClientToken } from './branding.js';
 
 // White-label фасад для клиентских пилотов (?client=slug в URL) — см. branding.js.
 // Не блокирует остальную инициализацию: fail-open при сбое сети.
@@ -165,8 +165,9 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
       onStatus(`${reason}, ждём ${sec} сек… (попытка ${attempt}/${maxAttempts})`);
     };
     const clientSlug = getClientSlug(); // white-label пилот (?client=slug) — см. branding.js
+    const clientToken = getClientToken(); // токен гейта паролем, если у клиента он задан — см. branding.js
     await geminiRateLimiter.acquire(signal);
-    const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug });
+    const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug, clientToken });
     const needsTableFollowUp = !presetType && isTableType(result.docType) && (!result.items || result.items.length === 0);
     if (needsTableFollowUp) {
       onStatus('Извлекаем таблицу…');
@@ -178,7 +179,7 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
         // Колонки берутся из ВТОРОГО запроса (tableResult), не из первого — у
         // первого их не может быть: та классификация ещё не знала тип, поэтому
         // сервер не мог решить, нужен ли override (см. lib/recognize.js:tableColumns).
-        const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true, onRetry, signal, clientSlug });
+        const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true, onRetry, signal, clientSlug, clientToken });
         return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items, columns: tableResult.columns, columnKeys: tableResult.columnKeys };
       } catch (e) {
         if (e && e.name === 'AbortError') throw e;

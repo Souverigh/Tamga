@@ -33,6 +33,11 @@ const deleteClientBtn = document.getElementById('deleteClientBtn');
 const fApiKey = document.getElementById('fApiKey');
 const fSlug = document.getElementById('fSlug');
 const fLabel = document.getElementById('fLabel');
+const fAccessPassword = document.getElementById('fAccessPassword');
+const fAccessPasswordLabel = document.getElementById('fAccessPasswordLabel');
+const passwordStatusBadge = document.getElementById('passwordStatusBadge');
+const removePasswordRow = document.getElementById('removePasswordRow');
+const fRemovePassword = document.getElementById('fRemovePassword');
 const fDisplayName = document.getElementById('fDisplayName');
 const fLogoUrl = document.getElementById('fLogoUrl');
 const fAccentColor = document.getElementById('fAccentColor');
@@ -210,6 +215,7 @@ function formatUpdatedAt(iso) {
 
 function badgesFor(client) {
   const badges = [];
+  if (client.has_password) badges.push('🔒 Пароль на сайт');
   if (client.fields && client.fields.length) badges.push('Устар. поля (любой тип)');
   if (client.field_overrides && Object.keys(client.field_overrides).length) badges.push(`Переопределений: ${Object.keys(client.field_overrides).length}`);
   if (client.custom_doc_types && Object.keys(client.custom_doc_types).length) badges.push(`Своих типов: ${Object.keys(client.custom_doc_types).length}`);
@@ -488,6 +494,8 @@ function resetForm() {
   fApiKey.value = '';
   fSlug.value = '';
   fLabel.value = '';
+  fAccessPassword.value = '';
+  fRemovePassword.checked = false;
   fDisplayName.value = '';
   fLogoUrl.value = '';
   fAccentColor.value = '';
@@ -500,7 +508,25 @@ function resetForm() {
   renderFieldOverridesList();
   renderCustomTypesList();
   renderLegacyFields();
+  renderPasswordStatus(false);
   updateSwatch();
+}
+
+// Пароль всегда приходит с сервера как has_password (булево), НИКОГДА как
+// хеш или plaintext (см. api/admin/clients.js:sanitizeClientRow) — поле ввода
+// поэтому всегда пустое при открытии карточки, а не "текущее значение".
+// hasPassword управляет только видимостью подсказки/чекбокса "убрать пароль".
+function renderPasswordStatus(hasPassword) {
+  if (hasPassword) {
+    passwordStatusBadge.textContent = '🔒 Пароль уже задан — оставьте поле пустым, чтобы не менять его.';
+    passwordStatusBadge.style.display = 'block';
+    fAccessPasswordLabel.textContent = 'Новый пароль';
+    removePasswordRow.style.display = 'block';
+  } else {
+    passwordStatusBadge.style.display = 'none';
+    fAccessPasswordLabel.textContent = 'Пароль';
+    removePasswordRow.style.display = 'none';
+  }
 }
 
 function updateSwatch() {
@@ -525,6 +551,7 @@ function openForm(client) {
     state.fieldOverrides = client.field_overrides ? JSON.parse(JSON.stringify(client.field_overrides)) : {};
     state.customDocTypes = client.custom_doc_types ? JSON.parse(JSON.stringify(client.custom_doc_types)) : {};
     state.legacyFields = Array.isArray(client.fields) ? [...client.fields] : [];
+    renderPasswordStatus(!!client.has_password);
     renderFieldOverridesList();
     renderCustomTypesList();
     renderLegacyFields();
@@ -548,7 +575,7 @@ function buildPayload() {
 
   const legacyFields = legacyChipEditor ? legacyChipEditor.getValues() : state.legacyFields;
 
-  return {
+  const payload = {
     api_key: fApiKey.value.trim(),
     client_slug: fSlug.value.trim(),
     label: fLabel.value.trim(),
@@ -560,6 +587,16 @@ function buildPayload() {
     custom_doc_types: Object.keys(state.customDocTypes).length ? state.customDocTypes : null,
     formatting: Object.keys(formatting).length ? formatting : null
   };
+  // Пароль — особый случай, см. api/admin/clients.js:validateAndNormalize:
+  // 'убрать пароль' и 'задать новый' взаимоисключающие, отсутствие обоих —
+  // 'не трогать существующий'. Чекбокс имеет приоритет над текстом в поле —
+  // если человек и ввёл что-то, и отметил "убрать", убираем.
+  if (fRemovePassword.checked) {
+    payload.remove_access_password = true;
+  } else if (fAccessPassword.value) {
+    payload.access_password = fAccessPassword.value;
+  }
+  return payload;
 }
 
 saveClientBtn.addEventListener('click', async () => {
