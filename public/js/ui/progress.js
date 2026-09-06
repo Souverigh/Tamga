@@ -8,14 +8,37 @@ const progressPanel = document.getElementById('progressPanel');
 const pagesList = document.getElementById('pagesList');
 const progressFill = document.getElementById('progressFill');
 const cancelProgressBtn = document.getElementById('cancelProgressBtn');
+const progressSummaryText = document.getElementById('progressSummaryText');
+const hideCompletedCheckbox = document.getElementById('hideCompletedCheckbox');
+
+hideCompletedCheckbox.addEventListener('change', () => {
+  pagesList.classList.toggle('hide-done', hideCompletedCheckbox.checked);
+});
 
 export function startProgress(onCancel) {
   progressPanel.style.display = 'block';
   cancelProgressBtn.style.display = 'inline-block';
   pagesList.innerHTML = '';
+  pagesList.classList.remove('hide-done');
+  hideCompletedCheckbox.checked = false;
+  progressSummaryText.textContent = '';
   progressFill.style.width = '0%';
   dropzone.classList.add('scanning');
   cancelProgressBtn.onclick = onCancel;
+}
+
+// При большом пакете (много файлов/страниц) список из десятков полностью успешных
+// файлов только мешает следить за тем, что ещё в процессе или упало с ошибкой —
+// включаем скрытие готовых по умолчанию. На малом пакете это не нужно: там же
+// самое интересное — увидеть весь результат целиком, ничего не пряча.
+export function setDefaultHideCompleted(shouldHide) {
+  hideCompletedCheckbox.checked = shouldHide;
+  pagesList.classList.toggle('hide-done', shouldHide);
+}
+
+export function setProgressSummary(done, errors, total) {
+  const remaining = Math.max(0, total - done - errors);
+  progressSummaryText.textContent = `Готово: ${done} · Ошибок: ${errors} · Осталось: ${remaining} из ${total}`;
 }
 
 export function finishProgress(cancelled) {
@@ -35,12 +58,23 @@ export function createFileProgressGroup(fileIndex, fileName) {
   groupTitle.textContent = `${fileIndex + 1}. ${fileName}`;
   const group = document.createElement('div');
   group.className = 'file-group';
+  group.id = `file-group-${fileIndex}`;
   group.appendChild(groupTitle);
   const pagesWrap = document.createElement('div');
   pagesWrap.className = 'pages';
   group.appendChild(pagesWrap);
   pagesList.appendChild(group);
   return pagesWrap;
+}
+
+// Файл считается «полностью готовым» (и может быть скрыт при hide-done), только
+// если ВСЕ его страницы отмечены done — ни одной ошибки, ни одной ещё в процессе.
+function refreshFileGroupDoneState(fileIndex) {
+  const group = document.getElementById(`file-group-${fileIndex}`);
+  if (!group) return;
+  const rows = group.querySelectorAll('.page-row');
+  const allDone = rows.length > 0 && Array.from(rows).every(r => r.classList.contains('done'));
+  group.classList.toggle('all-done', allDone);
 }
 
 // Добавляет построчный список страниц в уже созданный контейнер — вызывается,
@@ -72,6 +106,7 @@ export function markPageDone(fileIndex, pageIndex, status) {
   if (!row) return;
   row.classList.add('done');
   row.querySelector('.status').textContent = status;
+  refreshFileGroupDoneState(fileIndex);
 }
 
 export function markPageError(fileIndex, pageIndex, message) {

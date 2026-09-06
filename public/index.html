@@ -112,6 +112,12 @@
       <button class="btn-secondary" id="cancelProgressBtn" style="padding:6px 14px; font-size:0.85rem;">Отменить</button>
     </div>
     <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:10px; font-size:0.85rem; color:var(--ink-soft);">
+      <span id="progressSummaryText"></span>
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;">
+        <input type="checkbox" id="hideCompletedCheckbox"> Скрывать готовые файлы
+      </label>
+    </div>
     <div class="pages" id="pagesList" style="margin-top:14px;"></div>
   </div>
 

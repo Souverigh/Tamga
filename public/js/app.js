@@ -16,22 +16,39 @@ import { downloadPdf } from './export/pdfExport.js';
 import { initFileList, getSelectedFiles, getSelectedDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
 import {
   startProgress, finishProgress, setOverallProgress,
-  createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError
+  createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError,
+  setDefaultHideCompleted, setProgressSummary
 } from './ui/progress.js';
 import { showResults, hideResults, initResultsCollapseToggle, getFileGroups } from './ui/results.js';
 import { initSettings, getSelectedMode, getSelectedLang } from './ui/settings.js';
 import { showToast, showConfirm } from './ui/notify.js';
 import { isTableType, DOC_TYPES } from './config/docSchema.js';
 import { runWithConcurrency } from './utils/concurrencyPool.js';
+import { createRateLimiter } from './utils/rateLimiter.js';
 
 // Сколько страниц распознавать одновременно в режиме Gemini. Раньше запросы шли
 // строго по одному (файл-за-файлом, страница-за-страницей) — весь пакет из,
 // скажем, 10 однострочных документов ждал 10 последовательных round-trip'ов.
-// Ограничение (а не "сколько угодно одновременно") нужно, чтобы не упереться
-// в лимит бесплатного тарифа Gemini (20 запросов/мин, см. .env.example) — 3
-// одновременных запроса дают ощутимое ускорение, оставляя запас по лимиту даже
-// если каждая страница внутри себя делает второй запрос (авто-детект таблиц).
-const MAX_CONCURRENT_REQUESTS = 3;
+// Само по себе ограничение параллелизма НЕ защищает от превышения лимита в
+// минуту (см. rateLimiter.js) — это отдельный механизм ниже. Поднято до 10
+// по запросу — само число 10 безопасно при любом тарифе Gemini, реальную
+// защиту от 429 даёт GEMINI_RPM_BUDGET ниже, а не это значение.
+const MAX_CONCURRENT_REQUESTS = 10;
+
+// Бюджет запросов к Gemini в минуту — ЭТО настоящая защита от 429, а не
+// MAX_CONCURRENT_REQUESTS выше (тот лишь ограничивает число задач в полёте
+// одновременно, не темп во времени).
+//
+// ВАЖНО: держим консервативно (под бесплатный тариф, 20/мин), пока не
+// подтверждено, что на проекте включён Cloud Billing — это отдельная вещь
+// от подписки Google AI Pro/Ultra в приложении Gemini: подписка Pro/Ultra
+// НЕ увеличивает лимиты API-ключа, который использует Тамга, только доступ
+// внутри AI Studio Playground. Чтобы реально поднять лимит (обычно до
+// ~150-300 запросов/мин на Flash-моделях после включения биллинга — точное
+// число смотреть в AI Studio → проект → Rate Limits), нужно привязать
+// карту к Cloud-проекту. Как только это подтверждено — поднять это число.
+const GEMINI_RPM_BUDGET = 14;
+const geminiRateLimiter = createRateLimiter(GEMINI_RPM_BUDGET, 60000);
 
 const recognizeBtn = document.getElementById('recognizeBtn');
 const langSelect = document.getElementById('langSelect');
@@ -142,6 +159,7 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
       const reason = status === 429 ? 'Превышен лимит запросов' : 'Сервис Gemini временно перегружен';
       onStatus(`${reason}, ждём ${sec} сек… (попытка ${attempt}/${maxAttempts})`);
     };
+    await geminiRateLimiter.acquire(signal);
     const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal });
     const needsTableFollowUp = !presetType && isTableType(result.docType) && (!result.items || result.items.length === 0);
     if (needsTableFollowUp) {
@@ -150,6 +168,7 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
         // skipOcr: true — text уже есть от первого запроса (result.text), повторно
         // просить у Gemini полную OCR-расшифровку в этом запросе незачем: это
         // чистая избыточность, раздувающая объём ответа без пользы (см. лог рефакторинга).
+        await geminiRateLimiter.acquire(signal); // это ОТДЕЛЬНЫЙ запрос — тоже считается в лимит
         const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true, onRetry, signal });
         return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items };
       } catch (e) {
@@ -291,7 +310,14 @@ recognizeBtn.addEventListener('click', async () => {
   }
   const totalTasks = tasks.length;
   let completedCount = 0;
-  recognizeBtn.textContent = totalTasks ? `Распознаём… (0/${totalTasks})` : 'Распознавание…';
+  let doneCount = 0;
+  let errorCount = 0;
+  recognizeBtn.textContent = totalTasks ? 'Распознаём…' : 'Распознавание…';
+  setProgressSummary(0, 0, totalTasks);
+  // Порог подобран на глаз: до ~20 страниц интереснее видеть весь список целиком,
+  // после — список из десятков успешных файлов только мешает следить за тем, что
+  // ещё в процессе или упало (см. жалобу на неудобство при 50-100 документах).
+  setDefaultHideCompleted(totalTasks > 20);
 
   await runWithConcurrency(tasks, mode === 'gemini' ? MAX_CONCURRENT_REQUESTS : 1, async ([fileIndex, pageIndex]) => {
     const entry = fileEntries[fileIndex];
@@ -305,12 +331,14 @@ recognizeBtn.addEventListener('click', async () => {
       entry.pageRecognized[pageIndex] = { docType, fields, items };
       entry.pageTexts[pageIndex] = postProcessText(rawText, { cleanup: true, normalize: postProcessCheckbox.checked });
       markPageDone(fileIndex, pageIndex, 'Готово');
+      doneCount++;
     } catch (e) {
       const isAbort = e && e.name === 'AbortError';
       markPageError(fileIndex, pageIndex, isAbort ? 'Отменено' : (e && e.message ? e.message : String(e)));
+      errorCount++;
     }
     completedCount++;
-    recognizeBtn.textContent = `Распознаём… (${completedCount}/${totalTasks})`;
+    setProgressSummary(doneCount, errorCount, totalTasks);
     setOverallProgress(totalTasks ? completedCount / totalTasks : 1);
   }, () => cancelled);
 
