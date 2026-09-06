@@ -33,6 +33,9 @@ const deleteClientBtn = document.getElementById('deleteClientBtn');
 const fApiKey = document.getElementById('fApiKey');
 const fSlug = document.getElementById('fSlug');
 const fLabel = document.getElementById('fLabel');
+const fPageLimit = document.getElementById('fPageLimit');
+const fPagesUsed = document.getElementById('fPagesUsed');
+const usageWarning = document.getElementById('usageWarning');
 const fAccessPassword = document.getElementById('fAccessPassword');
 const fAccessPasswordLabel = document.getElementById('fAccessPasswordLabel');
 const passwordStatusBadge = document.getElementById('passwordStatusBadge');
@@ -216,6 +219,10 @@ function formatUpdatedAt(iso) {
 function badgesFor(client) {
   const badges = [];
   if (client.has_password) badges.push('🔒 Пароль на сайт');
+  if (client.page_limit != null) {
+    const exhausted = client.pages_used >= client.page_limit;
+    badges.push(`${exhausted ? '⛔' : '📄'} Страниц: ${client.pages_used}/${client.page_limit}`);
+  }
   if (client.fields && client.fields.length) badges.push('Устар. поля (любой тип)');
   if (client.field_overrides && Object.keys(client.field_overrides).length) badges.push(`Переопределений: ${Object.keys(client.field_overrides).length}`);
   if (client.custom_doc_types && Object.keys(client.custom_doc_types).length) badges.push(`Своих типов: ${Object.keys(client.custom_doc_types).length}`);
@@ -496,6 +503,9 @@ function resetForm() {
   fLabel.value = '';
   fAccessPassword.value = '';
   fRemovePassword.checked = false;
+  fPageLimit.value = '';
+  fPagesUsed.value = '';
+  usageWarning.style.display = 'none';
   fDisplayName.value = '';
   fLogoUrl.value = '';
   fAccentColor.value = '';
@@ -543,6 +553,12 @@ function openForm(client) {
     fApiKey.value = client.api_key || '';
     fSlug.value = client.client_slug || '';
     fLabel.value = client.label || '';
+    fPageLimit.value = client.page_limit != null ? client.page_limit : '';
+    fPagesUsed.value = client.pages_used != null ? client.pages_used : 0;
+    if (client.page_limit != null && client.pages_used >= client.page_limit) {
+      usageWarning.textContent = `⛔ Лимит исчерпан (${client.pages_used}/${client.page_limit}) — распознавание для этого клиента заблокировано, пока не поднимете лимит.`;
+      usageWarning.style.display = 'block';
+    }
     fDisplayName.value = client.display_name || '';
     fLogoUrl.value = client.logo_url || '';
     fAccentColor.value = client.accent_color || '';
@@ -579,6 +595,8 @@ function buildPayload() {
     api_key: fApiKey.value.trim(),
     client_slug: fSlug.value.trim(),
     label: fLabel.value.trim(),
+    page_limit: fPageLimit.value.trim(),
+    pages_used: fPagesUsed.value.trim() === '' ? undefined : Number(fPagesUsed.value),
     display_name: fDisplayName.value.trim(),
     logo_url: fLogoUrl.value.trim(),
     accent_color: fAccentColor.value.trim(),

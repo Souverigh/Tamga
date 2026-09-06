@@ -82,6 +82,18 @@
         <input type="text" id="fLabel" class="admin-input" placeholder="напр. Пилот Акме, начали сентябрь 2026">
       </div>
 
+      <h3 class="admin-section-title">Пакет страниц <span class="admin-hint">— разовый лимит, пополняется вручную после оплаты</span></h3>
+      <div class="admin-field-group">
+        <label class="admin-label">Лимит страниц</label>
+        <input type="number" id="fPageLimit" class="admin-input" min="0" step="1" placeholder="Пусто — без лимита">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Использовано страниц</label>
+        <input type="number" id="fPagesUsed" class="admin-input" min="0" step="1" placeholder="0">
+        <div class="admin-note">Растёт автоматически на каждой распознанной странице. Поменяйте вручную, чтобы обнулить счётчик при пополнении пакета или поправить ошибку.</div>
+      </div>
+      <div id="usageWarning" class="admin-note" style="display:none; color:var(--danger);"></div>
+
       <h3 class="admin-section-title">Фасад для веб-интерфейса</h3>
       <div class="admin-field-group">
         <label class="admin-label">Название компании</label>

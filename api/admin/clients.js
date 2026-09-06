@@ -17,7 +17,7 @@ const { clearConfigCache } = require('../../lib/customFieldsLookup');
 // Supabase REST используется напрямую через fetch (как и customFieldsLookup.js) —
 // в проекте принципиально нет npm-зависимостей, клиентская библиотека не нужна.
 
-const WRITABLE_COLUMNS = ['api_key', 'client_slug', 'label', 'fields', 'field_overrides', 'custom_doc_types', 'formatting', 'display_name', 'logo_url', 'accent_color'];
+const WRITABLE_COLUMNS = ['api_key', 'client_slug', 'label', 'fields', 'field_overrides', 'custom_doc_types', 'formatting', 'display_name', 'logo_url', 'accent_color', 'page_limit', 'pages_used'];
 // access_password_hash НЕ в WRITABLE_COLUMNS — админка никогда не пишет туда
 // напрямую. Вместо этого тело запроса может содержать 'access_password'
 // (plaintext, только на вход) — validateAndNormalize хеширует его сюда же
@@ -130,6 +130,25 @@ function validateAndNormalize(body) {
       return { error: `formatting.decimalSeparator должен быть одним из: ${allowedSeparator.join(', ')}` };
     }
     if (!row.formatting.dateFormat && !row.formatting.decimalSeparator) row.formatting = null;
+  }
+
+  // Разовый пакет страниц (см. lib/customFieldsLookup.js:consumeUsage). Пустая
+  // строка из поля ввода -> null (без лимита), не 0 — иначе форма с очищенным
+  // полем случайно заблокировала бы клиента на нулевом лимите вместо снятия лимита.
+  if (row.page_limit === '') row.page_limit = null;
+  if (row.page_limit !== undefined && row.page_limit !== null) {
+    const n = Number(row.page_limit);
+    if (!Number.isInteger(n) || n < 0) {
+      return { error: 'page_limit должен быть целым неотрицательным числом или пустым (без лимита)' };
+    }
+    row.page_limit = n;
+  }
+  if (row.pages_used !== undefined) {
+    const n = Number(row.pages_used);
+    if (!Number.isInteger(n) || n < 0) {
+      return { error: 'pages_used должен быть целым неотрицательным числом' };
+    }
+    row.pages_used = n;
   }
 
   return { row };
