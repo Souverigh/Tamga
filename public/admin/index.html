@@ -104,17 +104,52 @@
         </select>
       </div>
 
-      <h3 class="admin-section-title">Кастомные поля <span class="admin-hint">— для известных стандартных типов документов</span></h3>
-      <div class="admin-field-group">
-        <textarea id="fFields" class="admin-input admin-textarea" rows="3" placeholder="ФИО&#10;ПИН (ИНН)&#10;Дата рождения"></textarea>
-        <div class="admin-note">По одному полю на строку. Заменяет стандартный список полей ДЛЯ ЛЮБОГО распознанного стандартного типа — подходит, если этот клиент почти всегда присылает один и тот же тип документа (например, только паспорта через API).</div>
+      <h3 class="admin-section-title">Переопределение полей <span class="admin-hint">— свой список полей для конкретного стандартного типа документа</span></h3>
+      <div id="fieldOverridesList" class="admin-override-list"></div>
+      <button class="btn-secondary" id="addFieldOverrideBtn" type="button">+ Добавить переопределение</button>
+
+      <div id="fieldOverrideEditor" class="admin-editor-box" style="display:none;">
+        <div class="admin-field-group">
+          <label class="admin-label">Тип документа</label>
+          <select id="overrideTypeSelect" class="admin-input"></select>
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Поля</label>
+          <div id="overrideChips" class="admin-chip-editor"></div>
+        </div>
+        <div class="admin-form-actions">
+          <button class="btn-primary" id="confirmOverrideBtn" type="button">Добавить</button>
+          <button class="btn-secondary" id="cancelOverrideBtn" type="button">Отмена</button>
+        </div>
+      </div>
+
+      <div id="legacyFieldsBox" class="admin-field-group" style="display:none; margin-top:20px;">
+        <label class="admin-label">Устаревшее: поля для ЛЮБОГО типа <span class="admin-hint">— общий override без привязки к типу, оставлен для совместимости</span></label>
+        <div id="legacyChips" class="admin-chip-editor"></div>
+        <div class="admin-note">Этому клиенту задан старый общий override. Работает как раньше для любого типа, кроме тех, для которых выше добавлено собственное переопределение. Новым клиентам рекомендуем использовать переопределение по типу выше вместо этого поля.</div>
       </div>
 
       <h3 class="admin-section-title">Кастомные типы документов <span class="admin-hint">— свои типы, которых нет в стандартном списке</span></h3>
-      <div class="admin-field-group">
-        <textarea id="fCustomDocTypes" class="admin-input admin-textarea admin-mono" rows="6" placeholder='{&#10;  "Заявка на кредит": {&#10;    "fields": ["ФИО", "Сумма кредита", "Срок"],&#10;    "hint": "внутренняя форма банка, не паспорт"&#10;  }&#10;}'></textarea>
-        <div class="admin-note">JSON: название типа → список полей и необязательная подсказка для классификации. Работает и в автоклассификации, и в ручном выборе типа на сайте.</div>
-        <div id="customDocTypesError" class="admin-error" style="display:none;"></div>
+      <div id="customTypesList" class="admin-override-list"></div>
+      <button class="btn-secondary" id="addCustomTypeBtn" type="button">+ Добавить тип</button>
+
+      <div id="customTypeEditor" class="admin-editor-box" style="display:none;">
+        <div class="admin-field-group">
+          <label class="admin-label">Название типа</label>
+          <input type="text" id="newTypeName" class="admin-input" placeholder="напр. Заявка на кредит">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Поля</label>
+          <div id="newTypeChips" class="admin-chip-editor"></div>
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Подсказка для классификации <span class="admin-hint">необязательно</span></label>
+          <input type="text" id="newTypeHint" class="admin-input" placeholder="напр. внутренняя форма банка, не паспорт">
+        </div>
+        <div class="admin-form-actions">
+          <button class="btn-primary" id="confirmCustomTypeBtn" type="button">Добавить</button>
+          <button class="btn-secondary" id="cancelCustomTypeBtn" type="button">Отмена</button>
+        </div>
       </div>
 
       <div class="admin-form-actions">

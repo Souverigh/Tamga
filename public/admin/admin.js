@@ -2,6 +2,13 @@
 // public/js/app.js. Секрет (x-admin-secret, см. lib/adminAuth.js) хранится
 // в sessionStorage — сбрасывается при закрытии вкладки, чтобы не жить в
 // браузере бессрочно, как localStorage.
+//
+// Список типов/полей документов переиспользуется из основной схемы фронтенда
+// (public/js/config/docSchema.js) — та же схема, что использует сайт для
+// ручного выбора типа, чтобы дропдаун/подсказки полей здесь не расходились
+// с тем, что реально знает бэкенд (lib/docSchema.js — серверная копия).
+
+import { DOC_TYPES, DOC_FIELDS, isTableType } from '../js/config/docSchema.js';
 
 const SECRET_KEY = 'tamga_admin_secret';
 
@@ -32,11 +39,36 @@ const fAccentColor = document.getElementById('fAccentColor');
 const accentSwatch = document.getElementById('accentSwatch');
 const fDateFormat = document.getElementById('fDateFormat');
 const fDecimalSeparator = document.getElementById('fDecimalSeparator');
-const fFields = document.getElementById('fFields');
-const fCustomDocTypes = document.getElementById('fCustomDocTypes');
-const customDocTypesError = document.getElementById('customDocTypesError');
 
-let editingId = null; // null — создаём нового; иначе id редактируемой строки
+const fieldOverridesList = document.getElementById('fieldOverridesList');
+const addFieldOverrideBtn = document.getElementById('addFieldOverrideBtn');
+const fieldOverrideEditor = document.getElementById('fieldOverrideEditor');
+const overrideTypeSelect = document.getElementById('overrideTypeSelect');
+const overrideChipsEl = document.getElementById('overrideChips');
+const confirmOverrideBtn = document.getElementById('confirmOverrideBtn');
+const cancelOverrideBtn = document.getElementById('cancelOverrideBtn');
+
+const legacyFieldsBox = document.getElementById('legacyFieldsBox');
+const legacyChipsEl = document.getElementById('legacyChips');
+
+const customTypesList = document.getElementById('customTypesList');
+const addCustomTypeBtn = document.getElementById('addCustomTypeBtn');
+const customTypeEditor = document.getElementById('customTypeEditor');
+const newTypeName = document.getElementById('newTypeName');
+const newTypeChipsEl = document.getElementById('newTypeChips');
+const newTypeHint = document.getElementById('newTypeHint');
+const confirmCustomTypeBtn = document.getElementById('confirmCustomTypeBtn');
+const cancelCustomTypeBtn = document.getElementById('cancelCustomTypeBtn');
+
+let editingId = null; // null — создаём нового клиента; иначе id редактируемой строки
+let editingOverrideType = null; // null — добавляем новое переопределение; иначе редактируем существующее
+let editingCustomTypeName = null; // аналогично, для кастомных типов
+
+// Состояние формы для трёх структурированных блоков — отдельно от простых
+// text-полей (те читаются прямо из DOM в buildPayload).
+let state = { fieldOverrides: {}, customDocTypes: {}, legacyFields: [] };
+
+const CARD_TYPES = DOC_TYPES.filter(t => !isTableType(t)); // табличные типы не поддерживают переопределение полей
 
 function adminFetch(path, options = {}) {
   const secret = sessionStorage.getItem(SECRET_KEY);
@@ -44,6 +76,93 @@ function adminFetch(path, options = {}) {
     ...options,
     headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret, ...(options.headers || {}) }
   });
+}
+
+// --- Переиспользуемый редактор списка полей: чипы с крестиком + добавление
+// своего значения + (опционально) кнопки-подсказки из стандартной схемы типа. ---
+
+function createChipEditor(container, initialValues) {
+  container.innerHTML = '';
+  let values = [...(initialValues || [])];
+
+  const selectedRow = document.createElement('div');
+  selectedRow.className = 'admin-chip-editor-selected';
+  const addRow = document.createElement('div');
+  addRow.className = 'admin-chip-add-row';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'admin-input';
+  input.placeholder = 'Своё поле — введите название и нажмите «Добавить»';
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn-secondary';
+  addBtn.type = 'button';
+  addBtn.textContent = 'Добавить';
+  addRow.appendChild(input);
+  addRow.appendChild(addBtn);
+  const suggestionsRow = document.createElement('div');
+  suggestionsRow.className = 'admin-chip-suggestions';
+
+  container.appendChild(selectedRow);
+  container.appendChild(addRow);
+  container.appendChild(suggestionsRow);
+
+  let suggestions = [];
+
+  function renderSelected() {
+    selectedRow.innerHTML = '';
+    values.forEach(v => {
+      const chip = document.createElement('span');
+      chip.className = 'admin-chip';
+      const text = document.createElement('span');
+      text.textContent = v;
+      chip.appendChild(text);
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Убрать поле';
+      removeBtn.addEventListener('click', () => {
+        values = values.filter(x => x !== v);
+        renderSelected();
+        renderSuggestions();
+      });
+      chip.appendChild(removeBtn);
+      selectedRow.appendChild(chip);
+    });
+  }
+
+  function renderSuggestions() {
+    suggestionsRow.innerHTML = '';
+    suggestions.filter(s => !values.includes(s)).forEach(s => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'admin-chip-suggestion';
+      btn.textContent = '+ ' + s;
+      btn.addEventListener('click', () => {
+        values.push(s);
+        renderSelected();
+        renderSuggestions();
+      });
+      suggestionsRow.appendChild(btn);
+    });
+  }
+
+  function addFromInput() {
+    const v = input.value.trim();
+    if (!v || values.includes(v)) { input.value = ''; return; }
+    values.push(v);
+    input.value = '';
+    renderSelected();
+    renderSuggestions();
+  }
+  addBtn.addEventListener('click', addFromInput);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addFromInput(); } });
+
+  renderSelected();
+
+  return {
+    getValues: () => values,
+    setSuggestions: (list) => { suggestions = list || []; renderSuggestions(); }
+  };
 }
 
 // --- Гейт по секрету ---
@@ -74,7 +193,6 @@ async function tryEnter(secret) {
 gateBtn.addEventListener('click', () => tryEnter(secretInput.value.trim()));
 secretInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryEnter(secretInput.value.trim()); });
 
-// Если секрет уже сохранён с прошлого раза (та же вкладка) — входим сразу.
 if (sessionStorage.getItem(SECRET_KEY)) {
   tryEnter(sessionStorage.getItem(SECRET_KEY));
 }
@@ -89,7 +207,8 @@ function formatUpdatedAt(iso) {
 
 function badgesFor(client) {
   const badges = [];
-  if (client.fields && client.fields.length) badges.push(`Полей: ${client.fields.length}`);
+  if (client.fields && client.fields.length) badges.push('Устар. поля (любой тип)');
+  if (client.field_overrides && Object.keys(client.field_overrides).length) badges.push(`Переопределений: ${Object.keys(client.field_overrides).length}`);
   if (client.custom_doc_types && Object.keys(client.custom_doc_types).length) badges.push(`Своих типов: ${Object.keys(client.custom_doc_types).length}`);
   if (client.formatting && (client.formatting.dateFormat || client.formatting.decimalSeparator)) badges.push('Формат');
   if (client.display_name || client.logo_url || client.accent_color) badges.push('Фасад');
@@ -160,7 +279,189 @@ async function reloadClients() {
   renderClients(await res.json());
 }
 
-// --- Форма создания/редактирования ---
+// --- Блок «Переопределение полей» ---
+
+function renderFieldOverridesList() {
+  fieldOverridesList.innerHTML = '';
+  const types = Object.keys(state.fieldOverrides);
+  types.forEach(type => {
+    const item = document.createElement('div');
+    item.className = 'admin-override-item';
+
+    const main = document.createElement('div');
+    main.className = 'admin-override-item-main';
+    const title = document.createElement('div');
+    title.className = 'admin-override-item-title';
+    title.textContent = type;
+    main.appendChild(title);
+    const fieldsWrap = document.createElement('div');
+    fieldsWrap.className = 'admin-override-item-fields';
+    state.fieldOverrides[type].forEach(f => {
+      const badge = document.createElement('span');
+      badge.className = 'admin-badge';
+      badge.textContent = f;
+      fieldsWrap.appendChild(badge);
+    });
+    main.appendChild(fieldsWrap);
+    item.appendChild(main);
+
+    const btns = document.createElement('div');
+    const editBtn = document.createElement('button');
+    editBtn.className = 'admin-link-btn';
+    editBtn.textContent = 'Изменить';
+    editBtn.style.marginRight = '10px';
+    editBtn.addEventListener('click', () => openOverrideEditor(type));
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'admin-override-item-remove';
+    removeBtn.textContent = 'Удалить';
+    removeBtn.addEventListener('click', () => { delete state.fieldOverrides[type]; renderFieldOverridesList(); });
+    btns.appendChild(editBtn);
+    btns.appendChild(removeBtn);
+    item.appendChild(btns);
+
+    fieldOverridesList.appendChild(item);
+  });
+}
+
+let overrideChipEditor = null;
+
+function openOverrideEditor(existingType) {
+  editingOverrideType = existingType || null;
+  overrideTypeSelect.innerHTML = '';
+  const usedTypes = Object.keys(state.fieldOverrides);
+  const availableTypes = CARD_TYPES.filter(t => t === existingType || !usedTypes.includes(t));
+  availableTypes.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    overrideTypeSelect.appendChild(opt);
+  });
+  overrideTypeSelect.value = existingType || availableTypes[0];
+  overrideTypeSelect.disabled = !!existingType; // при редактировании тип не меняем — только поля
+
+  const initial = existingType ? state.fieldOverrides[existingType] : [];
+  overrideChipEditor = createChipEditor(overrideChipsEl, initial);
+  overrideChipEditor.setSuggestions(DOC_FIELDS[overrideTypeSelect.value] || []);
+
+  fieldOverrideEditor.style.display = 'block';
+  fieldOverrideEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+overrideTypeSelect.addEventListener('change', () => {
+  if (overrideChipEditor) overrideChipEditor.setSuggestions(DOC_FIELDS[overrideTypeSelect.value] || []);
+});
+
+addFieldOverrideBtn.addEventListener('click', () => {
+  if (!CARD_TYPES.some(t => !Object.keys(state.fieldOverrides).includes(t))) {
+    alert('Переопределения уже добавлены для всех поддерживаемых типов документов.');
+    return;
+  }
+  openOverrideEditor(null);
+});
+cancelOverrideBtn.addEventListener('click', () => { fieldOverrideEditor.style.display = 'none'; });
+confirmOverrideBtn.addEventListener('click', () => {
+  const type = overrideTypeSelect.value;
+  const values = overrideChipEditor.getValues();
+  if (!type || !values.length) { alert('Выберите тип и добавьте хотя бы одно поле.'); return; }
+  state.fieldOverrides[type] = values;
+  fieldOverrideEditor.style.display = 'none';
+  renderFieldOverridesList();
+});
+
+// --- Устаревшее общее поле fields (обратная совместимость) ---
+
+let legacyChipEditor = null;
+
+function renderLegacyFields() {
+  if (!state.legacyFields.length) {
+    legacyFieldsBox.style.display = 'none';
+    return;
+  }
+  legacyFieldsBox.style.display = 'block';
+  legacyChipEditor = createChipEditor(legacyChipsEl, state.legacyFields);
+}
+
+// --- Блок «Кастомные типы документов» ---
+
+function renderCustomTypesList() {
+  customTypesList.innerHTML = '';
+  Object.keys(state.customDocTypes).forEach(name => {
+    const entry = state.customDocTypes[name];
+    const item = document.createElement('div');
+    item.className = 'admin-override-item';
+
+    const main = document.createElement('div');
+    main.className = 'admin-override-item-main';
+    const title = document.createElement('div');
+    title.className = 'admin-override-item-title';
+    title.textContent = name;
+    main.appendChild(title);
+    if (entry.hint) {
+      const hint = document.createElement('div');
+      hint.className = 'admin-override-item-hint';
+      hint.textContent = entry.hint;
+      main.appendChild(hint);
+    }
+    const fieldsWrap = document.createElement('div');
+    fieldsWrap.className = 'admin-override-item-fields';
+    (entry.fields || []).forEach(f => {
+      const badge = document.createElement('span');
+      badge.className = 'admin-badge';
+      badge.textContent = f;
+      fieldsWrap.appendChild(badge);
+    });
+    main.appendChild(fieldsWrap);
+    item.appendChild(main);
+
+    const btns = document.createElement('div');
+    const editBtn = document.createElement('button');
+    editBtn.className = 'admin-link-btn';
+    editBtn.textContent = 'Изменить';
+    editBtn.style.marginRight = '10px';
+    editBtn.addEventListener('click', () => openCustomTypeEditor(name));
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'admin-override-item-remove';
+    removeBtn.textContent = 'Удалить';
+    removeBtn.addEventListener('click', () => { delete state.customDocTypes[name]; renderCustomTypesList(); });
+    btns.appendChild(editBtn);
+    btns.appendChild(removeBtn);
+    item.appendChild(btns);
+
+    customTypesList.appendChild(item);
+  });
+}
+
+let newTypeChipEditor = null;
+
+function openCustomTypeEditor(existingName) {
+  editingCustomTypeName = existingName || null;
+  newTypeName.value = existingName || '';
+  newTypeName.disabled = !!existingName; // переименование не поддерживаем — удалите и добавьте заново
+  newTypeHint.value = existingName ? (state.customDocTypes[existingName].hint || '') : '';
+  const initial = existingName ? (state.customDocTypes[existingName].fields || []) : [];
+  newTypeChipEditor = createChipEditor(newTypeChipsEl, initial); // без подсказок — тип новый, стандартной схемы для него нет
+
+  customTypeEditor.style.display = 'block';
+  customTypeEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+addCustomTypeBtn.addEventListener('click', () => openCustomTypeEditor(null));
+cancelCustomTypeBtn.addEventListener('click', () => { customTypeEditor.style.display = 'none'; });
+confirmCustomTypeBtn.addEventListener('click', () => {
+  const name = newTypeName.value.trim();
+  const values = newTypeChipEditor.getValues();
+  if (!name || !values.length) { alert('Укажите название типа и добавьте хотя бы одно поле.'); return; }
+  if (!editingCustomTypeName && DOC_TYPES.includes(name)) {
+    alert(`«${name}» совпадает со стандартным типом документа. Чтобы переопределить его поля, используйте блок «Переопределение полей» выше.`);
+    return;
+  }
+  state.customDocTypes[name] = { fields: values };
+  if (newTypeHint.value.trim()) state.customDocTypes[name].hint = newTypeHint.value.trim();
+  customTypeEditor.style.display = 'none';
+  renderCustomTypesList();
+});
+
+// --- Форма создания/редактирования клиента ---
 
 function resetForm() {
   fApiKey.value = '';
@@ -171,10 +472,13 @@ function resetForm() {
   fAccentColor.value = '';
   fDateFormat.value = '';
   fDecimalSeparator.value = '';
-  fFields.value = '';
-  fCustomDocTypes.value = '';
   formError.style.display = 'none';
-  customDocTypesError.style.display = 'none';
+  fieldOverrideEditor.style.display = 'none';
+  customTypeEditor.style.display = 'none';
+  state = { fieldOverrides: {}, customDocTypes: {}, legacyFields: [] };
+  renderFieldOverridesList();
+  renderCustomTypesList();
+  renderLegacyFields();
   updateSwatch();
 }
 
@@ -197,8 +501,12 @@ function openForm(client) {
     fAccentColor.value = client.accent_color || '';
     fDateFormat.value = (client.formatting && client.formatting.dateFormat) || '';
     fDecimalSeparator.value = (client.formatting && client.formatting.decimalSeparator) || '';
-    fFields.value = (client.fields || []).join('\n');
-    fCustomDocTypes.value = client.custom_doc_types ? JSON.stringify(client.custom_doc_types, null, 2) : '';
+    state.fieldOverrides = client.field_overrides ? JSON.parse(JSON.stringify(client.field_overrides)) : {};
+    state.customDocTypes = client.custom_doc_types ? JSON.parse(JSON.stringify(client.custom_doc_types)) : {};
+    state.legacyFields = Array.isArray(client.fields) ? [...client.fields] : [];
+    renderFieldOverridesList();
+    renderCustomTypesList();
+    renderLegacyFields();
     updateSwatch();
   } else {
     editingId = null;
@@ -213,23 +521,11 @@ newClientBtn.addEventListener('click', () => openForm(null));
 cancelFormBtn.addEventListener('click', () => { formPanel.style.display = 'none'; });
 
 function buildPayload() {
-  const fields = fFields.value.split('\n').map(s => s.trim()).filter(Boolean);
-
-  let customDocTypes = null;
-  customDocTypesError.style.display = 'none';
-  if (fCustomDocTypes.value.trim()) {
-    try {
-      customDocTypes = JSON.parse(fCustomDocTypes.value);
-    } catch (e) {
-      customDocTypesError.textContent = 'Некорректный JSON: ' + e.message;
-      customDocTypesError.style.display = 'block';
-      return null;
-    }
-  }
-
   const formatting = {};
   if (fDateFormat.value) formatting.dateFormat = fDateFormat.value;
   if (fDecimalSeparator.value) formatting.decimalSeparator = fDecimalSeparator.value;
+
+  const legacyFields = legacyChipEditor ? legacyChipEditor.getValues() : state.legacyFields;
 
   return {
     api_key: fApiKey.value.trim(),
@@ -238,8 +534,9 @@ function buildPayload() {
     display_name: fDisplayName.value.trim(),
     logo_url: fLogoUrl.value.trim(),
     accent_color: fAccentColor.value.trim(),
-    fields: fields.length ? fields : null,
-    custom_doc_types: customDocTypes,
+    fields: legacyFields.length ? legacyFields : null,
+    field_overrides: Object.keys(state.fieldOverrides).length ? state.fieldOverrides : null,
+    custom_doc_types: Object.keys(state.customDocTypes).length ? state.customDocTypes : null,
     formatting: Object.keys(formatting).length ? formatting : null
   };
 }
@@ -247,7 +544,6 @@ function buildPayload() {
 saveClientBtn.addEventListener('click', async () => {
   formError.style.display = 'none';
   const payload = buildPayload();
-  if (!payload) return; // ошибка JSON уже показана
 
   const path = editingId ? `/api/admin/clients?id=${encodeURIComponent(editingId)}` : '/api/admin/clients';
   const method = editingId ? 'PATCH' : 'POST';

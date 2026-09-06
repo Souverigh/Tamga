@@ -53,3 +53,44 @@
   cursor:pointer; padding:8px 4px; font-family:inherit;
 }
 .admin-delete-btn:hover{ text-decoration:underline; }
+
+/* Списки переопределений полей / кастомных типов */
+.admin-override-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+.admin-override-item{
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+  padding:10px 12px; border:1px solid var(--line); border-radius:6px; background:var(--surface);
+}
+.admin-override-item-main{ flex:1; min-width:0; }
+.admin-override-item-title{ font-weight:500; font-size:0.9rem; margin-bottom:4px; }
+.admin-override-item-hint{ color:var(--ink-soft); font-size:0.8rem; margin-bottom:6px; }
+.admin-override-item-fields{ display:flex; flex-wrap:wrap; gap:5px; }
+.admin-override-item-remove{
+  background:none; border:none; color:var(--danger); font-size:0.82rem; cursor:pointer;
+  padding:2px 4px; flex-shrink:0; font-family:inherit;
+}
+.admin-override-item-remove:hover{ text-decoration:underline; }
+
+.admin-editor-box{
+  border:1.5px dashed var(--line-strong); border-radius:8px; padding:16px; margin-bottom:20px; background:var(--bg);
+}
+
+/* Редактор списка полей: уже выбранные — чипы с крестиком, плюс поле ввода
+   для своих полей и предложенные (из стандартной схемы типа) для быстрого добавления. */
+.admin-chip-editor-selected{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; min-height:0; }
+.admin-chip{
+  display:inline-flex; align-items:center; gap:6px; background:var(--accent-tint); color:var(--accent-deep);
+  border-radius:5px; padding:4px 6px 4px 10px; font-size:0.82rem; font-weight:500;
+}
+.admin-chip button{
+  background:none; border:none; color:var(--accent-deep); cursor:pointer; font-size:0.95rem;
+  line-height:1; padding:0 2px; font-family:inherit; opacity:0.65;
+}
+.admin-chip button:hover{ opacity:1; }
+.admin-chip-add-row{ display:flex; gap:8px; margin-bottom:10px; }
+.admin-chip-add-row .admin-input{ flex:1; }
+.admin-chip-suggestions{ display:flex; flex-wrap:wrap; gap:6px; }
+.admin-chip-suggestion{
+  background:none; border:1px dashed var(--line-strong); color:var(--ink-soft); border-radius:5px;
+  padding:4px 9px; font-size:0.8rem; cursor:pointer; font-family:inherit;
+}
+.admin-chip-suggestion:hover{ border-color:var(--accent); color:var(--accent-deep); }

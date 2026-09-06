@@ -1,4 +1,5 @@
 const { checkAdminSecret } = require('../../lib/adminAuth');
+const { DOC_TYPES, isTableType } = require('../../lib/docSchema');
 
 // Админский CRUD над tamga_api_key_fields (конфиги клиентов — см. customFieldsLookup.js) —
 // заменяет ручную правку через Supabase Table Editor на простую форму (см. public/admin/).
@@ -14,7 +15,7 @@ const { checkAdminSecret } = require('../../lib/adminAuth');
 // Supabase REST используется напрямую через fetch (как и customFieldsLookup.js) —
 // в проекте принципиально нет npm-зависимостей, клиентская библиотека не нужна.
 
-const WRITABLE_COLUMNS = ['api_key', 'client_slug', 'label', 'fields', 'custom_doc_types', 'formatting', 'display_name', 'logo_url', 'accent_color'];
+const WRITABLE_COLUMNS = ['api_key', 'client_slug', 'label', 'fields', 'field_overrides', 'custom_doc_types', 'formatting', 'display_name', 'logo_url', 'accent_color'];
 
 function supabaseHeaders(serviceKey, extra) {
   return { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', ...extra };
@@ -48,11 +49,32 @@ function validateAndNormalize(body) {
     if (!row.fields.length) row.fields = null;
   }
 
+  if (row.field_overrides !== undefined && row.field_overrides !== null) {
+    if (typeof row.field_overrides !== 'object' || Array.isArray(row.field_overrides)) {
+      return { error: 'field_overrides должен быть объектом вида { "Название стандартного типа": ["Поле1", "Поле2"] }' };
+    }
+    for (const [type, fields] of Object.entries(row.field_overrides)) {
+      if (!DOC_TYPES.includes(type)) {
+        return { error: `field_overrides: "${type}" не входит в стандартный список типов документов` };
+      }
+      if (isTableType(type)) {
+        return { error: `field_overrides: "${type}" — табличный тип, переопределение полей для него не поддерживается` };
+      }
+      if (!Array.isArray(fields) || !fields.every(f => typeof f === 'string') || !fields.length) {
+        return { error: `field_overrides["${type}"] должен быть непустым массивом строк` };
+      }
+    }
+    if (!Object.keys(row.field_overrides).length) row.field_overrides = null;
+  }
+
   if (row.custom_doc_types !== undefined && row.custom_doc_types !== null) {
     if (typeof row.custom_doc_types !== 'object' || Array.isArray(row.custom_doc_types)) {
       return { error: 'custom_doc_types должен быть объектом вида { "Название типа": { "fields": ["Поле1"], "hint": "..." } }' };
     }
     for (const [type, entry] of Object.entries(row.custom_doc_types)) {
+      if (DOC_TYPES.includes(type)) {
+        return { error: `custom_doc_types: "${type}" совпадает со стандартным типом — используйте field_overrides для переопределения полей стандартного типа вместо кастомного типа с тем же именем` };
+      }
       if (!entry || typeof entry !== 'object' || !Array.isArray(entry.fields) || !entry.fields.every(f => typeof f === 'string')) {
         return { error: `custom_doc_types["${type}"].fields должен быть массивом строк` };
       }
