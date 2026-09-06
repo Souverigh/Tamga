@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Тамга — клиенты</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+<div class="wrap admin-wrap">
+
+  <header>
+    <div class="brand"><span class="seal"><span>Т</span></span>Тамга — клиенты</div>
+  </header>
+  <p class="tagline">Внутренний инструмент: конфиги клиентских пилотов (белые метки, кастомные поля/типы, форматирование) — без ручной правки через Supabase.</p>
+
+  <!-- Гейт по секрету: показывается, пока не подтверждён x-admin-secret -->
+  <section id="gate" class="panel">
+    <div class="step-label">Вход</div>
+    <input type="password" id="secretInput" class="admin-input" placeholder="Секрет админки" autocomplete="current-password">
+    <button class="btn-primary" id="gateBtn" type="button" style="margin-top:12px;">Войти</button>
+    <div id="gateError" class="admin-error" style="display:none;"></div>
+  </section>
+
+  <!-- Основной экран: список + форма — скрыт до входа -->
+  <section id="adminMain" style="display:none;">
+
+    <div class="panel">
+      <div class="admin-panel-header">
+        <div class="step-label" style="margin:0;">Клиенты</div>
+        <button class="btn-secondary" id="newClientBtn" type="button">+ Новый клиент</button>
+      </div>
+      <div id="clientsEmpty" class="admin-empty" style="display:none;">Клиентов пока нет — добавьте первого.</div>
+      <div id="clientsTableWrap" style="display:none;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Идентификатор</th>
+              <th>Заметка</th>
+              <th>Настроено</th>
+              <th>Обновлён</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="clientsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Форма создания/редактирования — скрыта, пока не нажали «Новый клиент»/«Изменить» -->
+    <section id="formPanel" class="panel" style="display:none;">
+      <div class="step-label" id="formTitle">Новый клиент</div>
+
+      <div class="admin-field-group">
+        <label class="admin-label">API-ключ <span class="admin-hint">— для доступа через /api/v1/recognize (x-api-key)</span></label>
+        <input type="text" id="fApiKey" class="admin-input" placeholder="напр. sk_acme_a1b2c3">
+      </div>
+
+      <div class="admin-field-group">
+        <label class="admin-label">Slug для сайта <span class="admin-hint">— доступ через ?client=slug</span></label>
+        <input type="text" id="fSlug" class="admin-input" placeholder="напр. acme">
+      </div>
+      <div class="admin-note">Нужно задать хотя бы одно из двух полей выше — иначе на клиента не сослаться ни из API, ни с сайта.</div>
+
+      <div class="admin-field-group">
+        <label class="admin-label">Заметка <span class="admin-hint">— только для вас, клиент её не увидит</span></label>
+        <input type="text" id="fLabel" class="admin-input" placeholder="напр. Пилот Акме, начали сентябрь 2026">
+      </div>
+
+      <h3 class="admin-section-title">Фасад для веб-интерфейса</h3>
+      <div class="admin-field-group">
+        <label class="admin-label">Название компании</label>
+        <input type="text" id="fDisplayName" class="admin-input" placeholder="напр. Acme Consulting — заменит «Тамга» в шапке">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">URL логотипа</label>
+        <input type="text" id="fLogoUrl" class="admin-input" placeholder="https://...">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Акцентный цвет</label>
+        <div class="admin-color-row">
+          <input type="text" id="fAccentColor" class="admin-input" placeholder="#2A4FE0" style="max-width:160px;">
+          <span id="accentSwatch" class="admin-swatch"></span>
+        </div>
+      </div>
+
+      <h3 class="admin-section-title">Форматирование значений</h3>
+      <div class="admin-field-group">
+        <label class="admin-label">Формат даты</label>
+        <select id="fDateFormat" class="admin-input">
+          <option value="">По умолчанию (ДД.ММ.ГГГГ)</option>
+          <option value="DD.MM.YYYY">ДД.ММ.ГГГГ</option>
+          <option value="YYYY-MM-DD">ГГГГ-ММ-ДД (ISO)</option>
+        </select>
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Десятичный разделитель</label>
+        <select id="fDecimalSeparator" class="admin-input">
+          <option value="">По умолчанию (запятая)</option>
+          <option value=",">Запятая — 1250,50</option>
+          <option value=".">Точка — 1250.50</option>
+        </select>
+      </div>
+
+      <h3 class="admin-section-title">Кастомные поля <span class="admin-hint">— для известных стандартных типов документов</span></h3>
+      <div class="admin-field-group">
+        <textarea id="fFields" class="admin-input admin-textarea" rows="3" placeholder="ФИО&#10;ПИН (ИНН)&#10;Дата рождения"></textarea>
+        <div class="admin-note">По одному полю на строку. Заменяет стандартный список полей ДЛЯ ЛЮБОГО распознанного стандартного типа — подходит, если этот клиент почти всегда присылает один и тот же тип документа (например, только паспорта через API).</div>
+      </div>
+
+      <h3 class="admin-section-title">Кастомные типы документов <span class="admin-hint">— свои типы, которых нет в стандартном списке</span></h3>
+      <div class="admin-field-group">
+        <textarea id="fCustomDocTypes" class="admin-input admin-textarea admin-mono" rows="6" placeholder='{&#10;  "Заявка на кредит": {&#10;    "fields": ["ФИО", "Сумма кредита", "Срок"],&#10;    "hint": "внутренняя форма банка, не паспорт"&#10;  }&#10;}'></textarea>
+        <div class="admin-note">JSON: название типа → список полей и необязательная подсказка для классификации. Работает и в автоклассификации, и в ручном выборе типа на сайте.</div>
+        <div id="customDocTypesError" class="admin-error" style="display:none;"></div>
+      </div>
+
+      <div class="admin-form-actions">
+        <button class="btn-primary" id="saveClientBtn" type="button">Сохранить</button>
+        <button class="btn-secondary" id="cancelFormBtn" type="button">Отмена</button>
+        <button class="admin-delete-btn" id="deleteClientBtn" type="button" style="display:none;">Удалить клиента</button>
+      </div>
+      <div id="formError" class="admin-error" style="display:none;"></div>
+    </section>
+
+  </section>
+
+</div>
+<script type="module" src="/admin/admin.js"></script>
+</body>
+</html>
