@@ -32,16 +32,20 @@ export function downloadXlsx(groups) {
 
   // Группируем товарные строки по типу документа — у каждого табличного типа
   // свои колонки/ключи (см. docSchema.js), поэтому один общий лист не подходит.
+  // Колонки для группы берутся из ПЕРВОГО файла этой группы — корректно, т.к.
+  // override зависит от клиента/сессии (одинаков для всех файлов сессии), не
+  // от конкретного файла (см. results.js:getFileGroups — columns/columnKeys
+  // приходят с сервера при tableMode, см. lib/recognize.js).
   const itemsByType = new Map();
-  groups.forEach(({ fileName, docType, items }) => {
+  groups.forEach(({ fileName, docType, items, columns, columnKeys }) => {
     if (!isTableType(docType) || !items || items.length === 0) return;
-    if (!itemsByType.has(docType)) itemsByType.set(docType, []);
-    itemsByType.get(docType).push(...items.map(item => ({ fileName, item })));
+    if (!itemsByType.has(docType)) itemsByType.set(docType, { columns: columns || null, columnKeys: columnKeys || null, entries: [] });
+    itemsByType.get(docType).entries.push(...items.map(item => ({ fileName, item })));
   });
 
-  itemsByType.forEach((entries, docType) => {
-    const columns = columnsForType(docType);
-    const keys = keysForType(docType);
+  itemsByType.forEach(({ columns: columnsOverride, columnKeys: keysOverride, entries }, docType) => {
+    const columns = columnsOverride || columnsForType(docType);
+    const keys = keysOverride || keysForType(docType);
     const itemRows = [['Файл', 'Тип документа', ...columns]];
     entries.forEach(({ fileName, item }) => {
       itemRows.push([fileName, docType, ...keys.map(k => item[k] || '')]);

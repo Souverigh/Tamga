@@ -56,10 +56,14 @@ function renderLineItemsRow(container, columns, keys, item) {
   container.appendChild(row);
 }
 
-function renderLineItemsTable(container, docType, items) {
+// columnsOverride/keysOverride (опционально) — реально использованная сервером
+// раскладка (см. lib/recognize.js: columns/columnKeys в ответе), нужна когда
+// у клиента есть field_overrides для этого табличного типа — тогда она
+// отличается от статичной схемы docSchema.js. Без override — как раньше.
+function renderLineItemsTable(container, docType, items, columnsOverride, keysOverride) {
   container.innerHTML = '';
-  const columns = columnsForType(docType);
-  const keys = keysForType(docType);
+  const columns = columnsOverride || columnsForType(docType);
+  const keys = keysOverride || keysForType(docType);
 
   const header = document.createElement('div');
   header.className = 'line-items-row line-items-header';
@@ -85,18 +89,19 @@ function renderLineItemsTable(container, docType, items) {
   container.appendChild(addRowBtn);
 }
 
-// docType нужен, чтобы знать, какие ключи (keys) относятся к этому типу —
-// без этого пустая строка нового типа не отфильтровывалась бы корректно.
-function readLineItemsTable(container, docType) {
-  const keys = keysForType(docType);
+// Ключи читаются напрямую из input.dataset.key, а НЕ пересчитываются заново
+// через keysForType(docType) — при клиентском override ключи техническте
+// (col0, col1, ...) и не совпадают со статичной схемой типа; пересчёт заново
+// отфильтровал бы ВСЕ строки как "пустые" (ни один ключ не совпал бы).
+function readLineItemsTable(container) {
   return Array.from(container.querySelectorAll('.line-items-rows .line-items-row')).map(row => {
     const item = {};
     row.querySelectorAll('.line-items-input').forEach(input => { item[input.dataset.key] = input.value; });
     return item;
-  }).filter(item => keys.some(k => (item[k] || '').trim() !== ''));
+  }).filter(item => Object.keys(item).some(k => (item[k] || '').trim() !== ''));
 }
 
-export function renderResultGroup({ fileName, pages, docType, fields, items }) {
+export function renderResultGroup({ fileName, pages, docType, fields, items, columns, columnKeys }) {
   const group = document.createElement('div');
   group.className = 'file-result-group';
 
@@ -138,8 +143,13 @@ export function renderResultGroup({ fileName, pages, docType, fields, items }) {
   const tableMode = isTableType(docType);
   fieldsTable.className = tableMode ? 'line-items-table' : 'fields-table';
   group.dataset.mode = tableMode ? 'table' : 'fields';
+  // Колонки/ключи хранятся прямо на DOM-элементе группы — нужны при последующем
+  // чтении в getFileGroups() (для экспорта), т.к. при клиентском override они
+  // отличаются от статичной схемы docSchema.js и больше нигде не сохранены.
+  group._tamgaColumns = tableMode ? (columns || null) : null;
+  group._tamgaColumnKeys = tableMode ? (columnKeys || null) : null;
   if (tableMode) {
-    renderLineItemsTable(fieldsTable, docType, items || []);
+    renderLineItemsTable(fieldsTable, docType, items || [], columns, columnKeys);
   } else {
     renderFieldsTable(fieldsTable, fields);
   }
@@ -148,12 +158,16 @@ export function renderResultGroup({ fileName, pages, docType, fields, items }) {
   // Смена типа документа вручную в результатах пересчитывает поля локально —
   // это уже после распознавания, лишний вызов Gemini здесь не нужен. Для табличных
   // типов эвристика недоступна (см. heuristicExtractor.js) — таблица начинается пустой,
-  // пользователь заполняет вручную кнопкой «Добавить строку».
+  // пользователь заполняет вручную кнопкой «Добавить строку». Колонки сбрасываются
+  // в null — при ручной смене типа неоткуда взять серверную (override) раскладку заново,
+  // используется статичная схема нового типа.
   typeSelect.addEventListener('change', () => {
     const newType = typeSelect.value;
     const newTableMode = isTableType(newType);
     group.dataset.mode = newTableMode ? 'table' : 'fields';
     fieldsTable.className = newTableMode ? 'line-items-table' : 'fields-table';
+    group._tamgaColumns = null;
+    group._tamgaColumnKeys = null;
     if (newTableMode) {
       renderLineItemsTable(fieldsTable, newType, []);
     } else {
@@ -231,7 +245,9 @@ export function getFileGroups() {
       label: row.querySelector('.fields-label').textContent,
       value: row.querySelector('.fields-input').value
     }));
-    const items = tableMode ? readLineItemsTable(group.querySelector('.line-items-table'), docType) : [];
-    return { fileName, docType, text, fields, items };
+    const items = tableMode ? readLineItemsTable(group.querySelector('.line-items-table')) : [];
+    const columns = tableMode ? (group._tamgaColumns || null) : null;
+    const columnKeys = tableMode ? (group._tamgaColumnKeys || null) : null;
+    return { fileName, docType, text, fields, items, columns, columnKeys };
   });
 }

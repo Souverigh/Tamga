@@ -8,7 +8,7 @@
 // ручного выбора типа, чтобы дропдаун/подсказки полей здесь не расходились
 // с тем, что реально знает бэкенд (lib/docSchema.js — серверная копия).
 
-import { DOC_TYPES, DOC_FIELDS, isTableType } from '../js/config/docSchema.js';
+import { DOC_TYPES, DOC_FIELDS, isTableType, columnsForType } from '../js/config/docSchema.js';
 
 const SECRET_KEY = 'tamga_admin_secret';
 
@@ -45,6 +45,7 @@ const addFieldOverrideBtn = document.getElementById('addFieldOverrideBtn');
 const fieldOverrideEditor = document.getElementById('fieldOverrideEditor');
 const overrideTypeSelect = document.getElementById('overrideTypeSelect');
 const overrideChipsEl = document.getElementById('overrideChips');
+const overrideFieldsLabel = document.getElementById('overrideFieldsLabel');
 const confirmOverrideBtn = document.getElementById('confirmOverrideBtn');
 const cancelOverrideBtn = document.getElementById('cancelOverrideBtn');
 
@@ -68,7 +69,9 @@ let editingCustomTypeName = null; // аналогично, для кастомн
 // text-полей (те читаются прямо из DOM в buildPayload).
 let state = { fieldOverrides: {}, customDocTypes: {}, legacyFields: [] };
 
-const CARD_TYPES = DOC_TYPES.filter(t => !isTableType(t)); // табличные типы не поддерживают переопределение полей
+// Табличные типы (накладная/УПД и т.д.) теперь тоже поддерживают override —
+// для них значения переопределения означают КОЛОНКИ, а не подписи полей (см.
+// lib/extraction.js:resolveTableColumns) — поэтому полный список типов, без фильтра.
 
 function adminFetch(path, options = {}) {
   const secret = sessionStorage.getItem(SECRET_KEY);
@@ -325,11 +328,27 @@ function renderFieldOverridesList() {
 
 let overrideChipEditor = null;
 
+// DOC_FIELDS[type] для табличных типов — это объект {mode, columns, keys,
+// description}, а не плоский массив полей: передать его напрямую в
+// setSuggestions сломало бы её на .filter() (метод массива). Для табличных
+// типов подсказки нужно брать из columnsForType(type) — это плоский массив
+// названий колонок, ровно то, что setSuggestions ожидает на входе.
+function suggestionsForOverrideType(type) {
+  return isTableType(type) ? (columnsForType(type) || []) : (DOC_FIELDS[type] || []);
+}
+
+// Для табличных типов override — это КОЛОНКИ таблицы, для карточных — ПОЛЯ
+// label/value (см. lib/extraction.js:resolveTableColumns). Подпись поля ввода
+// переключается соответственно, чтобы не путать админа терминологией.
+function updateOverrideFieldsLabel(type) {
+  overrideFieldsLabel.textContent = isTableType(type) ? 'Колонки' : 'Поля';
+}
+
 function openOverrideEditor(existingType) {
   editingOverrideType = existingType || null;
   overrideTypeSelect.innerHTML = '';
   const usedTypes = Object.keys(state.fieldOverrides);
-  const availableTypes = CARD_TYPES.filter(t => t === existingType || !usedTypes.includes(t));
+  const availableTypes = DOC_TYPES.filter(t => t === existingType || !usedTypes.includes(t));
   availableTypes.forEach(t => {
     const opt = document.createElement('option');
     opt.value = t;
@@ -337,22 +356,24 @@ function openOverrideEditor(existingType) {
     overrideTypeSelect.appendChild(opt);
   });
   overrideTypeSelect.value = existingType || availableTypes[0];
-  overrideTypeSelect.disabled = !!existingType; // при редактировании тип не меняем — только поля
+  overrideTypeSelect.disabled = !!existingType; // при редактировании тип не меняем — только поля/колонки
 
   const initial = existingType ? state.fieldOverrides[existingType] : [];
   overrideChipEditor = createChipEditor(overrideChipsEl, initial);
-  overrideChipEditor.setSuggestions(DOC_FIELDS[overrideTypeSelect.value] || []);
+  overrideChipEditor.setSuggestions(suggestionsForOverrideType(overrideTypeSelect.value));
+  updateOverrideFieldsLabel(overrideTypeSelect.value);
 
   fieldOverrideEditor.style.display = 'block';
   fieldOverrideEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 overrideTypeSelect.addEventListener('change', () => {
-  if (overrideChipEditor) overrideChipEditor.setSuggestions(DOC_FIELDS[overrideTypeSelect.value] || []);
+  if (overrideChipEditor) overrideChipEditor.setSuggestions(suggestionsForOverrideType(overrideTypeSelect.value));
+  updateOverrideFieldsLabel(overrideTypeSelect.value);
 });
 
 addFieldOverrideBtn.addEventListener('click', () => {
-  if (!CARD_TYPES.some(t => !Object.keys(state.fieldOverrides).includes(t))) {
+  if (!DOC_TYPES.some(t => !Object.keys(state.fieldOverrides).includes(t))) {
     alert('Переопределения уже добавлены для всех поддерживаемых типов документов.');
     return;
   }

@@ -88,7 +88,12 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
         text: data.text || '',
         docType: data.documentType || 'Другое',
         fields: Array.isArray(data.fields) && data.fields.length ? data.fields : null,
-        items: Array.isArray(data.items) && data.items.length ? data.items : null
+        items: Array.isArray(data.items) && data.items.length ? data.items : null,
+        // Реально использованная раскладка колонок (см. lib/recognize.js) — только
+        // при табличном типе. Нужна фронтенду, т.к. при клиентском override она
+        // отличается от статичной схемы docSchema.js (см. app.js/results.js/export/*).
+        columns: Array.isArray(data.columns) && data.columns.length ? data.columns : null,
+        columnKeys: Array.isArray(data.columnKeys) && data.columnKeys.length ? data.columnKeys : null
       };
     }
 

@@ -13,9 +13,13 @@ import { columnsForType, keysForType } from '../config/docSchema.js';
 // Ширины колонок распределяются поровну — у разных табличных типов разное
 // число колонок (накладная — 5, справочник номенклатуры — 6 и т.д.), поэтому
 // фиксированные проценты под конкретный набор колонок здесь не подходят.
-function buildLineItemsTable(docType, items) {
-  const columns = columnsForType(docType);
-  const keys = keysForType(docType);
+// columnsOverride/keysOverride (опционально) — реально использованная раскладка
+// с сервера (см. results.js:getFileGroups) — нужна при клиентском field_overrides
+// для этого типа, иначе отличается от статичной схемы docSchema.js. Раньше эта
+// функция всегда брала колонки по имени типа — тихо ломало экспорт при override.
+function buildLineItemsTable(docType, items, columnsOverride, keysOverride) {
+  const columns = columnsOverride || columnsForType(docType);
+  const keys = keysOverride || keysForType(docType);
   const width = `${(100 / columns.length).toFixed(1)}%`;
 
   const table = document.createElement('table');
@@ -53,7 +57,7 @@ function buildOffscreenContainer(groups) {
   titleEl.style.cssText = 'font-size:18px; margin:0 0 16px;';
   container.appendChild(titleEl);
 
-  groups.forEach(({ fileName, docType, fields, items }) => {
+  groups.forEach(({ fileName, docType, fields, items, columns, columnKeys }) => {
     const card = document.createElement('div');
     card.style.cssText = 'margin-bottom:22px; padding-bottom:14px; border-bottom:1px solid #C9C2AE;';
 
@@ -68,7 +72,7 @@ function buildOffscreenContainer(groups) {
     card.appendChild(typeEl);
 
     if (items && items.length > 0) {
-      card.appendChild(buildLineItemsTable(docType, items));
+      card.appendChild(buildLineItemsTable(docType, items, columns, columnKeys));
     } else if (fields.length === 0) {
       const emptyEl = document.createElement('div');
       emptyEl.textContent = 'Поля не заполнены';

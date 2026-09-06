@@ -175,31 +175,34 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
         // просить у Gemini полную OCR-расшифровку в этом запросе незачем: это
         // чистая избыточность, раздувающая объём ответа без пользы (см. лог рефакторинга).
         await geminiRateLimiter.acquire(signal); // это ОТДЕЛЬНЫЙ запрос — тоже считается в лимит
+        // Колонки берутся из ВТОРОГО запроса (tableResult), не из первого — у
+        // первого их не может быть: та классификация ещё не знала тип, поэтому
+        // сервер не мог решить, нужен ли override (см. lib/recognize.js:tableColumns).
         const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true, onRetry, signal, clientSlug });
-        return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items };
+        return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items, columns: tableResult.columns, columnKeys: tableResult.columnKeys };
       } catch (e) {
         if (e && e.name === 'AbortError') throw e;
         // Второй запрос не удался (например, 504) — не роняем страницу целиком: текст
         // и определённый тип у нас уже есть, таблица просто останется пустой для
         // ручного заполнения, как раньше при ручном выборе табличного типа.
         console.error('Авто-извлечение таблицы не удалось, оставляем текст и тип без строк:', e);
-        return { rawText: result.text, docType: result.docType, fields: result.fields, items: null };
+        return { rawText: result.text, docType: result.docType, fields: result.fields, items: null, columns: null, columnKeys: null };
       }
     }
-    return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items };
+    return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys };
   }
   const rawText = await recognizeWithTesseract(pageImage, lang, m => {
     const pct = Math.round(m.progress * 100);
     const stage = (m.status.includes('loading') || m.status.includes('load')) ? 'Загружаем движок' : 'Распознаём';
     onStatus(`${stage}… ${pct}%`);
   });
-  return { rawText, docType: null, fields: null, items: null };
+  return { rawText, docType: null, fields: null, items: null, columns: null, columnKeys: null };
 }
 
 // Собирает финальный результат по файлу из уже распознанных страниц (без сети —
 // сама сеть теперь в общем пуле ниже, по всем файлам сразу, а не файл-за-файлом).
-// entry.pageRecognized[i] — { docType, fields, items } для успешно распознанной
-// страницы i, или null для страницы, где распознавание не удалось.
+// entry.pageRecognized[i] — { docType, fields, items, columns, columnKeys } для
+// успешно распознанной страницы i, или null для страницы, где распознавание не удалось.
 //
 // "Первая страница с полями побеждает" — здесь это детерминированно, по порядку
 // страниц (индексу), а НЕ по тому, какой запрос вернулся первым: при параллельных
@@ -209,11 +212,13 @@ function finalizeFileResult(entry, mode) {
   let fileDocType = entry.presetType;
   let fileFields = null;
   let fileItems = null;
+  let fileColumns = null;
+  let fileColumnKeys = null;
   for (const rec of entry.pageRecognized) {
     if (!rec) continue;
     if (!entry.presetType && fileDocType == null && rec.docType) fileDocType = rec.docType;
     if (fileFields === null && rec.fields) fileFields = rec.fields;
-    if (fileItems === null && rec.items) fileItems = rec.items;
+    if (fileItems === null && rec.items) { fileItems = rec.items; fileColumns = rec.columns || null; fileColumnKeys = rec.columnKeys || null; }
   }
 
   // Классификация и извлечение полей не должны молча ронять весь сценарий: если
@@ -240,7 +245,7 @@ function finalizeFileResult(entry, mode) {
     fileDocType = DOC_TYPES.includes(fileDocType) ? fileDocType : 'Другое';
   }
 
-  return { fileName: entry.file.name, pages: entry.pageTexts, docType: fileDocType, fields, items };
+  return { fileName: entry.file.name, pages: entry.pageTexts, docType: fileDocType, fields, items, columns: fileColumns, columnKeys: fileColumnKeys };
 }
 
 recognizeBtn.addEventListener('click', async () => {
@@ -329,12 +334,12 @@ recognizeBtn.addEventListener('click', async () => {
     const entry = fileEntries[fileIndex];
     setPageStatus(fileIndex, pageIndex, 'Распознаём…');
     try {
-      const { rawText, docType, fields, items } = await recognizePage(
+      const { rawText, docType, fields, items, columns, columnKeys } = await recognizePage(
         entry.pageImages[pageIndex], mode, lang, entry.presetType,
         abortController.signal,
         status => setPageStatus(fileIndex, pageIndex, status)
       );
-      entry.pageRecognized[pageIndex] = { docType, fields, items };
+      entry.pageRecognized[pageIndex] = { docType, fields, items, columns, columnKeys };
       entry.pageTexts[pageIndex] = postProcessText(rawText, { cleanup: true, normalize: postProcessCheckbox.checked });
       markPageDone(fileIndex, pageIndex, 'Готово');
       doneCount++;

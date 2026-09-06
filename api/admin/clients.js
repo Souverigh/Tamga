@@ -1,5 +1,5 @@
 const { checkAdminSecret } = require('../../lib/adminAuth');
-const { DOC_TYPES, isTableType } = require('../../lib/docSchema');
+const { DOC_TYPES } = require('../../lib/docSchema');
 
 // Админский CRUD над tamga_api_key_fields (конфиги клиентов — см. customFieldsLookup.js) —
 // заменяет ручную правку через Supabase Table Editor на простую форму (см. public/admin/).
@@ -49,16 +49,19 @@ function validateAndNormalize(body) {
     if (!row.fields.length) row.fields = null;
   }
 
+  // Для табличных типов (накладная/УПД, справочник номенклатуры и т.д.) массив
+  // значений — это НАЗВАНИЯ КОЛОНОК, а не подписи полей label/value; ключи в
+  // JSON-ответе для них генерируются автоматически (col0, col1, ...), см.
+  // lib/extraction.js:resolveTableColumns. Формат override один и тот же
+  // (массив строк) для карточных и табличных типов — различие только в том,
+  // как этот массив интерпретируется дальше по пайплайну.
   if (row.field_overrides !== undefined && row.field_overrides !== null) {
     if (typeof row.field_overrides !== 'object' || Array.isArray(row.field_overrides)) {
-      return { error: 'field_overrides должен быть объектом вида { "Название стандартного типа": ["Поле1", "Поле2"] }' };
+      return { error: 'field_overrides должен быть объектом вида { "Название стандартного типа": ["Поле1", "Поле2"] } (для табличных типов — названия колонок)' };
     }
     for (const [type, fields] of Object.entries(row.field_overrides)) {
       if (!DOC_TYPES.includes(type)) {
         return { error: `field_overrides: "${type}" не входит в стандартный список типов документов` };
-      }
-      if (isTableType(type)) {
-        return { error: `field_overrides: "${type}" — табличный тип, переопределение полей для него не поддерживается` };
       }
       if (!Array.isArray(fields) || !fields.every(f => typeof f === 'string') || !fields.length) {
         return { error: `field_overrides["${type}"] должен быть непустым массивом строк` };

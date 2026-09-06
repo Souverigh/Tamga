@@ -88,7 +88,12 @@ async function main() {
   }
 
   if (Array.isArray(data.items) && data.items.length) {
-    console.log(`\nТабличные строки (items): ${data.items.length} — кастомные поля на табличные типы пока не распространяются.`);
+    console.log(`\nТабличные строки (items): ${data.items.length}`);
+    if (Array.isArray(data.columns) && data.columns.length) {
+      console.log('Колонки:', data.columns.join(', '));
+      console.log('Если это НЕ стандартный набор колонок для этого типа (см. DOC_FIELDS в lib/docSchema.js),');
+      console.log('а кастомный список из tamga_api_key_fields.field_overrides — переопределение колонок работает.');
+    }
   }
 }
 
