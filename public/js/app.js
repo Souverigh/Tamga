@@ -22,6 +22,16 @@ import { showResults, hideResults, initResultsCollapseToggle, getFileGroups } fr
 import { initSettings, getSelectedMode, getSelectedLang } from './ui/settings.js';
 import { showToast, showConfirm } from './ui/notify.js';
 import { isTableType, DOC_TYPES } from './config/docSchema.js';
+import { runWithConcurrency } from './utils/concurrencyPool.js';
+
+// Сколько страниц распознавать одновременно в режиме Gemini. Раньше запросы шли
+// строго по одному (файл-за-файлом, страница-за-страницей) — весь пакет из,
+// скажем, 10 однострочных документов ждал 10 последовательных round-trip'ов.
+// Ограничение (а не "сколько угодно одновременно") нужно, чтобы не упереться
+// в лимит бесплатного тарифа Gemini (20 запросов/мин, см. .env.example) — 3
+// одновременных запроса дают ощутимое ускорение, оставляя запас по лимиту даже
+// если каждая страница внутри себя делает второй запрос (авто-детект таблиц).
+const MAX_CONCURRENT_REQUESTS = 3;
 
 const recognizeBtn = document.getElementById('recognizeBtn');
 const langSelect = document.getElementById('langSelect');
@@ -123,19 +133,27 @@ async function loadPageImages(file) {
 // отдельный вызов serverless-функции со своим лимитом в 60 сек, так что риск 504
 // не удваивается на одном запросе. Второй запрос делаем только для табличных типов —
 // на обычных документах (паспорт, справка и т.д.) поведение не меняется.
-async function recognizePage(pageImage, mode, lang, presetType, onTesseractProgress, onStage, onRetry) {
+async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus) {
   if (mode === 'gemini') {
-    const result = await recognizeWithGemini(pageImage, presetType, { onRetry });
+    const onRetry = ({ attempt, maxAttempts, delayMs, status }) => {
+      const sec = Math.ceil(delayMs / 1000);
+      // status === 429 — превышен лимит бесплатного тарифа; 503 — модель Gemini
+      // временно перегружена ("high demand"). Формулировка разная, повтор один и тот же.
+      const reason = status === 429 ? 'Превышен лимит запросов' : 'Сервис Gemini временно перегружен';
+      onStatus(`${reason}, ждём ${sec} сек… (попытка ${attempt}/${maxAttempts})`);
+    };
+    const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal });
     const needsTableFollowUp = !presetType && isTableType(result.docType) && (!result.items || result.items.length === 0);
     if (needsTableFollowUp) {
-      if (onStage) onStage();
+      onStatus('Извлекаем таблицу…');
       try {
         // skipOcr: true — text уже есть от первого запроса (result.text), повторно
         // просить у Gemini полную OCR-расшифровку в этом запросе незачем: это
         // чистая избыточность, раздувающая объём ответа без пользы (см. лог рефакторинга).
-        const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true, onRetry });
+        const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true, onRetry, signal });
         return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items };
       } catch (e) {
+        if (e && e.name === 'AbortError') throw e;
         // Второй запрос не удался (например, 504) — не роняем страницу целиком: текст
         // и определённый тип у нас уже есть, таблица просто останется пустой для
         // ручного заполнения, как раньше при ручном выборе табличного типа.
@@ -145,64 +163,32 @@ async function recognizePage(pageImage, mode, lang, presetType, onTesseractProgr
     }
     return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items };
   }
-  const rawText = await recognizeWithTesseract(pageImage, lang, onTesseractProgress);
+  const rawText = await recognizeWithTesseract(pageImage, lang, m => {
+    const pct = Math.round(m.progress * 100);
+    const stage = (m.status.includes('loading') || m.status.includes('load')) ? 'Загружаем движок' : 'Распознаём';
+    onStatus(`${stage}… ${pct}%`);
+  });
   return { rawText, docType: null, fields: null, items: null };
 }
 
-async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType) {
-  const pagesWrap = createFileProgressGroup(fileIndex, file.name);
-
-  let pageImages;
-  try {
-    pageImages = await loadPageImages(file);
-  } catch (e) {
-    showFileOpenError(pagesWrap);
-    return null;
-  }
-
-  addPageRows(pagesWrap, fileIndex, pageImages.length);
-
-  const pageTexts = [];
-  let fileDocType = presetType; // если пользователь выбрал тип заранее — классификация не запускается вообще
+// Собирает финальный результат по файлу из уже распознанных страниц (без сети —
+// сама сеть теперь в общем пуле ниже, по всем файлам сразу, а не файл-за-файлом).
+// entry.pageRecognized[i] — { docType, fields, items } для успешно распознанной
+// страницы i, или null для страницы, где распознавание не удалось.
+//
+// "Первая страница с полями побеждает" — здесь это детерминированно, по порядку
+// страниц (индексу), а НЕ по тому, какой запрос вернулся первым: при параллельных
+// запросах случайная задержка сети иначе решала бы, какая страница считается
+// главной — а это должно зависеть от структуры документа, а не от таймингов сети.
+function finalizeFileResult(entry, mode) {
+  let fileDocType = entry.presetType;
   let fileFields = null;
   let fileItems = null;
-
-  for (let i = 0; i < pageImages.length; i++) {
-    setPageStatus(fileIndex, i, 'Распознаём…');
-    recognizeBtn.textContent = `Файл ${fileIndex + 1} из ${totalFiles}, страница ${i + 1} из ${pageImages.length}…`;
-
-    try {
-      const { rawText, docType, fields, items } = await recognizePage(pageImages[i], mode, lang, presetType, m => {
-        const pct = Math.round(m.progress * 100);
-        const stage = (m.status.includes('loading') || m.status.includes('load')) ? 'Загружаем движок' : 'Распознаём';
-        recognizeBtn.textContent = `${stage}… файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length} — ${pct}%`;
-      }, () => {
-        recognizeBtn.textContent = `Извлекаем таблицу… файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length}`;
-      }, ({ attempt, maxAttempts, delayMs, status }) => {
-        const sec = Math.ceil(delayMs / 1000);
-        // status === 429 — превышен лимит бесплатного тарифа; 503 — модель Gemini
-        // временно перегружена ("high demand"). Формулировка разная, повтор один и тот же.
-        const reason = status === 429 ? 'Превышен лимит запросов' : 'Сервис Gemini временно перегружен';
-        recognizeBtn.textContent = `${reason}, ждём ${sec} сек… (попытка ${attempt}/${maxAttempts}) файл ${fileIndex + 1}/${totalFiles}, стр. ${i + 1}/${pageImages.length}`;
-      });
-
-      // Тип уже задан пользователем — не даём Gemini-классификации его переопределить.
-      if (!presetType && fileDocType === null && docType) fileDocType = docType;
-      // Поля/товарные строки от Gemini берём в любом случае (даже если тип задан вручную):
-      // бэкенд теперь извлекает их именно под этот тип (см. lib/extraction.js), так что они
-      // надёжнее локальной regex-эвристики ниже, которая остаётся только запасным вариантом
-      // (и для табличных типов вообще недоступна — см. heuristicExtractor.js).
-      if (fileFields === null && fields) fileFields = fields;
-      if (fileItems === null && items) fileItems = items;
-
-      pageTexts.push(postProcessText(rawText, { cleanup: true, normalize: postProcessCheckbox.checked }));
-      markPageDone(fileIndex, i, 'Готово');
-    } catch (e) {
-      pageTexts.push('');
-      markPageError(fileIndex, i, e && e.message ? e.message : String(e));
-    }
-
-    setOverallProgress((fileIndex + (i + 1) / pageImages.length) / totalFiles);
+  for (const rec of entry.pageRecognized) {
+    if (!rec) continue;
+    if (!entry.presetType && fileDocType == null && rec.docType) fileDocType = rec.docType;
+    if (fileFields === null && rec.fields) fileFields = rec.fields;
+    if (fileItems === null && rec.items) fileItems = rec.items;
   }
 
   // Классификация и извлечение полей не должны молча ронять весь сценарий: если
@@ -212,14 +198,14 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
   let fields = [];
   let items = [];
   try {
+    const joinedText = entry.pageTexts.join('\n');
     // Классификация (независимый модуль) — только если тип не был известен заранее и не пришёл от Gemini.
-    if (!presetType && !fileDocType && mode === 'tesseract') {
-      fileDocType = classifyByKeywords(pageTexts.join('\n'));
+    if (!entry.presetType && !fileDocType && mode === 'tesseract') {
+      fileDocType = classifyByKeywords(joinedText);
     }
     if (!fileDocType || !DOC_TYPES.includes(fileDocType)) fileDocType = 'Другое';
 
     // Извлечение полей (независимый модуль) — только если Gemini их ещё не вернул в этом же запросе.
-    const joinedText = pageTexts.join('\n');
     fields = isTableType(fileDocType) ? [] : (fileFields || extractFieldsHeuristic(joinedText, fileDocType));
     // Товарные строки: офлайн-эвристика их не производит (см. heuristicExtractor.js) —
     // без Gemini таблица придёт пустой, пользователь заполнит вручную в интерфейсе.
@@ -229,7 +215,7 @@ async function recognizeFile(file, fileIndex, totalFiles, mode, lang, presetType
     fileDocType = DOC_TYPES.includes(fileDocType) ? fileDocType : 'Другое';
   }
 
-  return { fileName: file.name, pages: pageTexts, docType: fileDocType, fields, items };
+  return { fileName: entry.file.name, pages: entry.pageTexts, docType: fileDocType, fields, items };
 }
 
 recognizeBtn.addEventListener('click', async () => {
@@ -256,24 +242,83 @@ recognizeBtn.addEventListener('click', async () => {
 
   restoreBanner.style.display = 'none';
   let cancelled = false;
+  const abortController = new AbortController();
 
   lockControls();
   hideResults();
-  startProgress(() => { cancelled = true; cancelTesseract(); });
+  startProgress(() => {
+    cancelled = true;
+    cancelTesseract();
+    abortController.abort(); // прерывает и уже летящие запросы к Gemini, и паузы между повторами
+  });
 
-  const fileResults = [];
-  try {
-    for (let f = 0; f < selectedFiles.length; f++) {
-      if (cancelled) break;
-      const presetType = selectedDocTypes[f] && selectedDocTypes[f] !== 'auto' ? selectedDocTypes[f] : null;
-      const result = await recognizeFile(selectedFiles[f], f, selectedFiles.length, mode, lang, presetType);
-      if (result) fileResults.push(result);
+  // Фаза 1: открыть все файлы и подготовить строки прогресса — быстро, локально,
+  // без сети, поэтому делаем последовательно (нет смысла распараллеливать).
+  const fileEntries = [];
+  for (let f = 0; f < selectedFiles.length; f++) {
+    const file = selectedFiles[f];
+    const pagesWrap = createFileProgressGroup(f, file.name);
+    let pageImages;
+    try {
+      pageImages = await loadPageImages(file);
+    } catch (e) {
+      showFileOpenError(pagesWrap);
+      fileEntries.push(null);
+      continue;
     }
-  } catch (e) {
-    // Не должно случаться (recognizeFile сам ловит свои ошибки), но если всё же
-    // что-то пробьётся сюда — не оставляем интерфейс молча зависшим.
-    console.error('Распознавание прервалось неожиданной ошибкой:', e);
-    showToast('Распознавание остановилось из-за ошибки: ' + (e && e.message ? e.message : String(e)), 'error');
+    addPageRows(pagesWrap, f, pageImages.length);
+    const presetType = selectedDocTypes[f] && selectedDocTypes[f] !== 'auto' ? selectedDocTypes[f] : null;
+    fileEntries.push({
+      file,
+      presetType,
+      pageImages,
+      pageTexts: new Array(pageImages.length).fill(''),
+      pageRecognized: new Array(pageImages.length).fill(null)
+    });
+  }
+
+  // Фаза 2: сами запросы распознавания — независимо по всем страницам всех файлов
+  // сразу (а не строго по одному файл-за-файлом/страница-за-страницей, как было
+  // раньше), но с ограничением на число одновременных запросов. Ограничение —
+  // не искусственное, а чтобы не упереться в лимит бесплатного тарифа Gemini
+  // (20 запросов/мин) при большом пакете файлов; для офлайн-режима (Tesseract)
+  // держим по одному, т.к. tesseractClient.js хранит один активный воркер —
+  // параллельные вызовы сломали бы отмену и были бы тяжелы для мобильных браузеров.
+  const tasks = [];
+  for (let f = 0; f < fileEntries.length; f++) {
+    if (!fileEntries[f]) continue;
+    for (let i = 0; i < fileEntries[f].pageImages.length; i++) tasks.push([f, i]);
+  }
+  const totalTasks = tasks.length;
+  let completedCount = 0;
+  recognizeBtn.textContent = totalTasks ? `Распознаём… (0/${totalTasks})` : 'Распознавание…';
+
+  await runWithConcurrency(tasks, mode === 'gemini' ? MAX_CONCURRENT_REQUESTS : 1, async ([fileIndex, pageIndex]) => {
+    const entry = fileEntries[fileIndex];
+    setPageStatus(fileIndex, pageIndex, 'Распознаём…');
+    try {
+      const { rawText, docType, fields, items } = await recognizePage(
+        entry.pageImages[pageIndex], mode, lang, entry.presetType,
+        abortController.signal,
+        status => setPageStatus(fileIndex, pageIndex, status)
+      );
+      entry.pageRecognized[pageIndex] = { docType, fields, items };
+      entry.pageTexts[pageIndex] = postProcessText(rawText, { cleanup: true, normalize: postProcessCheckbox.checked });
+      markPageDone(fileIndex, pageIndex, 'Готово');
+    } catch (e) {
+      const isAbort = e && e.name === 'AbortError';
+      markPageError(fileIndex, pageIndex, isAbort ? 'Отменено' : (e && e.message ? e.message : String(e)));
+    }
+    completedCount++;
+    recognizeBtn.textContent = `Распознаём… (${completedCount}/${totalTasks})`;
+    setOverallProgress(totalTasks ? completedCount / totalTasks : 1);
+  }, () => cancelled);
+
+  // Фаза 3: сборка финального результата по каждому файлу — без сети, детерминированно
+  // (см. комментарий в finalizeFileResult про порядок страниц, а не порядок завершения запросов).
+  const fileResults = [];
+  for (const entry of fileEntries) {
+    if (entry) fileResults.push(finalizeFileResult(entry, mode));
   }
 
   finishProgress(cancelled);

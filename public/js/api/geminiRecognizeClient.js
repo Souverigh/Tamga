@@ -7,6 +7,9 @@
 // запроса, повторно запрашивать его — чистая избыточность).
 // options.onRetry(info) — вызывается перед каждым повтором после 429, чтобы
 // вызывающий код мог показать пользователю, что и почему сейчас ждёт (см. app.js).
+// options.signal — AbortSignal: прерывает и сам fetch, и ожидание перед повтором
+// (важно при параллельном распознавании нескольких страниц — отмена должна
+// остановить каждую из них, а не только ту, что попадёт в проверку между итерациями).
 
 import { pageImageToBase64 } from '../ocr/imageLoader.js';
 
@@ -31,8 +34,20 @@ function parseRetryDelayMs(message) {
   return m ? Math.ceil(parseFloat(m[1]) * 1000) : null;
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    if (!signal) return;
+    if (signal.aborted) {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    signal.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    }, { once: true });
+  });
 }
 
 export async function recognizeWithGemini(pageImage, presetDocType, options) {
@@ -41,12 +56,14 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
   if (presetDocType) body.docType = presetDocType;
   if (options && options.skipOcr) body.skipOcr = true;
   const onRetry = options && options.onRetry;
+  const signal = options && options.signal;
 
   for (let attempt = 0; ; attempt++) {
     const res = await fetch('/api/recognize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal
     });
 
     let data;
@@ -68,7 +85,7 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
     if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_RETRY_ATTEMPTS) {
       const delayMs = parseRetryDelayMs(data?.error) ?? Math.min(DEFAULT_RETRY_DELAY_MS * (attempt + 1), MAX_RETRY_DELAY_MS);
       if (onRetry) onRetry({ attempt: attempt + 1, maxAttempts: MAX_RETRY_ATTEMPTS, delayMs, status: res.status });
-      await sleep(delayMs);
+      await sleep(delayMs, signal); // бросит AbortError, если отменили именно во время ожидания повтора
       continue;
     }
 
