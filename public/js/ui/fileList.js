@@ -9,9 +9,13 @@ import { DOC_TYPES } from '../config/docSchema.js';
 const MAX_FILES = 50;
 
 let selectedFiles = []; // File[]
-let selectedDocTypes = []; // string[], параллельно selectedFiles — 'auto' или значение из DOC_TYPES
+let selectedDocTypes = []; // string[], параллельно selectedFiles — 'auto' или значение из DOC_TYPES/extraDocTypes
 let previewUrls = []; // string[], object URL на каждый файл — для просмотра/скачивания оригинала
 let onChange = () => {};
+// Кастомные типы документов текущего клиентского пилота (см. branding.js,
+// tamga_api_key_fields.custom_doc_types) — подгружаются асинхронно, поэтому
+// могут появиться уже после того, как человек начал добавлять файлы.
+let extraDocTypes = [];
 
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
@@ -97,6 +101,17 @@ function buildFileRow(file, idx) {
     opt.textContent = t;
     typeSelect.appendChild(opt);
   });
+  if (extraDocTypes.length) {
+    const group = document.createElement('optgroup');
+    group.label = 'Ваши типы';
+    extraDocTypes.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      group.appendChild(opt);
+    });
+    typeSelect.appendChild(group);
+  }
   typeSelect.value = selectedDocTypes[idx] || 'auto';
   typeSelect.classList.toggle('is-set', typeSelect.value !== 'auto');
   typeSelect.addEventListener('change', () => {
@@ -188,6 +203,33 @@ export function addExternalFile(file) {
 
 export function getSelectedDocTypes() {
   return selectedDocTypes;
+}
+
+// Вызывается branding.js после того, как подгрузился конфиг клиентского пилота
+// (см. tamga_api_key_fields.custom_doc_types) — может случиться уже после того,
+// как человек начал добавлять файлы, поэтому дописываем опции в уже
+// отрисованные <select>, а не гоняем полный render() (тот пересоздаёт все
+// object URL превью — лишняя работа и риск моргнуть уже показанные миниатюры).
+export function setExtraDocTypes(names) {
+  extraDocTypes = Array.isArray(names) ? names : [];
+  if (!extraDocTypes.length) return;
+
+  fileListItems.querySelectorAll('.file-type-select').forEach(select => {
+    let group = select.querySelector('optgroup');
+    if (!group) {
+      group = document.createElement('optgroup');
+      group.label = 'Ваши типы';
+      select.appendChild(group);
+    }
+    extraDocTypes.forEach(name => {
+      if (![...select.options].some(o => o.value === name)) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        group.appendChild(opt);
+      }
+    });
+  });
 }
 
 export function setControlsDisabled(disabled) {

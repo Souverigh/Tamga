@@ -9,6 +9,8 @@
 // просто не находит конфиг и оставляет вид по умолчанию (см. api/client-config.js:
 // пустой slug/ненайденная запись — это нормальный случай, не ошибка).
 
+import { setExtraDocTypes } from './ui/fileList.js';
+
 const STORAGE_KEY = 'tamga_client_slug';
 
 function resolveClientSlug() {
@@ -69,6 +71,13 @@ export async function initBranding() {
     if (!res.ok) return;
     const config = await res.json();
     applyFacade(config);
+    // Кастомные типы клиента — не только для авто-классификации (уже работает
+    // через lib/classification.js на сервере), но и для ручного выбора в
+    // выпадающем списке, если человек включит «Указать тип документа вручную»
+    // (см. fileList.js: manualTypeToggle).
+    if (config.customDocTypeNames && config.customDocTypeNames.length) {
+      setExtraDocTypes(config.customDocTypeNames);
+    }
   } catch (err) {
     console.error('branding: не удалось загрузить конфиг клиента, используем вид по умолчанию:', err.message);
   }
