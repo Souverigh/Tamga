@@ -10,6 +10,9 @@
 // options.signal — AbortSignal: прерывает и сам fetch, и ожидание перед повтором
 // (важно при параллельном распознавании нескольких страниц — отмена должна
 // остановить каждую из них, а не только ту, что попадёт в проверку между итерациями).
+// options.clientSlug — идентификатор клиентского пилота (?client=slug, см.
+// branding.js/getClientSlug) — сервер по нему найдёт конфиг клиента в Supabase
+// (кастомные поля/типы/форматирование), см. lib/recognize.js. Без него — как раньше.
 
 import { pageImageToBase64 } from '../ocr/imageLoader.js';
 
@@ -55,6 +58,7 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
   const body = { image: base64, mimeType: 'image/jpeg' };
   if (presetDocType) body.docType = presetDocType;
   if (options && options.skipOcr) body.skipOcr = true;
+  if (options && options.clientSlug) body.clientSlug = options.clientSlug;
   const onRetry = options && options.onRetry;
   const signal = options && options.signal;
 
