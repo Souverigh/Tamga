@@ -17,7 +17,17 @@
 import { pageImageToBase64 } from '../ocr/imageLoader.js';
 
 const MAX_RETRY_ATTEMPTS = 2; // всего до 3 попыток (исходная + 2 повтора)
-const DEFAULT_RETRY_DELAY_MS = 15000; // если Gemini не подсказала точное время ожидания
+// Разные дефолтные задержки по типу ошибки — они принципиально разной природы:
+//   429 — исчерпан лимит запросов В МИНУТУ (скользящее окно) — есть смысл ждать
+//         долго, окно не освободится раньше, чем через десяток секунд.
+//   503 — модель Gemini кратковременно перегружена ("high demand") — это не
+//         привязано к минутному окну, обычно проходит за пару секунд; долгая
+//         пауза здесь просто зря удлиняет ожидание человека перед экраном
+//         (см. живой пример: 6 из ~22 запросов вернули 503 за сессию, каждый
+//         с 15-секундной паузой добавлял по 15+ сек к общему времени распознавания
+//         даже пачки из 1-2 документов).
+const DEFAULT_RETRY_DELAY_MS = { 429: 15000, 503: 2000 };
+const FALLBACK_RETRY_DELAY_MS = 15000; // на случай статуса вне карты выше
 const MAX_RETRY_DELAY_MS = 60000; // не ждём дольше минуты, даже если Gemini попросит больше
 
 // Статусы, которые имеет смысл повторять автоматически — это временные состояния
@@ -87,7 +97,13 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
     // вызывающему коду как есть — там уже есть свой fallback (например, в app.js
     // follow-up просто не роняет страницу целиком, см. recognizePage).
     if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_RETRY_ATTEMPTS) {
-      const delayMs = parseRetryDelayMs(data?.error) ?? Math.min(DEFAULT_RETRY_DELAY_MS * (attempt + 1), MAX_RETRY_DELAY_MS);
+      const base = DEFAULT_RETRY_DELAY_MS[res.status] ?? FALLBACK_RETRY_DELAY_MS;
+      // Небольшой джиттер (0-400мс) — при параллельном распознавании нескольких
+      // страниц несколько запросов часто ловят один и тот же всплеск 503 почти
+      // синхронно; без джиттера их повторы тоже стартуют синхронно и могут
+      // снова столкнуться с перегрузкой все разом.
+      const jitter = Math.floor(Math.random() * 400);
+      const delayMs = parseRetryDelayMs(data?.error) ?? Math.min(base * (attempt + 1) + jitter, MAX_RETRY_DELAY_MS);
       if (onRetry) onRetry({ attempt: attempt + 1, maxAttempts: MAX_RETRY_ATTEMPTS, delayMs, status: res.status });
       await sleep(delayMs, signal); // бросит AbortError, если отменили именно во время ожидания повтора
       continue;
