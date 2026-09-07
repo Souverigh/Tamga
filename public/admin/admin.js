@@ -36,6 +36,7 @@ const fLabel = document.getElementById('fLabel');
 const fPageLimit = document.getElementById('fPageLimit');
 const fPagesUsed = document.getElementById('fPagesUsed');
 const usageWarning = document.getElementById('usageWarning');
+const usageStatsBox = document.getElementById('usageStatsBox');
 const fAccessPassword = document.getElementById('fAccessPassword');
 const fAccessPasswordLabel = document.getElementById('fAccessPasswordLabel');
 const passwordStatusBadge = document.getElementById('passwordStatusBadge');
@@ -519,6 +520,8 @@ function resetForm() {
   fMaxConcurrency.value = '';
   fWebhookUrl.value = '';
   fWebhookSecret.value = '';
+  usageStatsBox.style.display = 'none';
+  usageStatsBox.textContent = '';
   formError.style.display = 'none';
   fieldOverrideEditor.style.display = 'none';
   customTypeEditor.style.display = 'none';
@@ -552,6 +555,61 @@ function updateSwatch() {
 }
 fAccentColor.addEventListener('input', updateSwatch);
 
+// Рендерит сводку аналитики (lib/usageAnalytics.js:getUsageSummary) в
+// usageStatsBox. Собирается через textContent/createElement, не innerHTML —
+// docType приходит из классификации Gemini (не от пользователя напрямую, но
+// хранится и отдаётся без санитизации нигде дальше по цепочке), безопаснее
+// не полагаться на это.
+function renderUsageSummary(summary, days) {
+  usageStatsBox.textContent = '';
+  if (!summary) {
+    usageStatsBox.textContent = `Нет данных за последние ${days} дней.`;
+    return;
+  }
+  const lines = document.createElement('div');
+  const mkLine = text => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div;
+  };
+  lines.appendChild(mkLine(`Документов обработано: ${summary.totalRequests} (ошибок: ${summary.totalErrors})`));
+  if (summary.avgConfidence != null) {
+    lines.appendChild(mkLine(`Средняя уверенность: ${Math.round(summary.avgConfidence)}%`));
+  }
+  if (summary.avgLatencyMs != null) {
+    lines.appendChild(mkLine(`Средняя задержка: ${(summary.avgLatencyMs / 1000).toFixed(1)} с`));
+  }
+  lines.appendChild(mkLine(`Токенов использовано: ${summary.totalTokens.toLocaleString('ru-RU')}`));
+  const byTypeEntries = Object.entries(summary.byType || {}).sort((a, b) => b[1] - a[1]);
+  if (byTypeEntries.length) {
+    const byTypeLine = document.createElement('div');
+    byTypeLine.style.marginTop = '4px';
+    byTypeLine.textContent = 'По типам: ' + byTypeEntries.map(([type, count]) => `${type} — ${count}`).join(', ');
+    lines.appendChild(byTypeLine);
+  }
+  usageStatsBox.appendChild(lines);
+}
+
+async function loadUsageSummary(clientId) {
+  usageStatsBox.style.display = 'block';
+  usageStatsBox.textContent = 'Загрузка…';
+  try {
+    const res = await adminFetch(`/api/admin/usage?id=${encodeURIComponent(clientId)}&days=30`);
+    // Карточка могла смениться, пока запрос летел (открыли другого клиента,
+    // либо закрыли форму) — не затираем чужие/уже неактуальные данные.
+    if (editingId !== clientId) return;
+    if (!res.ok) {
+      usageStatsBox.textContent = 'Не удалось загрузить аналитику.';
+      return;
+    }
+    const data = await res.json();
+    renderUsageSummary(data.summary, data.days);
+  } catch (_) {
+    if (editingId !== clientId) return;
+    usageStatsBox.textContent = 'Не удалось загрузить аналитику.';
+  }
+}
+
 function openForm(client) {
   resetForm();
   if (client) {
@@ -583,6 +641,7 @@ function openForm(client) {
     renderCustomTypesList();
     renderLegacyFields();
     updateSwatch();
+    loadUsageSummary(client.id);
   } else {
     editingId = null;
     formTitle.textContent = 'Новый клиент';
