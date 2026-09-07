@@ -7,6 +7,7 @@
 // ui/results.js) — сам DOM не читает.
 
 import { isTableType, columnsForType, keysForType } from '../config/docSchema.js';
+import { maskFields, maskItems } from './sensitiveFields.js';
 
 function csvEscape(value) {
   const s = value == null ? '' : String(value);
@@ -17,10 +18,15 @@ function toCsvRow(cells) {
   return cells.map(csvEscape).join(',');
 }
 
-export function buildCsv(groups) {
+// options.maskSensitive — см. sensitiveFields.js: маскирует ПИН/ИНН, серию и
+// номер и т.п. точками, оставляя последние 4 символа видимыми. По умолчанию
+// выключено (false) — не меняет поведение существующих вызовов без options.
+export function buildCsv(groups, { maskSensitive = false } = {}) {
   const lines = [toCsvRow(['Файл', 'Тип документа', 'Строка', 'Поле', 'Значение'])];
 
-  groups.forEach(({ fileName, docType, fields, items, columns, columnKeys, confidence }) => {
+  groups.forEach(({ fileName, docType, fields: rawFields, items: rawItems, columns, columnKeys, confidence }) => {
+    const fields = maskFields(rawFields, maskSensitive);
+    const items = maskItems(rawItems, columns || columnsForType(docType), columnKeys || keysForType(docType), maskSensitive);
     // Уверенность (см. lib/confidence.js) добавлена синтетической строкой-полем,
     // а не отдельной колонкой — у плоского CSV и так только 5 колонок общих на
     // все типы, отдельная колонка только под одно значение раздула бы файл
@@ -53,11 +59,11 @@ export function buildCsv(groups) {
   return lines.join('\r\n');
 }
 
-export function downloadCsv(groups) {
+export function downloadCsv(groups, options) {
   if (groups.length === 0) return;
   // BOM — чтобы Excel на Windows сразу открывал файл в UTF-8 (без BOM кириллица
   // превращается в кракозябры, т.к. Excel по умолчанию читает CSV как ANSI).
-  const blob = new Blob(['\uFEFF' + buildCsv(groups)], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['\uFEFF' + buildCsv(groups, options)], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

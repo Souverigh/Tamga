@@ -164,6 +164,10 @@
 
     <div class="export-group">
       <div class="export-group-label">Только извлечённые поля (без текста целиком)</div>
+      <label class="mask-toggle" style="display:flex; align-items:center; gap:6px; margin:8px 0; font-size:13px; color:var(--muted, #5B5F52); cursor:pointer;">
+        <input type="checkbox" id="maskSensitiveToggle">
+        Маскировать чувствительные поля (ПИН/ИНН, серия и номер и т.п.) при скачивании
+      </label>
       <div class="btn-row" style="margin-top:8px;">
         <button class="btn-secondary" id="downloadXlsxBtn">Скачать Excel</button>
         <button class="btn-secondary" id="downloadPdfBtn">Скачать PDF</button>

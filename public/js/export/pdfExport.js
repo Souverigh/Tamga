@@ -9,6 +9,7 @@
 // за пределы экрана (даёт пустой PDF).
 
 import { columnsForType, keysForType } from '../config/docSchema.js';
+import { maskFields, maskItems } from './sensitiveFields.js';
 
 // Ширины колонок распределяются поровну — у разных табличных типов разное
 // число колонок (накладная — 5, справочник номенклатуры — 6 и т.д.), поэтому
@@ -48,16 +49,48 @@ function buildLineItemsTable(docType, items, columnsOverride, keysOverride) {
   return table;
 }
 
-function buildOffscreenContainer(groups) {
+// branding — { displayName, logoUrl, accentColor } | null (см. branding.js:
+// getClientBranding) — премиум-опция "брендированный экспорт" (Ethan, 7 сен
+// 2026): клиент передаёт PDF дальше со своим лого/названием, а не с "Тамга".
+// Возвращает { container, logoImg } — logoImg нужен вызывающему коду
+// (downloadPdf), чтобы дождаться его загрузки ПЕРЕД html2canvas: без этого
+// картинка почти наверняка не успеет прогрузиться за два requestAnimationFrame
+// и просто не попадёт на итоговый PDF (пустой квадрат вместо лого).
+function buildOffscreenContainer(groups, { maskSensitive = false, branding = null } = {}) {
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed; left:0; top:0; z-index:99999; width:520px; padding:24px; font-family:Arial, sans-serif; color:#1E2433; background:#fff;';
 
-  const titleEl = document.createElement('h1');
-  titleEl.textContent = 'Тамга — извлечённые данные';
-  titleEl.style.cssText = 'font-size:18px; margin:0 0 16px;';
-  container.appendChild(titleEl);
+  const accent = (branding && branding.accentColor) || '#1E2433';
+  let logoImg = null;
 
-  groups.forEach(({ fileName, docType, fields, items, columns, columnKeys, confidence }) => {
+  if (branding && branding.logoUrl) {
+    const headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display:flex; align-items:center; gap:10px; margin-bottom:16px;';
+    logoImg = document.createElement('img');
+    logoImg.src = branding.logoUrl;
+    logoImg.alt = branding.displayName || 'логотип';
+    // crossOrigin — иначе html2canvas не сможет прочитать пиксели с другого
+    // домена (canvas становится "tainted") и либо упадёт, либо отрисует пусто.
+    logoImg.crossOrigin = 'anonymous';
+    logoImg.style.cssText = 'width:36px; height:36px; object-fit:contain; border-radius:6px;';
+    headerRow.appendChild(logoImg);
+
+    const titleEl = document.createElement('h1');
+    titleEl.textContent = branding.displayName ? `${branding.displayName} — извлечённые данные` : 'Тамга — извлечённые данные';
+    titleEl.style.cssText = `font-size:18px; margin:0; color:${accent};`;
+    headerRow.appendChild(titleEl);
+
+    container.appendChild(headerRow);
+  } else {
+    const titleEl = document.createElement('h1');
+    titleEl.textContent = branding && branding.displayName ? `${branding.displayName} — извлечённые данные` : 'Тамга — извлечённые данные';
+    titleEl.style.cssText = `font-size:18px; margin:0 0 16px; color:${accent};`;
+    container.appendChild(titleEl);
+  }
+
+  groups.forEach(({ fileName, docType, fields: rawFields, items: rawItems, columns, columnKeys, confidence }) => {
+    const fields = maskFields(rawFields, maskSensitive);
+    const items = maskItems(rawItems, columns || columnsForType(docType), columnKeys || keysForType(docType), maskSensitive);
     const card = document.createElement('div');
     card.style.cssText = 'margin-bottom:22px; padding-bottom:14px; border-bottom:1px solid #C9C2AE;';
 
@@ -109,7 +142,23 @@ function buildOffscreenContainer(groups) {
     container.appendChild(card);
   });
 
-  return container;
+  return { container, logoImg };
+}
+
+// Ждёт загрузки лого (успех/ошибка/таймаут) перед тем, как звать html2canvas —
+// иначе картинка почти наверняка не успеет прогрузиться за пару кадров и
+// просто не попадёт в PDF. Таймаут — на случай недоступного/медленного URL
+// логотипа: экспорт не должен зависать навсегда из-за одной картинки, лучше
+// отдать PDF без лого, чем не отдать вообще ничего.
+function waitForImage(img, timeoutMs = 4000) {
+  if (!img) return Promise.resolve();
+  if (img.complete) return Promise.resolve();
+  return new Promise(resolve => {
+    const done = () => resolve();
+    img.addEventListener('load', done, { once: true });
+    img.addEventListener('error', done, { once: true });
+    setTimeout(done, timeoutMs);
+  });
 }
 
 function sliceCanvasToPdf(canvas) {
@@ -145,14 +194,23 @@ function sliceCanvasToPdf(canvas) {
 }
 
 // onDone(errorOrNull) вызывается по завершении — вызывающий код решает, что делать с кнопкой.
-export function downloadPdf(groups, onDone) {
+// options.maskSensitive — см. sensitiveFields.js. options.branding — см.
+// buildOffscreenContainer выше.
+export function downloadPdf(groups, onDone, options) {
   if (groups.length === 0) return;
 
-  const container = buildOffscreenContainer(groups);
+  const { container, logoImg } = buildOffscreenContainer(groups, options);
   document.body.appendChild(container);
 
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    html2canvas(container, { scale: 2, backgroundColor: '#ffffff' }).then(canvas => {
+  waitForImage(logoImg).then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))).then(() => {
+    // useCORS — нужен, если в контейнере есть логотип клиента с другого домена
+    // (Supabase Storage и т.п.): без этого html2canvas либо бросит ошибку на
+    // "загрязнённом" (tainted) canvas, либо тихо отрисует пустое место вместо
+    // картинки. Публичные объекты Supabase Storage отдают Access-Control-Allow-Origin
+    // по умолчанию — если у конкретного клиента логотип на другом хостинге без
+    // CORS, картинка просто не попадёт в PDF (см. catch ниже — весь экспорт
+    // из-за одной картинки не должен падать).
+    html2canvas(container, { scale: 2, backgroundColor: '#ffffff', useCORS: true }).then(canvas => {
       document.body.removeChild(container);
       if (canvas.width === 0 || canvas.height === 0) {
         throw new Error('Не удалось отрисовать содержимое для PDF (пустой холст)');
@@ -163,5 +221,5 @@ export function downloadPdf(groups, onDone) {
       if (document.body.contains(container)) document.body.removeChild(container);
       onDone(err);
     });
-  }));
+  });
 }

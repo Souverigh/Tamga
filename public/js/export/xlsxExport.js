@@ -7,17 +7,29 @@
 // справочник номенклатуры) разные наборы колонок и их нельзя свести в одну таблицу.
 
 import { isTableType, columnsForType, keysForType } from '../config/docSchema.js';
+import { maskFields, maskItems } from './sensitiveFields.js';
 
 // Имя листа Excel ограничено 31 символом и не может содержать некоторые символы.
 function sheetNameFor(docType) {
   return docType.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31);
 }
 
-export function downloadXlsx(groups) {
+// options.maskSensitive — см. sensitiveFields.js. options.branding —
+// { displayName, logoUrl, accentColor } | null (см. branding.js:getClientBranding).
+// SheetJS Community Edition (тот, что подключён через CDN, xlsx.full.min.js)
+// не умеет встраивать картинки в лист — это фича только Pro-версии, поэтому
+// логотип сюда не идёт (в отличие от PDF), только название клиента текстом.
+export function downloadXlsx(groups, { maskSensitive = false, branding = null } = {}) {
   if (groups.length === 0) return;
 
-  const rows = [['Файл', 'Тип документа', 'Поле', 'Значение']];
-  groups.forEach(({ fileName, docType, fields, confidence }) => {
+  const rows = [];
+  if (branding && branding.displayName) {
+    rows.push([`${branding.displayName} — извлечённые данные (Тамга)`]);
+    rows.push([]); // пустая строка-отступ перед таблицей
+  }
+  rows.push(['Файл', 'Тип документа', 'Поле', 'Значение']);
+  groups.forEach(({ fileName, docType, fields: rawFields, confidence }) => {
+    const fields = maskFields(rawFields, maskSensitive);
     // Уверенность (см. lib/confidence.js) — та же синтетическая строка-поле,
     // что в csvExport.js, ради согласованности между форматами экспорта.
     if (confidence != null) {
@@ -33,6 +45,11 @@ export function downloadXlsx(groups) {
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 40 }];
   const wb = XLSX.utils.book_new();
+  if (branding && branding.displayName) {
+    // Свойства документа (File → Сведения в Excel) — дополнительно к видимой
+    // строке-заголовку выше, не вместо неё: свойства мало кто открывает.
+    wb.Props = { Title: `${branding.displayName} — извлечённые данные`, Company: branding.displayName };
+  }
   XLSX.utils.book_append_sheet(wb, ws, 'Тамга');
 
   // Группируем товарные строки по типу документа — у каждого табличного типа
@@ -42,8 +59,9 @@ export function downloadXlsx(groups) {
   // от конкретного файла (см. results.js:getFileGroups — columns/columnKeys
   // приходят с сервера при tableMode, см. lib/recognize.js).
   const itemsByType = new Map();
-  groups.forEach(({ fileName, docType, items, columns, columnKeys }) => {
-    if (!isTableType(docType) || !items || items.length === 0) return;
+  groups.forEach(({ fileName, docType, items: rawItems, columns, columnKeys }) => {
+    if (!isTableType(docType) || !rawItems || rawItems.length === 0) return;
+    const items = maskItems(rawItems, columns || columnsForType(docType), columnKeys || keysForType(docType), maskSensitive);
     if (!itemsByType.has(docType)) itemsByType.set(docType, { columns: columns || null, columnKeys: columnKeys || null, entries: [] });
     itemsByType.get(docType).entries.push(...items.map(item => ({ fileName, item })));
   });

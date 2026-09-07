@@ -23,6 +23,27 @@ import { setExtraDocTypes } from './ui/fileList.js';
 const STORAGE_KEY = 'tamga_client_slug';
 const TOKEN_KEY_PREFIX = 'tamga_client_token:';
 
+// Кэш последнего успешно загруженного конфига клиента — визуальный фасад
+// (displayName/logoUrl/accentColor, нужен export/pdfExport.js и export/xlsxExport.js
+// через app.js для брендированного экспорта) И лимит приоритетной обработки
+// (maxConcurrency — премиум-опция, см. app.js) в одном объекте, т.к. оба
+// приходят одним и тем же запросом к /api/client-config — нет смысла делать
+// второй запрос ради ещё одного числа. null, пока конфиг не загрузился (или
+// его нет вовсе — обычный посетитель без slug).
+let cachedBranding = null;
+
+// Используется export-модулями (см. app.js) для брендированного экспорта —
+// логотип/название клиента в PDF, название компании в свойствах Excel — И
+// самим app.js для приоритетной обработки (maxConcurrency, см. комментарий
+// у MAX_CONCURRENT_REQUESTS там). Не гарантирует, что конфиг уже загрузился
+// (initBranding — fire-and-forget, см. вызов в app.js) — на момент фактического
+// клика "Распознать"/"Скачать" он почти наверняка успеет (человек сначала
+// выбирает файлы), но вызывающий код должен быть готов к null и просто
+// использовать значения по умолчанию в этом случае.
+export function getClientBranding() {
+  return cachedBranding;
+}
+
 function resolveClientSlug() {
   const params = new URLSearchParams(window.location.search);
   const fromUrl = params.get('client');
@@ -173,6 +194,15 @@ export async function initBranding() {
     if (ok && config) {
       applyFacade(config);
       applyCustomDocTypes(config);
+      // Только безопасные для браузера поля — то же самое, что уже отдал
+      // /api/client-config (см. его комментарий: намеренно НЕ полный конфиг).
+      cachedBranding = {
+        displayName: config.displayName || null,
+        logoUrl: config.logoUrl || null,
+        accentColor: config.accentColor || null,
+        // Число или null — см. api/client-config.js и lib/customFieldsLookup.js.
+        maxConcurrency: typeof config.maxConcurrency === 'number' ? config.maxConcurrency : null
+      };
     }
   } catch (err) {
     // Сетевой сбой на этапе, когда гейт ещё не подтверждён точно не нужен —
