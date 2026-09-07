@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { checkAdminSecret } = require('../../lib/adminAuth');
 const { DOC_TYPES } = require('../../lib/docSchema');
 const { hashPassword } = require('../../lib/clientAuth');
@@ -142,11 +143,35 @@ function validateAndNormalize(body) {
     } else {
       delete row.formatting.maxConcurrency;
     }
+    // Вебхук "пакет завершён" (см. api/v1/batch.js, lib/webhooks.js). URL
+    // обязательно https:// — секрет отправляется по нему в виде подписи,
+    // http сделал бы её бессмысленной (перехватывается вместе с телом).
+    if (row.formatting.webhookUrl !== undefined && row.formatting.webhookUrl !== null && row.formatting.webhookUrl !== '') {
+      const url = String(row.formatting.webhookUrl).trim();
+      if (!/^https:\/\/.+/.test(url)) {
+        return { error: 'formatting.webhookUrl должен начинаться с https://' };
+      }
+      row.formatting.webhookUrl = url;
+      // Секрет для подписи (X-Tamga-Signature) — если URL задан, а секрет нет,
+      // генерируем сами: пусть подпись есть по умолчанию, а не только если
+      // администратор вспомнит её задать вручную. Показывается в ответе формы
+      // (см. sanitizeClientRow — только access_password_hash скрывается, это
+      // внутренний инструмент для самого Ethan, не self-service клиентов).
+      if (!row.formatting.webhookSecret) {
+        row.formatting.webhookSecret = crypto.randomBytes(24).toString('hex');
+      }
+    } else {
+      // Нет URL — секрет без него бессмысленен, чистим оба вместе.
+      delete row.formatting.webhookUrl;
+      delete row.formatting.webhookSecret;
+    }
     // ВАЖНО: должно перечислять ВСЕ поддерживаемые ключи formatting — раньше
     // здесь проверялись только dateFormat/decimalSeparator, из-за чего
     // formatting с ЕДИНСТВЕННО заданным maxConcurrency (без даты/разделителя)
     // тихо схлопывался в null и настройка приоритета никогда бы не сохранялась.
-    if (!row.formatting.dateFormat && !row.formatting.decimalSeparator && !row.formatting.maxConcurrency) row.formatting = null;
+    // webhookUrl добавлен в этот же список по той же причине — не наступать
+    // на те же грабли второй раз.
+    if (!row.formatting.dateFormat && !row.formatting.decimalSeparator && !row.formatting.maxConcurrency && !row.formatting.webhookUrl) row.formatting = null;
   }
 
   // Разовый пакет страниц (см. lib/customFieldsLookup.js:consumeUsage). Пустая

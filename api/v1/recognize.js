@@ -5,7 +5,7 @@ const { checkApiKey } = require('../../lib/apiKeyAuth');
 //
 // POST /api/v1/recognize
 // Заголовки: x-api-key: <ваш ключ>, Content-Type: application/json
-// Тело:      { "image": "<base64>", "mimeType": "image/png", "docType": "Справка" (опционально), "skipOcr": false (опционально) }
+// Тело:      { "image": "<base64>", "mimeType": "image/png", "docType": "Справка" (опционально), "skipOcr": false (опционально), "batchId": "batch_..." (опционально) }
 // Ответ:     { "documentType": "...", "text": "...", "fields": [{label, value}, ...], "items": [], "confidence": 92 }
 //            (для табличных типов дополнительно: "columns": [...], "columnKeys": [...] — см. ниже)
 //
@@ -46,6 +46,13 @@ const { checkApiKey } = require('../../lib/apiKeyAuth');
 // Поддерживаемые mimeType: image/png, image/jpeg, image/webp, application/pdf
 // (для application/pdf документ передаётся Gemini напрямую, постраничная
 // разбивка на сервере не выполняется — модель обрабатывает файл целиком).
+//
+// batchId: необязательный — если вы обрабатываете группу документов и хотите
+// получить вебхук "пакет завершён" на свою систему, сначала создайте пакет
+// (POST /api/v1/batch), передавайте вернувшийся batchId в каждом вызове
+// recognize для этой группы, затем закройте пакет (POST /api/v1/batch с
+// { "batchId": "...", "finish": true }) — см. batch.js. Без batchId ничего
+// не меняется в поведении этого эндпоинта.
 module.exports = async (req, res) => {
   // Разрешаем кросс-доменные вызовы — интеграции обычно идут не из браузера,
   // но не будем этого требовать.
@@ -69,9 +76,9 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType, docType, skipOcr } = req.body || {};
+    const { image, mimeType, docType, skipOcr, batchId } = req.body || {};
     const clientApiKey = req.headers['x-api-key'];
-    const result = await recognizeDocument({ base64: image, mimeType, docType, skipOcr, clientApiKey });
+    const result = await recognizeDocument({ base64: image, mimeType, docType, skipOcr, clientApiKey, batchId });
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {

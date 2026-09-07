@@ -135,6 +135,16 @@
         <input type="number" id="fMaxConcurrency" class="admin-input" min="1" max="60" step="1" placeholder="По умолчанию (25)" style="max-width:160px;">
       </div>
 
+      <h3 class="admin-section-title">Вебхук «пакет завершён» <span class="admin-hint">— только для API-интеграций (x-api-key), см. /api/v1/batch</span></h3>
+      <div class="admin-field-group">
+        <label class="admin-label">URL вебхука</label>
+        <input type="text" id="fWebhookUrl" class="admin-input" placeholder="https://... — куда слать POST при закрытии пакета">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Секрет для подписи <span class="admin-hint">— для заголовка X-Tamga-Signature; пусто — сгенерируется автоматически при сохранении (появится здесь при повторном открытии карточки)</span></label>
+        <input type="text" id="fWebhookSecret" class="admin-input" placeholder="Оставьте пустым для автогенерации">
+      </div>
+
       <h3 class="admin-section-title">Переопределение полей <span class="admin-hint">— свой список полей для конкретного стандартного типа документа</span></h3>
       <div id="fieldOverridesList" class="admin-override-list"></div>
       <button class="btn-secondary" id="addFieldOverrideBtn" type="button">+ Добавить переопределение</button>

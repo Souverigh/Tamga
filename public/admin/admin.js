@@ -48,6 +48,8 @@ const accentSwatch = document.getElementById('accentSwatch');
 const fDateFormat = document.getElementById('fDateFormat');
 const fDecimalSeparator = document.getElementById('fDecimalSeparator');
 const fMaxConcurrency = document.getElementById('fMaxConcurrency');
+const fWebhookUrl = document.getElementById('fWebhookUrl');
+const fWebhookSecret = document.getElementById('fWebhookSecret');
 
 const fieldOverridesList = document.getElementById('fieldOverridesList');
 const addFieldOverrideBtn = document.getElementById('addFieldOverrideBtn');
@@ -229,6 +231,7 @@ function badgesFor(client) {
   if (client.custom_doc_types && Object.keys(client.custom_doc_types).length) badges.push(`Своих типов: ${Object.keys(client.custom_doc_types).length}`);
   if (client.formatting && (client.formatting.dateFormat || client.formatting.decimalSeparator)) badges.push('Формат');
   if (client.formatting && client.formatting.maxConcurrency) badges.push(`Приоритет ×${client.formatting.maxConcurrency}`);
+  if (client.formatting && client.formatting.webhookUrl) badges.push('Вебхук');
   if (client.display_name || client.logo_url || client.accent_color) badges.push('Фасад');
   return badges;
 }
@@ -514,6 +517,8 @@ function resetForm() {
   fDateFormat.value = '';
   fDecimalSeparator.value = '';
   fMaxConcurrency.value = '';
+  fWebhookUrl.value = '';
+  fWebhookSecret.value = '';
   formError.style.display = 'none';
   fieldOverrideEditor.style.display = 'none';
   customTypeEditor.style.display = 'none';
@@ -568,6 +573,8 @@ function openForm(client) {
     fDateFormat.value = (client.formatting && client.formatting.dateFormat) || '';
     fDecimalSeparator.value = (client.formatting && client.formatting.decimalSeparator) || '';
     fMaxConcurrency.value = (client.formatting && client.formatting.maxConcurrency) || '';
+    fWebhookUrl.value = (client.formatting && client.formatting.webhookUrl) || '';
+    fWebhookSecret.value = (client.formatting && client.formatting.webhookSecret) || '';
     state.fieldOverrides = client.field_overrides ? JSON.parse(JSON.stringify(client.field_overrides)) : {};
     state.customDocTypes = client.custom_doc_types ? JSON.parse(JSON.stringify(client.custom_doc_types)) : {};
     state.legacyFields = Array.isArray(client.fields) ? [...client.fields] : [];
@@ -596,6 +603,15 @@ function buildPayload() {
   // formatting, отдельная колонка не заводилась. Валидация диапазона (1-60) —
   // на сервере (api/admin/clients.js), здесь только не шлём пустое значение.
   if (fMaxConcurrency.value) formatting.maxConcurrency = Number(fMaxConcurrency.value);
+  // Вебхук "пакет завершён" (см. api/v1/batch.js) — секрет не отправляем,
+  // если поле пустое: сервер сам сгенерирует его при сохранении, если задан
+  // URL (см. api/admin/clients.js). Если поле НЕ пустое — значит либо уже
+  // сгенерирован раньше (карточка открыта повторно), либо администратор
+  // вписал свой — в обоих случаях отправляем как есть, не перезаписываем.
+  if (fWebhookUrl.value.trim()) {
+    formatting.webhookUrl = fWebhookUrl.value.trim();
+    if (fWebhookSecret.value.trim()) formatting.webhookSecret = fWebhookSecret.value.trim();
+  }
 
   const legacyFields = legacyChipEditor ? legacyChipEditor.getValues() : state.legacyFields;
 
