@@ -27,23 +27,26 @@ export function downloadXlsx(groups, { maskSensitive = false, branding = null } 
     rows.push([`${branding.displayName} — извлечённые данные (Тамга)`]);
     rows.push([]); // пустая строка-отступ перед таблицей
   }
-  rows.push(['Файл', 'Тип документа', 'Поле', 'Значение']);
+  rows.push(['Файл', 'Тип документа', 'Поле', 'Значение', 'Уверенность поля (%)']);
   groups.forEach(({ fileName, docType, fields: rawFields, confidence }) => {
     const fields = maskFields(rawFields, maskSensitive);
-    // Уверенность (см. lib/confidence.js) — та же синтетическая строка-поле,
-    // что в csvExport.js, ради согласованности между форматами экспорта.
+    // Уверенность на весь документ (см. lib/confidence.js) — та же синтетическая
+    // строка-поле, что в csvExport.js, ради согласованности между форматами
+    // экспорта. 5-я колонка (про КОНКРЕТНОЕ поле) для этой строки пуста.
     if (confidence != null) {
-      rows.push([fileName, docType, 'Уверенность модели (%)', confidence]);
+      rows.push([fileName, docType, 'Уверенность модели (%)', confidence, '']);
     }
     if (fields.length === 0) {
-      if (confidence == null) rows.push([fileName, docType, '', '']);
+      if (confidence == null) rows.push([fileName, docType, '', '', '']);
     } else {
-      fields.forEach(({ label, value }) => rows.push([fileName, docType, label, value]));
+      // Уверенность на КОНКРЕТНОЕ поле (Ethan, 7 сен 2026, "уверенность по
+      // каждому полю") — null (офлайн-режим/старый ответ) -> пустая ячейка.
+      fields.forEach(({ label, value, confidence: fieldConfidence }) => rows.push([fileName, docType, label, value, fieldConfidence == null ? '' : fieldConfidence]));
     }
   });
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 40 }];
+  ws['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 40 }, { wch: 16 }];
   const wb = XLSX.utils.book_new();
   if (branding && branding.displayName) {
     // Свойства документа (File → Сведения в Excel) — дополнительно к видимой

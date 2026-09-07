@@ -195,6 +195,10 @@
   .confidence-badge.confidence-high{ color:var(--good); background:var(--good-tint); }
   .confidence-badge.confidence-medium{ color:var(--warn); background:var(--warn-tint); }
   .confidence-badge.confidence-low{ color:var(--danger); background:var(--danger-tint); }
+  /* Уверенность на конкретное поле (см. ui/results.js:buildFieldConfidenceBadge) —
+     тот же бейдж, компактнее, т.к. на одной карточке их может быть много (по
+     одному на строку fields-row). */
+  .confidence-badge-field{ font-size:0.66rem; padding:1px 6px; margin-top:0; justify-self:end; }
   /* Проверки бизнес-логики (см. postprocess/businessRules.js) — например,
      "дата выдачи позже даты окончания". error — вероятная ошибка распознавания,
      info — не ошибка, а факт о документе (например, срок истёк). */
@@ -224,7 +228,7 @@
     display:flex; flex-direction:column; gap:0; margin-bottom:18px;
     border:1px solid var(--line); border-radius:4px; overflow:hidden;
   }
-  .fields-row{ display:grid; grid-template-columns:36% 64%; gap:10px; align-items:center;
+  .fields-row{ display:grid; grid-template-columns:36% 1fr auto; gap:10px; align-items:center;
     padding:9px 12px; border-bottom:1px solid var(--line); }
   .fields-row:last-child{ border-bottom:none; }
   .fields-row:nth-child(odd){ background:#FAFAF8; }

@@ -124,16 +124,27 @@ function buildOffscreenContainer(groups, { maskSensitive = false, branding = nul
     } else {
       const table = document.createElement('table');
       table.style.cssText = 'width:100%; border-collapse:collapse; font-size:11px;';
-      fields.forEach(({ label, value }) => {
+      // Уверенность на КОНКРЕТНОЕ поле (Ethan, 7 сен 2026, "уверенность по
+      // каждому полю") — 3-я колонка, тот же цвет по порогам, что и confEl
+      // выше (уверенность на документ). Пусто, если её нет (офлайн-режим/
+      // старый ответ без неё) — не рисуем "0%" там, где оценки просто не было.
+      fields.forEach(({ label, value, confidence: fieldConfidence }) => {
         const tr = document.createElement('tr');
         const tdLabel = document.createElement('td');
         tdLabel.textContent = label;
-        tdLabel.style.cssText = 'padding:3px 8px 3px 0; color:#5B5F52; vertical-align:top; width:40%;';
+        tdLabel.style.cssText = 'padding:3px 8px 3px 0; color:#5B5F52; vertical-align:top; width:36%;';
         const tdValue = document.createElement('td');
         tdValue.textContent = value || '—';
-        tdValue.style.cssText = 'padding:3px 0; vertical-align:top;';
+        tdValue.style.cssText = 'padding:3px 8px 3px 0; vertical-align:top; width:52%;';
+        const tdConfidence = document.createElement('td');
+        tdConfidence.style.cssText = 'padding:3px 0; vertical-align:top; text-align:right; font-weight:bold; width:12%;';
+        if (fieldConfidence != null) {
+          tdConfidence.textContent = `${fieldConfidence}%`;
+          tdConfidence.style.color = fieldConfidence >= 85 ? '#1C8A5C' : fieldConfidence >= 50 ? '#A8630E' : '#C23B2E';
+        }
         tr.appendChild(tdLabel);
         tr.appendChild(tdValue);
+        tr.appendChild(tdConfidence);
         table.appendChild(tr);
       });
       card.appendChild(table);

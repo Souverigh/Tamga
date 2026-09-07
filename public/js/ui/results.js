@@ -42,6 +42,24 @@ function buildConfidenceBadge(confidence) {
   return badge;
 }
 
+// Уверенность на КОНКРЕТНОЕ поле (Ethan, 7 сен 2026, "уверенность по каждому
+// полю" — только карточные типы, см. lib/extraction.js:FIELD_CONFIDENCE_GUIDANCE),
+// не путать с buildConfidenceBadge выше (тот — на весь документ). Компактнее
+// (см. .confidence-badge-field в styles.css) — на одной карточке таких
+// бейджей может быть много, крупный вариант распирал бы строку.
+function buildFieldConfidenceBadge(confidence) {
+  if (confidence == null) return null;
+  const badge = document.createElement('span');
+  const tier = confidenceTier(confidence);
+  badge.className = `confidence-badge confidence-badge-field confidence-${tier}`;
+  badge.textContent = `${confidence}%`;
+  const tierText = tier === 'high' ? 'значение распознано уверенно'
+    : tier === 'medium' ? 'стоит бегло перепроверить'
+    : 'рекомендуем проверить вручную';
+  badge.title = `Уверенность модели в этом поле: ${confidence}% — ${tierText}`;
+  return badge;
+}
+
 // warnings — [{level:'error'|'info', message}] от checkBusinessRules
 // (см. postprocess/businessRules.js). null, если проверять было нечего —
 // вызывающий код (renderWarnings ниже) в этом случае просто очищает контейнер.
@@ -58,11 +76,20 @@ function buildWarningsBox(warnings) {
   return box;
 }
 
+// confidence на поле — не приходит вовсе для полей из офлайн-эвристики
+// (heuristicExtractor.js, ручная смена типа ниже) и из старых ответов сервера
+// без этого поля; в обоих случаях просто undefined/null, бейдж не рисуется —
+// то же "лучше молчать, чем показать неверную оценку", что и у buildConfidenceBadge.
+// Само значение confidence (в отличие от value) не редактируется руками —
+// хранится на строке через dataset, чтобы getFileGroups() ниже мог прочитать
+// его обратно для экспорта, не пересчитывая при каждом нажатии клавиши (тот
+// же принцип, что и group._tamgaConfidence на весь документ).
 function renderFieldsTable(container, fields) {
   container.innerHTML = '';
-  fields.forEach(({ label, value }) => {
+  fields.forEach(({ label, value, confidence }) => {
     const row = document.createElement('div');
     row.className = 'fields-row';
+    row.dataset.confidence = confidence == null ? '' : String(confidence);
     const l = document.createElement('div');
     l.className = 'fields-label';
     l.textContent = label;
@@ -72,6 +99,8 @@ function renderFieldsTable(container, fields) {
     input.value = value || '';
     row.appendChild(l);
     row.appendChild(input);
+    const badge = buildFieldConfidenceBadge(confidence == null ? null : confidence);
+    if (badge) row.appendChild(badge);
     container.appendChild(row);
   });
 }
@@ -322,7 +351,10 @@ export function getFileGroups() {
     const tableMode = group.dataset.mode === 'table';
     const fields = tableMode ? [] : Array.from(group.querySelectorAll('.fields-row')).map(row => ({
       label: row.querySelector('.fields-label').textContent,
-      value: row.querySelector('.fields-input').value
+      value: row.querySelector('.fields-input').value,
+      // Уверенность на поле (см. renderFieldsTable выше) — читается из dataset,
+      // не пересчитывается; '' (нет оценки) -> null, не 0.
+      confidence: row.dataset.confidence ? Number(row.dataset.confidence) : null
     }));
     const items = tableMode ? readLineItemsTable(group.querySelector('.line-items-table')) : [];
     const columns = tableMode ? (group._tamgaColumns || null) : null;
