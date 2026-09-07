@@ -43,22 +43,28 @@ export const DOC_FIELDS = {
   'Банковский документ': ['Владелец счёта', 'Номер счёта / IBAN', 'Банк', 'Сумма', 'Дата операции'],
   'Платёжное поручение': ['Плательщик', 'Получатель', 'Счёт получателя', 'Сумма', 'Дата', 'Номер поручения', 'Назначение платежа'],
   'Квитанция / чек': ['Продавец', 'Дата', 'Сумма итого', 'Номер чека'],
+  // Ставка НДС/Сумма НДС (Ethan, 7 сен 2026, "совместимость формата экспорта
+  // с 1С") — ДОЛЖНО совпадать с lib/docSchema.js (серверная копия): это
+  // только запасной вариант на случай, если ответ сервера не принёс
+  // columns/columnKeys (например, старый сохранённый результат) — рассинхрон
+  // с сервером означал бы, что для части документов рендерится/экспортируется
+  // на 2 колонки меньше, чем реально извлечено.
   'Накладная / УПД': {
     mode: 'table',
-    columns: ['Наименование', 'Артикул', 'Цена', 'Количество', 'Сумма'],
-    keys: ['name', 'id', 'price', 'qty', 'sum'],
+    columns: ['Наименование', 'Артикул', 'Цена', 'Количество', 'Сумма', 'Ставка НДС', 'Сумма НДС'],
+    keys: ['name', 'id', 'price', 'qty', 'sum', 'vatRate', 'vatSum'],
     description: 'an invoice/goods delivery note with a table of line items'
   },
   'Счёт-фактура / Инвойс': {
     mode: 'table',
-    columns: ['Наименование', 'Артикул', 'Цена', 'Количество', 'Сумма'],
-    keys: ['name', 'id', 'price', 'qty', 'sum'],
+    columns: ['Наименование', 'Артикул', 'Цена', 'Количество', 'Сумма', 'Ставка НДС', 'Сумма НДС'],
+    keys: ['name', 'id', 'price', 'qty', 'sum', 'vatRate', 'vatSum'],
     description: 'an invoice issued for payment, with a table of line items, structurally similar to a goods delivery note but issued before/for payment rather than confirming delivery'
   },
   'Акт выполненных работ': {
     mode: 'table',
-    columns: ['Наименование работ/услуг', 'Ед. изм.', 'Количество', 'Цена', 'Сумма'],
-    keys: ['name', 'unit', 'qty', 'price', 'sum'],
+    columns: ['Наименование работ/услуг', 'Ед. изм.', 'Количество', 'Цена', 'Сумма', 'Ставка НДС', 'Сумма НДС'],
+    keys: ['name', 'unit', 'qty', 'price', 'sum', 'vatRate', 'vatSum'],
     description: 'a certificate of completed work or services, with a table of line items for labor/services rendered rather than physical goods'
   },
   'Справочник номенклатуры': {
