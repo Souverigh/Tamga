@@ -13,6 +13,8 @@ import { saveResultsToStorage, loadSavedResults, clearSavedResults } from './sto
 import { downloadTxt, buildAllText } from './export/txtExport.js';
 import { downloadXlsx } from './export/xlsxExport.js';
 import { downloadPdf } from './export/pdfExport.js';
+import { downloadCsv } from './export/csvExport.js';
+import { downloadJson } from './export/jsonExport.js';
 import { initFileList, getSelectedFiles, getSelectedDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
 import {
   startProgress, finishProgress, setOverallProgress,
@@ -66,6 +68,8 @@ const copyAllBtn = document.getElementById('copyAllBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const downloadXlsxBtn = document.getElementById('downloadXlsxBtn');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+const downloadJsonBtn = document.getElementById('downloadJsonBtn');
 const tryDemoBtn = document.getElementById('tryDemoBtn');
 
 // --- Загрузка файлов: при любом изменении списка прячем прогресс и старые результаты ---
@@ -388,6 +392,8 @@ copyAllBtn.addEventListener('click', async () => {
 
 downloadBtn.addEventListener('click', () => downloadTxt(getFileGroups()));
 downloadXlsxBtn.addEventListener('click', () => downloadXlsx(getFileGroups()));
+downloadCsvBtn.addEventListener('click', () => downloadCsv(getFileGroups()));
+downloadJsonBtn.addEventListener('click', () => downloadJson(getFileGroups()));
 
 downloadPdfBtn.addEventListener('click', () => {
   const originalLabel = downloadPdfBtn.textContent;
