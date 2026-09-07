@@ -12,7 +12,10 @@
     --accent-deep:#1E3BB8;
     --good:#1C8A5C;
     --good-tint:#E4F3EC;
+    --warn:#A8630E;
+    --warn-tint:#FBF0DC;
     --danger:#C23B2E;
+    --danger-tint:#FBEAE8;
   }
   *{box-sizing:border-box;}
   html{ overflow-x:hidden; width:100%; }
@@ -184,6 +187,14 @@
   }
   .file-result-title .chevron{ font-size:0.7rem; color:var(--ink-soft); transition:transform .15s; margin-top:3px; flex-shrink:0; }
   .file-result-title .title-text{ min-width:0; overflow-wrap:anywhere; }
+  .confidence-badge{
+    display:inline-block; flex-shrink:0; margin-top:1px; font-size:0.72rem; font-weight:600;
+    font-family:'IBM Plex Mono', monospace; letter-spacing:0.02em; border-radius:4px; padding:2px 7px;
+    cursor:help;
+  }
+  .confidence-badge.confidence-high{ color:var(--good); background:var(--good-tint); }
+  .confidence-badge.confidence-medium{ color:var(--warn); background:var(--warn-tint); }
+  .confidence-badge.confidence-low{ color:var(--danger); background:var(--danger-tint); }
   .file-result-group.collapsed .file-result-title .chevron{ transform:rotate(-90deg); }
   .file-result-group.collapsed .collapsible{ display:none; }
   .doc-type-badge{

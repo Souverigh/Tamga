@@ -5,9 +5,14 @@
 // в ui/results.js) — сам DOM не читает.
 
 export function buildJson(groups) {
-  const payload = groups.map(({ fileName, docType, text, fields, items, columns, columnKeys }) => ({
+  const payload = groups.map(({ fileName, docType, text, fields, items, columns, columnKeys, confidence }) => ({
     file: fileName,
     docType,
+    // Самооценка модели (0-100, см. lib/confidence.js) — null, если её нет
+    // (офлайн-режим или Gemini не смогла дать оценку); в JSON.stringify null
+    // сериализуется как есть (в отличие от undefined ниже), т.к. это осмысленное
+    // значение "оценки нет", а не отсутствующее в этой версии ответа поле.
+    confidence: confidence === undefined ? null : confidence,
     text,
     // Пустые/неприменимые для типа поля не включаем — JSON.stringify сам
     // отбрасывает ключи со значением undefined.

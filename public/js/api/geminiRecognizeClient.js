@@ -99,7 +99,10 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
         // при табличном типе. Нужна фронтенду, т.к. при клиентском override она
         // отличается от статичной схемы docSchema.js (см. app.js/results.js/export/*).
         columns: Array.isArray(data.columns) && data.columns.length ? data.columns : null,
-        columnKeys: Array.isArray(data.columnKeys) && data.columnKeys.length ? data.columnKeys : null
+        columnKeys: Array.isArray(data.columnKeys) && data.columnKeys.length ? data.columnKeys : null,
+        // Самооценка модели (0-100, см. lib/confidence.js) — null, если сервер
+        // её не смог нормализовать (см. lib/fieldFormat.js:normalizeConfidence).
+        confidence: typeof data.confidence === 'number' ? data.confidence : null
       };
     }
 

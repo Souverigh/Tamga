@@ -152,8 +152,20 @@ async function loadPageImages(file) {
   return file.type === 'application/pdf' ? loadPdfPages(file) : loadImageFile(file);
 }
 
-// Распознаёт одну страницу выбранным движком. Возвращает { rawText, docType, fields, items }.
-// docType/fields/items заполняются только Gemini-режимом (Tesseract их не знает — см. классификацию ниже).
+// null-safe минимум — confidence может быть null (Tesseract, __unparsed-ответ,
+// не-числовая оценка от Gemini, см. lib/fieldFormat.js:normalizeConfidence);
+// null означает «оценки нет», а не «наихудшая оценка», поэтому Math.min напрямую
+// не годится (Math.min(90, null) === 0 из-за приведения null к 0 — испортило бы
+// вполне уверенный документ). Отсутствие оценки просто не участвует в минимуме.
+function minConfidence(a, b) {
+  if (a == null) return b;
+  if (b == null) return a;
+  return Math.min(a, b);
+}
+
+// Распознаёт одну страницу выбранным движком. Возвращает { rawText, docType, fields, items, confidence }.
+// docType/fields/items/confidence заполняются только Gemini-режимом (Tesseract их не знает — см. классификацию ниже).
+// confidence — самооценка модели (0-100) или null, если оценки нет (см. lib/confidence.js).
 //
 // Авто-извлечение таблиц без ручного выбора типа: если тип не был известен заранее
 // (пользователь оставил «Определить автоматически»), первый запрос не мог попросить
@@ -190,24 +202,32 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
         // первого их не может быть: та классификация ещё не знала тип, поэтому
         // сервер не мог решить, нужен ли override (см. lib/recognize.js:tableColumns).
         const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true, onRetry, signal, clientSlug, clientToken });
-        return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items, columns: tableResult.columns, columnKeys: tableResult.columnKeys };
+        // Два запроса на одну страницу (классификация+текст, потом строки таблицы) —
+        // берём худшую (минимальную) из двух оценок, т.к. обе относятся к одному и
+        // тому же документу: низкая уверенность в любой из частей (что это за тип,
+        // или что строки таблицы верны) одинаково значима для решения «перепроверить».
+        return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items, columns: tableResult.columns, columnKeys: tableResult.columnKeys, confidence: minConfidence(result.confidence, tableResult.confidence) };
       } catch (e) {
         if (e && e.name === 'AbortError') throw e;
         // Второй запрос не удался (например, 504) — не роняем страницу целиком: текст
         // и определённый тип у нас уже есть, таблица просто останется пустой для
-        // ручного заполнения, как раньше при ручном выборе табличного типа.
+        // ручного заполнения, как раньше при ручном выборе табличного типа. confidence —
+        // только от первого запроса (единственная оценка, которая у нас есть).
         console.error('Авто-извлечение таблицы не удалось, оставляем текст и тип без строк:', e);
-        return { rawText: result.text, docType: result.docType, fields: result.fields, items: null, columns: null, columnKeys: null };
+        return { rawText: result.text, docType: result.docType, fields: result.fields, items: null, columns: null, columnKeys: null, confidence: result.confidence };
       }
     }
-    return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys };
+    return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys, confidence: result.confidence };
   }
   const rawText = await recognizeWithTesseract(pageImage, lang, m => {
     const pct = Math.round(m.progress * 100);
     const stage = (m.status.includes('loading') || m.status.includes('load')) ? 'Загружаем движок' : 'Распознаём';
     onStatus(`${stage}… ${pct}%`);
   });
-  return { rawText, docType: null, fields: null, items: null, columns: null, columnKeys: null };
+  // Офлайн-режим не даёт сопоставимой оценки уверенности (Tesseract возвращает
+  // символьную OCR-точность, не «правильно ли извлечены поля») — не подменяем
+  // одно другим, честно null: бейдж на фронтенде просто не покажется.
+  return { rawText, docType: null, fields: null, items: null, columns: null, columnKeys: null, confidence: null };
 }
 
 // Собирает финальный результат по файлу из уже распознанных страниц (без сети —
@@ -225,11 +245,18 @@ function finalizeFileResult(entry, mode) {
   let fileItems = null;
   let fileColumns = null;
   let fileColumnKeys = null;
+  // В отличие от docType/fields/items (берутся с ПЕРВОЙ подходящей страницы —
+  // см. комментарий выше), уверенность сводим по ВСЕМ страницам файла минимумом:
+  // клиенту важно, что хотя бы одна страница вызвала сомнение у модели, а не
+  // только первая — иначе смазанная последняя страница многостраничного
+  // документа осталась бы никак не отмеченной.
+  let fileConfidence = null;
   for (const rec of entry.pageRecognized) {
     if (!rec) continue;
     if (!entry.presetType && fileDocType == null && rec.docType) fileDocType = rec.docType;
     if (fileFields === null && rec.fields) fileFields = rec.fields;
     if (fileItems === null && rec.items) { fileItems = rec.items; fileColumns = rec.columns || null; fileColumnKeys = rec.columnKeys || null; }
+    fileConfidence = minConfidence(fileConfidence, rec.confidence);
   }
 
   // Классификация и извлечение полей не должны молча ронять весь сценарий: если
@@ -256,7 +283,7 @@ function finalizeFileResult(entry, mode) {
     fileDocType = DOC_TYPES.includes(fileDocType) ? fileDocType : 'Другое';
   }
 
-  return { fileName: entry.file.name, pages: entry.pageTexts, docType: fileDocType, fields, items, columns: fileColumns, columnKeys: fileColumnKeys };
+  return { fileName: entry.file.name, pages: entry.pageTexts, docType: fileDocType, fields, items, columns: fileColumns, columnKeys: fileColumnKeys, confidence: fileConfidence };
 }
 
 recognizeBtn.addEventListener('click', async () => {
@@ -345,12 +372,12 @@ recognizeBtn.addEventListener('click', async () => {
     const entry = fileEntries[fileIndex];
     setPageStatus(fileIndex, pageIndex, 'Распознаём…');
     try {
-      const { rawText, docType, fields, items, columns, columnKeys } = await recognizePage(
+      const { rawText, docType, fields, items, columns, columnKeys, confidence } = await recognizePage(
         entry.pageImages[pageIndex], mode, lang, entry.presetType,
         abortController.signal,
         status => setPageStatus(fileIndex, pageIndex, status)
       );
-      entry.pageRecognized[pageIndex] = { docType, fields, items, columns, columnKeys };
+      entry.pageRecognized[pageIndex] = { docType, fields, items, columns, columnKeys, confidence };
       entry.pageTexts[pageIndex] = postProcessText(rawText, { cleanup: true, normalize: postProcessCheckbox.checked });
       markPageDone(fileIndex, pageIndex, 'Готово');
       doneCount++;

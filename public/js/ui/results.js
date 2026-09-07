@@ -11,6 +11,36 @@ const toggleCollapseBtn = document.getElementById('toggleCollapseBtn');
 
 let allCollapsed = false;
 
+// Пороги подобраны на глаз (аналогично AUTO_COLLAPSE_THRESHOLD ниже) — цель не
+// точная калибровка (это self-reported оценка модели, не откалиброванная
+// вероятность, см. lib/confidence.js), а грубая сортировка «можно доверять
+// / стоит бегло глянуть / стоит проверить руками» для быстрого визуального
+// сканирования пачки из многих файлов.
+const CONFIDENCE_HIGH_THRESHOLD = 85;
+const CONFIDENCE_MEDIUM_THRESHOLD = 50;
+
+function confidenceTier(confidence) {
+  if (confidence >= CONFIDENCE_HIGH_THRESHOLD) return 'high';
+  if (confidence >= CONFIDENCE_MEDIUM_THRESHOLD) return 'medium';
+  return 'low';
+}
+
+// null — бейдж не показываем вообще (офлайн-режим, либо Gemini не смогла дать
+// оценку, см. lib/fieldFormat.js:normalizeConfidence) — лучше молчать, чем
+// показать неверный 0%, который выглядел бы как "документ совсем не читается".
+function buildConfidenceBadge(confidence) {
+  if (confidence == null) return null;
+  const badge = document.createElement('span');
+  const tier = confidenceTier(confidence);
+  badge.className = `confidence-badge confidence-${tier}`;
+  badge.textContent = `${confidence}%`;
+  const tierText = tier === 'high' ? 'документ распознан уверенно'
+    : tier === 'medium' ? 'стоит бегло перепроверить'
+    : 'рекомендуем проверить вручную';
+  badge.title = `Уверенность модели в этом документе: ${confidence}% — ${tierText}`;
+  return badge;
+}
+
 function renderFieldsTable(container, fields) {
   container.innerHTML = '';
   fields.forEach(({ label, value }) => {
@@ -101,9 +131,14 @@ function readLineItemsTable(container) {
   }).filter(item => Object.keys(item).some(k => (item[k] || '').trim() !== ''));
 }
 
-export function renderResultGroup({ fileName, pages, docType, fields, items, columns, columnKeys }) {
+export function renderResultGroup({ fileName, pages, docType, fields, items, columns, columnKeys, confidence }) {
   const group = document.createElement('div');
   group.className = 'file-result-group';
+  // Хранится прямо на DOM-элементе группы — та же схема, что _tamgaColumns/
+  // _tamgaColumnKeys ниже, нужна getFileGroups() (для экспорта). confidence
+  // не редактируется пользователем (в отличие от текста/полей), поэтому
+  // никакого DOM-инпута под него нет — только это значение и бейдж на вид.
+  group._tamgaConfidence = confidence == null ? null : confidence;
 
   const title = document.createElement('div');
   title.className = 'file-result-title';
@@ -115,6 +150,12 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
   titleText.textContent = fileName;
   title.appendChild(chevron);
   title.appendChild(titleText);
+  // Бейдж кладём в строку заголовка (не внутрь collapsible) — она остаётся
+  // видимой и когда карточка свёрнута (см. AUTO_COLLAPSE_THRESHOLD ниже), а
+  // именно тогда, при большой пачке файлов, бейдж больше всего и нужен —
+  // пробежаться взглядом по списку, не разворачивая каждую карточку по очереди.
+  const confidenceBadge = buildConfidenceBadge(confidence);
+  if (confidenceBadge) title.appendChild(confidenceBadge);
   title.addEventListener('click', () => group.classList.toggle('collapsed'));
   group.appendChild(title);
 
@@ -248,6 +289,7 @@ export function getFileGroups() {
     const items = tableMode ? readLineItemsTable(group.querySelector('.line-items-table')) : [];
     const columns = tableMode ? (group._tamgaColumns || null) : null;
     const columnKeys = tableMode ? (group._tamgaColumnKeys || null) : null;
-    return { fileName, docType, text, fields, items, columns, columnKeys };
+    const confidence = group._tamgaConfidence == null ? null : group._tamgaConfidence;
+    return { fileName, docType, text, fields, items, columns, columnKeys, confidence };
   });
 }

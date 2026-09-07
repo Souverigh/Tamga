@@ -20,7 +20,15 @@ function toCsvRow(cells) {
 export function buildCsv(groups) {
   const lines = [toCsvRow(['Файл', 'Тип документа', 'Строка', 'Поле', 'Значение'])];
 
-  groups.forEach(({ fileName, docType, fields, items, columns, columnKeys }) => {
+  groups.forEach(({ fileName, docType, fields, items, columns, columnKeys, confidence }) => {
+    // Уверенность (см. lib/confidence.js) добавлена синтетической строкой-полем,
+    // а не отдельной колонкой — у плоского CSV и так только 5 колонок общих на
+    // все типы, отдельная колонка только под одно значение раздула бы файл
+    // пустыми ячейками на каждой строке. null (нет оценки — офлайн-режим,
+    // либо Gemini не смогла её дать) — строку просто не добавляем.
+    if (confidence != null) {
+      lines.push(toCsvRow([fileName, docType, '', 'Уверенность модели (%)', confidence]));
+    }
     if (isTableType(docType) && items && items.length) {
       // columns/columnKeys с сервера (клиентский override) имеют приоритет над
       // статичной схемой — та же логика, что в xlsxExport.js.
@@ -35,7 +43,9 @@ export function buildCsv(groups) {
       fields.forEach(({ label, value }) => {
         lines.push(toCsvRow([fileName, docType, '', label, value]));
       });
-    } else {
+    } else if (confidence == null) {
+      // Пустая строка-заглушка только если вообще нечего написать про файл —
+      // если confidence уже был написан выше, файл и так представлен в выводе.
       lines.push(toCsvRow([fileName, docType, '', '', '']));
     }
   });

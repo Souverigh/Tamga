@@ -57,7 +57,7 @@ function buildOffscreenContainer(groups) {
   titleEl.style.cssText = 'font-size:18px; margin:0 0 16px;';
   container.appendChild(titleEl);
 
-  groups.forEach(({ fileName, docType, fields, items, columns, columnKeys }) => {
+  groups.forEach(({ fileName, docType, fields, items, columns, columnKeys, confidence }) => {
     const card = document.createElement('div');
     card.style.cssText = 'margin-bottom:22px; padding-bottom:14px; border-bottom:1px solid #C9C2AE;';
 
@@ -70,6 +70,16 @@ function buildOffscreenContainer(groups) {
     typeEl.textContent = `Тип документа: ${docType}`;
     typeEl.style.cssText = 'font-size:11px; color:#5B5F52; margin-bottom:10px;';
     card.appendChild(typeEl);
+
+    // Уверенность (см. lib/confidence.js) — цвет по тем же порогам, что бейдж
+    // в results.js (85/50), просто на статичном фоне, т.к. PDF рендерится один раз.
+    if (confidence != null) {
+      const confEl = document.createElement('div');
+      confEl.textContent = `Уверенность модели: ${confidence}%`;
+      const color = confidence >= 85 ? '#1C8A5C' : confidence >= 50 ? '#A8630E' : '#C23B2E';
+      confEl.style.cssText = `font-size:11px; font-weight:bold; color:${color}; margin:-4px 0 10px;`;
+      card.appendChild(confEl);
+    }
 
     if (items && items.length > 0) {
       card.appendChild(buildLineItemsTable(docType, items, columns, columnKeys));

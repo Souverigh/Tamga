@@ -17,9 +17,14 @@ export function downloadXlsx(groups) {
   if (groups.length === 0) return;
 
   const rows = [['Файл', 'Тип документа', 'Поле', 'Значение']];
-  groups.forEach(({ fileName, docType, fields }) => {
+  groups.forEach(({ fileName, docType, fields, confidence }) => {
+    // Уверенность (см. lib/confidence.js) — та же синтетическая строка-поле,
+    // что в csvExport.js, ради согласованности между форматами экспорта.
+    if (confidence != null) {
+      rows.push([fileName, docType, 'Уверенность модели (%)', confidence]);
+    }
     if (fields.length === 0) {
-      rows.push([fileName, docType, '', '']);
+      if (confidence == null) rows.push([fileName, docType, '', '']);
     } else {
       fields.forEach(({ label, value }) => rows.push([fileName, docType, label, value]));
     }
