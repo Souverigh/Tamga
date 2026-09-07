@@ -4,6 +4,7 @@
 
 import { DOC_TYPES, isTableType, columnsForType, keysForType } from '../config/docSchema.js';
 import { extractFieldsHeuristic } from '../extraction/heuristicExtractor.js';
+import { checkBusinessRules } from '../postprocess/businessRules.js';
 
 const resultsPanel = document.getElementById('resultsPanel');
 const pageResults = document.getElementById('pageResults');
@@ -39,6 +40,22 @@ function buildConfidenceBadge(confidence) {
     : 'рекомендуем проверить вручную';
   badge.title = `Уверенность модели в этом документе: ${confidence}% — ${tierText}`;
   return badge;
+}
+
+// warnings — [{level:'error'|'info', message}] от checkBusinessRules
+// (см. postprocess/businessRules.js). null, если проверять было нечего —
+// вызывающий код (renderWarnings ниже) в этом случае просто очищает контейнер.
+function buildWarningsBox(warnings) {
+  if (!warnings || !warnings.length) return null;
+  const box = document.createElement('div');
+  box.className = 'business-warnings';
+  warnings.forEach(({ level, message }) => {
+    const line = document.createElement('div');
+    line.className = `business-warning business-warning-${level}`;
+    line.textContent = message;
+    box.appendChild(line);
+  });
+  return box;
 }
 
 function renderFieldsTable(container, fields) {
@@ -180,6 +197,21 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
   typeRow.appendChild(typeSelect);
   collapsible.appendChild(typeRow);
 
+  // Проверки бизнес-логики (см. postprocess/businessRules.js) — например,
+  // "дата выдачи позже даты окончания". Контейнер создаётся сразу (пустой),
+  // а наполняется через renderWarnings ниже — чтобы при смене типа документа
+  // вручную (typeSelect.addEventListener('change', ...) ниже) можно было
+  // пересчитать и обновить его на месте, а не только при первом рендере.
+  const warningsContainer = document.createElement('div');
+  collapsible.appendChild(warningsContainer);
+  function renderWarnings(currentFields) {
+    const warnings = checkBusinessRules(currentFields);
+    group._tamgaWarnings = warnings;
+    warningsContainer.innerHTML = '';
+    const box = buildWarningsBox(warnings);
+    if (box) warningsContainer.appendChild(box);
+  }
+
   const fieldsTable = document.createElement('div');
   const tableMode = isTableType(docType);
   fieldsTable.className = tableMode ? 'line-items-table' : 'fields-table';
@@ -195,6 +227,10 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
     renderFieldsTable(fieldsTable, fields);
   }
   collapsible.appendChild(fieldsTable);
+  // Табличные типы приходят с fields=[] (см. lib/recognize.js) — checkBusinessRules
+  // на пустом массиве просто ничего не найдёт и молча вернёт [], отдельная
+  // ветка на tableMode не нужна.
+  renderWarnings(fields);
 
   // Смена типа документа вручную в результатах пересчитывает поля локально —
   // это уже после распознавания, лишний вызов Gemini здесь не нужен. Для табличных
@@ -211,11 +247,13 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
     group._tamgaColumnKeys = null;
     if (newTableMode) {
       renderLineItemsTable(fieldsTable, newType, []);
+      renderWarnings([]);
     } else {
       const areas = collapsible.querySelectorAll('.page-result textarea');
       const currentText = Array.from(areas).map(a => a.value).join('\n');
       const newFields = extractFieldsHeuristic(currentText, newType);
       renderFieldsTable(fieldsTable, newFields);
+      renderWarnings(newFields);
     }
   });
 
@@ -290,6 +328,11 @@ export function getFileGroups() {
     const columns = tableMode ? (group._tamgaColumns || null) : null;
     const columnKeys = tableMode ? (group._tamgaColumnKeys || null) : null;
     const confidence = group._tamgaConfidence == null ? null : group._tamgaConfidence;
-    return { fileName, docType, text, fields, items, columns, columnKeys, confidence };
+    // Проверки бизнес-логики (см. postprocess/businessRules.js) — посчитаны
+    // на момент рендера/смены типа, НЕ пересчитываются на каждое нажатие
+    // клавиши при ручном редактировании полей (та же экономия, что и с
+    // confidence — не пересчитываем на лету то, что дёшево посчитать один раз).
+    const warnings = group._tamgaWarnings || [];
+    return { fileName, docType, text, fields, items, columns, columnKeys, confidence, warnings };
   });
 }

@@ -27,7 +27,7 @@ import { showToast, showConfirm } from './ui/notify.js';
 import { isTableType, DOC_TYPES } from './config/docSchema.js';
 import { runWithConcurrency } from './utils/concurrencyPool.js';
 import { createRateLimiter } from './utils/rateLimiter.js';
-import { initBranding, getClientSlug, getClientToken } from './branding.js';
+import { initBranding, getClientSlug, getClientToken, getClientBranding } from './branding.js';
 
 // White-label фасад для клиентских пилотов (?client=slug в URL) — см. branding.js.
 // Не блокирует остальную инициализацию: fail-open при сбое сети.
@@ -80,7 +80,39 @@ const MAX_CONCURRENT_REQUESTS = 25;
 // Если понадобится больше — можно поднимать дальше, вплоть до, скажем, 700-800,
 // с тем же запасом ~20-30% под TPM/RPD и другие каналы.
 const GEMINI_RPM_BUDGET = 200;
-const geminiRateLimiter = createRateLimiter(GEMINI_RPM_BUDGET, 60000);
+// let, не const — приоритетная обработка (см. computeEffectiveLimits ниже)
+// пересоздаёт лимитер с более широким бюджетом для премиум-клиента ПЕРЕД
+// стартом конкретного прогона. recognizePage() всегда читает актуальное
+// значение через замыкание (обычное поведение let в JS), поэтому отдельно
+// прокидывать лимитер параметром через весь стек вызовов не нужно.
+let geminiRateLimiter = createRateLimiter(GEMINI_RPM_BUDGET, 60000);
+
+// Приоритетная обработка (Ethan, 7 сен 2026, премиум-функция): клиент с
+// настроенным formatting.maxConcurrency (см. lib/customFieldsLookup.js,
+// /admin) получает более широкий персональный потолок одновременных
+// запросов вместо общего MAX_CONCURRENT_REQUESTS — свой пакет обрабатывается
+// быстрее. ВАЖНО (честно, а не как маркетинг): это НЕ настоящая приоритетная
+// очередь — сервер ничего не знает про приоритет, у него нет общей очереди
+// между разными клиентами вообще (см. обсуждение архитектуры). Это просто
+// более широкий личный лимит параллелизма+темпа именно для запросов этого
+// клиента — его собственная пачка идёт быстрее, а не "обгоняет" чужие.
+//
+// RPM-бюджет масштабируется вместе с конкурентностью в той же пропорции, что
+// сейчас у дефолта (200/25 = 8) — иначе более широкий MAX_CONCURRENT просто
+// упирался бы в старый RPM-потолок и не давал реального ускорения (см.
+// комментарий выше про GEMINI_RPM_BUDGET=14 в старой версии). Верхний предел
+// на сам RPM-бюджет (500) — защита общего ключа Gemini (реальный потолок
+// проекта 1000 RPM, см. комментарий у GEMINI_RPM_BUDGET, делится между ВСЕМИ
+// каналами и клиентами одновременно) от одного неверно настроенного клиента.
+function computeEffectiveLimits() {
+  const branding = getClientBranding();
+  const configured = branding && branding.maxConcurrency;
+  if (!configured || configured <= MAX_CONCURRENT_REQUESTS) {
+    return { concurrency: MAX_CONCURRENT_REQUESTS, rpmBudget: GEMINI_RPM_BUDGET };
+  }
+  const rpmBudget = Math.min(500, Math.round(configured * (GEMINI_RPM_BUDGET / MAX_CONCURRENT_REQUESTS)));
+  return { concurrency: configured, rpmBudget };
+}
 
 const recognizeBtn = document.getElementById('recognizeBtn');
 const langSelect = document.getElementById('langSelect');
@@ -95,6 +127,18 @@ const downloadXlsxBtn = document.getElementById('downloadXlsxBtn');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 const downloadCsvBtn = document.getElementById('downloadCsvBtn');
 const downloadJsonBtn = document.getElementById('downloadJsonBtn');
+const maskSensitiveToggle = document.getElementById('maskSensitiveToggle');
+
+// Опции экспорта — не влияют на распознавание или показ в интерфейсе, только
+// на то, что уходит в скачиваемый файл. maskSensitive — см. export/sensitiveFields.js.
+// branding — лого/название клиента (см. branding.js:getClientBranding), для
+// обычного посетителя без ?client= всегда null — экспорт выглядит как раньше.
+function exportOptions() {
+  return {
+    maskSensitive: !!(maskSensitiveToggle && maskSensitiveToggle.checked),
+    branding: getClientBranding()
+  };
+}
 const tryDemoBtn = document.getElementById('tryDemoBtn');
 
 // --- Загрузка файлов: при любом изменении списка прячем прогресс и старые результаты ---
@@ -387,7 +431,16 @@ recognizeBtn.addEventListener('click', async () => {
   // ещё в процессе или упало (см. жалобу на неудобство при 50-100 документах).
   setDefaultHideCompleted(totalTasks > 20);
 
-  await runWithConcurrency(tasks, mode === 'gemini' ? MAX_CONCURRENT_REQUESTS : 1, async ([fileIndex, pageIndex]) => {
+  // Пересчитываем лимиты ПЕРЕД стартом этого конкретного прогона (не один раз
+  // при загрузке страницы) — на момент загрузки модуля клиентский конфиг ещё
+  // не успел прийти (initBranding — fire-and-forget), а здесь пользователь уже
+  // выбрал файлы и нажал «Распознать», так что fetch почти наверняка успел.
+  const { concurrency: effectiveConcurrency, rpmBudget: effectiveRpmBudget } = computeEffectiveLimits();
+  if (effectiveRpmBudget !== GEMINI_RPM_BUDGET) {
+    geminiRateLimiter = createRateLimiter(effectiveRpmBudget, 60000);
+  }
+
+  await runWithConcurrency(tasks, mode === 'gemini' ? effectiveConcurrency : 1, async ([fileIndex, pageIndex]) => {
     const entry = fileEntries[fileIndex];
     setPageStatus(fileIndex, pageIndex, 'Распознаём…');
     try {
@@ -443,9 +496,9 @@ copyAllBtn.addEventListener('click', async () => {
 });
 
 downloadBtn.addEventListener('click', () => downloadTxt(getFileGroups()));
-downloadXlsxBtn.addEventListener('click', () => downloadXlsx(getFileGroups()));
-downloadCsvBtn.addEventListener('click', () => downloadCsv(getFileGroups()));
-downloadJsonBtn.addEventListener('click', () => downloadJson(getFileGroups()));
+downloadXlsxBtn.addEventListener('click', () => downloadXlsx(getFileGroups(), exportOptions()));
+downloadCsvBtn.addEventListener('click', () => downloadCsv(getFileGroups(), exportOptions()));
+downloadJsonBtn.addEventListener('click', () => downloadJson(getFileGroups(), exportOptions()));
 
 downloadPdfBtn.addEventListener('click', () => {
   const originalLabel = downloadPdfBtn.textContent;
@@ -456,5 +509,5 @@ downloadPdfBtn.addEventListener('click', () => {
     if (err) showToast('Не удалось создать PDF: ' + (err.message || String(err)), 'error');
     downloadPdfBtn.disabled = false;
     downloadPdfBtn.textContent = originalLabel;
-  });
+  }, exportOptions());
 });

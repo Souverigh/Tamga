@@ -121,7 +121,7 @@ function validateAndNormalize(body) {
     const allowedDate = ['DD.MM.YYYY', 'YYYY-MM-DD'];
     const allowedSeparator = [',', '.'];
     if (typeof row.formatting !== 'object' || Array.isArray(row.formatting)) {
-      return { error: 'formatting должен быть объектом { dateFormat, decimalSeparator }' };
+      return { error: 'formatting должен быть объектом { dateFormat, decimalSeparator, maxConcurrency }' };
     }
     if (row.formatting.dateFormat && !allowedDate.includes(row.formatting.dateFormat)) {
       return { error: `formatting.dateFormat должен быть одним из: ${allowedDate.join(', ')}` };
@@ -129,7 +129,24 @@ function validateAndNormalize(body) {
     if (row.formatting.decimalSeparator && !allowedSeparator.includes(row.formatting.decimalSeparator)) {
       return { error: `formatting.decimalSeparator должен быть одним из: ${allowedSeparator.join(', ')}` };
     }
-    if (!row.formatting.dateFormat && !row.formatting.decimalSeparator) row.formatting = null;
+    // Приоритетная обработка (см. lib/customFieldsLookup.js:getClientConfig —
+    // диапазон 1-60 зажимается там же ещё раз при чтении, здесь проверяем
+    // сразу на записи ради понятной ошибки в форме админки, а не молчаливого
+    // игнорирования кривого значения при следующем распознавании).
+    if (row.formatting.maxConcurrency !== undefined && row.formatting.maxConcurrency !== null && row.formatting.maxConcurrency !== '') {
+      const n = Number(row.formatting.maxConcurrency);
+      if (!Number.isInteger(n) || n < 1 || n > 60) {
+        return { error: 'formatting.maxConcurrency должен быть целым числом от 1 до 60' };
+      }
+      row.formatting.maxConcurrency = n;
+    } else {
+      delete row.formatting.maxConcurrency;
+    }
+    // ВАЖНО: должно перечислять ВСЕ поддерживаемые ключи formatting — раньше
+    // здесь проверялись только dateFormat/decimalSeparator, из-за чего
+    // formatting с ЕДИНСТВЕННО заданным maxConcurrency (без даты/разделителя)
+    // тихо схлопывался в null и настройка приоритета никогда бы не сохранялась.
+    if (!row.formatting.dateFormat && !row.formatting.decimalSeparator && !row.formatting.maxConcurrency) row.formatting = null;
   }
 
   // Разовый пакет страниц (см. lib/customFieldsLookup.js:consumeUsage). Пустая

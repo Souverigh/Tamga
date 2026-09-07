@@ -195,6 +195,13 @@
   .confidence-badge.confidence-high{ color:var(--good); background:var(--good-tint); }
   .confidence-badge.confidence-medium{ color:var(--warn); background:var(--warn-tint); }
   .confidence-badge.confidence-low{ color:var(--danger); background:var(--danger-tint); }
+  /* Проверки бизнес-логики (см. postprocess/businessRules.js) — например,
+     "дата выдачи позже даты окончания". error — вероятная ошибка распознавания,
+     info — не ошибка, а факт о документе (например, срок истёк). */
+  .business-warnings{ margin:0 0 10px; display:flex; flex-direction:column; gap:5px; }
+  .business-warning{ font-size:0.82rem; border-radius:6px; padding:6px 10px; line-height:1.35; }
+  .business-warning-error{ color:var(--danger); background:var(--danger-tint); }
+  .business-warning-info{ color:var(--warn); background:var(--warn-tint); }
   .file-result-group.collapsed .file-result-title .chevron{ transform:rotate(-90deg); }
   .file-result-group.collapsed .collapsible{ display:none; }
   .doc-type-badge{

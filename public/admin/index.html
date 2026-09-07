@@ -129,6 +129,12 @@
         </select>
       </div>
 
+      <h3 class="admin-section-title">Приоритетная обработка <span class="admin-hint">— личный потолок одновременных запросов вместо общего (25)</span></h3>
+      <div class="admin-field-group">
+        <label class="admin-label">Макс. одновременных запросов <span class="admin-hint">выше — пачка этого клиента обрабатывается быстрее; не даёт приоритет над другими клиентами (общей очереди нет), просто расширяет личный лимит; максимум 60</span></label>
+        <input type="number" id="fMaxConcurrency" class="admin-input" min="1" max="60" step="1" placeholder="По умолчанию (25)" style="max-width:160px;">
+      </div>
+
       <h3 class="admin-section-title">Переопределение полей <span class="admin-hint">— свой список полей для конкретного стандартного типа документа</span></h3>
       <div id="fieldOverridesList" class="admin-override-list"></div>
       <button class="btn-secondary" id="addFieldOverrideBtn" type="button">+ Добавить переопределение</button>

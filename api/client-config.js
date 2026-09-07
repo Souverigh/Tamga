@@ -55,7 +55,11 @@ module.exports = async (req, res) => {
       // (см. public/js/ui/fileList.js) мог их показать. Сами поля/hints внутри
       // каждого типа остаются только на сервере (см. lib/extraction.js) —
       // пользователю сайта незачем видеть содержимое промпта в сетевой вкладке.
-      customDocTypeNames: config.customDocTypes ? Object.keys(config.customDocTypes) : []
+      customDocTypeNames: config.customDocTypes ? Object.keys(config.customDocTypes) : [],
+      // Приоритетная обработка (см. lib/customFieldsLookup.js) — просто число
+      // или null, безопасно отдавать в браузер целиком (в отличие от
+      // formatting/fields/customDocTypes выше, тут нет содержимого промпта).
+      maxConcurrency: config.maxConcurrency
     });
   } catch (err) {
     // Fail-open — как и вся остальная кастомизация: сбой не должен мешать
