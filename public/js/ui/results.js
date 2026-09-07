@@ -5,6 +5,7 @@
 import { DOC_TYPES, isTableType, columnsForType, keysForType } from '../config/docSchema.js';
 import { extractFieldsHeuristic } from '../extraction/heuristicExtractor.js';
 import { checkBusinessRules } from '../postprocess/businessRules.js';
+import { findDuplicates } from '../postprocess/duplicateDetection.js';
 
 const resultsPanel = document.getElementById('resultsPanel');
 const pageResults = document.getElementById('pageResults');
@@ -177,7 +178,12 @@ function readLineItemsTable(container) {
   }).filter(item => Object.keys(item).some(k => (item[k] || '').trim() !== ''));
 }
 
-export function renderResultGroup({ fileName, pages, docType, fields, items, columns, columnKeys, confidence }) {
+// duplicateWarnings (опционально, по умолчанию []) — [{level, message}],
+// посчитано ОДИН РАЗ на всю пачку в showResults() (см. findDuplicates в
+// postprocess/duplicateDetection.js) и передано сюда именно для ЭТОГО файла —
+// сама renderResultGroup ничего не знает про остальные файлы пачки и не
+// умеет считать дубли самостоятельно.
+export function renderResultGroup({ fileName, pages, docType, fields, items, columns, columnKeys, confidence }, duplicateWarnings = []) {
   const group = document.createElement('div');
   group.className = 'file-result-group';
   // Хранится прямо на DOM-элементе группы — та же схема, что _tamgaColumns/
@@ -233,8 +239,11 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
   // пересчитать и обновить его на месте, а не только при первом рендере.
   const warningsContainer = document.createElement('div');
   collapsible.appendChild(warningsContainer);
+  // Дубли идут первыми (найдены один раз на всю пачку, не зависят от текущего
+  // типа документа этой карточки) — бизнес-правила пересчитываются на каждый
+  // вызов (см. typeSelect ниже), дубли просто добавляются к ним неизменными.
   function renderWarnings(currentFields) {
-    const warnings = checkBusinessRules(currentFields);
+    const warnings = [...duplicateWarnings, ...checkBusinessRules(currentFields)];
     group._tamgaWarnings = warnings;
     warningsContainer.innerHTML = '';
     const box = buildWarningsBox(warnings);
@@ -316,7 +325,17 @@ const AUTO_COLLAPSE_THRESHOLD = 8;
 
 export function showResults(fileResults) {
   pageResults.innerHTML = '';
-  fileResults.forEach(fr => pageResults.appendChild(renderResultGroup(fr)));
+  // Дубли внутри пачки (см. postprocess/duplicateDetection.js) — считаются
+  // ОДИН РАЗ по всем файлам сразу (нужен доступ ко ВСЕМ файлам пачки, не
+  // только к одному), результат раскладывается по конкретным файлам ниже.
+  const duplicates = findDuplicates(fileResults);
+  fileResults.forEach(fr => {
+    const dupWarnings = (duplicates.get(fr.fileName) || []).map(d => ({
+      level: 'info',
+      message: `Возможный дубликат файла «${d.duplicateOf}» — ${d.reason}.`
+    }));
+    pageResults.appendChild(renderResultGroup(fr, dupWarnings));
+  });
   resultsPanel.style.display = fileResults.length ? 'block' : 'none';
 
   allCollapsed = fileResults.length > AUTO_COLLAPSE_THRESHOLD;
