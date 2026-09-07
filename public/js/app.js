@@ -13,6 +13,7 @@ import { saveResultsToStorage, loadSavedResults, clearSavedResults } from './sto
 import { downloadTxt, buildAllText } from './export/txtExport.js';
 import { downloadXlsx } from './export/xlsxExport.js';
 import { downloadPdf } from './export/pdfExport.js';
+import { downloadSummaryReport } from './export/summaryReport.js';
 import { downloadCsv } from './export/csvExport.js';
 import { downloadJson } from './export/jsonExport.js';
 import { initFileList, getSelectedFiles, getSelectedDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
@@ -125,6 +126,7 @@ const copyAllBtn = document.getElementById('copyAllBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const downloadXlsxBtn = document.getElementById('downloadXlsxBtn');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+const downloadSummaryBtn = document.getElementById('downloadSummaryBtn');
 const downloadCsvBtn = document.getElementById('downloadCsvBtn');
 const downloadJsonBtn = document.getElementById('downloadJsonBtn');
 const maskSensitiveToggle = document.getElementById('maskSensitiveToggle');
@@ -509,5 +511,21 @@ downloadPdfBtn.addEventListener('click', () => {
     if (err) showToast('Не удалось создать PDF: ' + (err.message || String(err)), 'error');
     downloadPdfBtn.disabled = false;
     downloadPdfBtn.textContent = originalLabel;
+  }, exportOptions());
+});
+
+// Сводный отчёт по пачке (см. export/summaryReport.js) — не зависит от
+// maskSensitive (сводка не содержит значений полей документа), но branding
+// передаём тем же exportOptions(), что и остальные экспорты — единообразный
+// брендированный вид для премиум-клиента везде, а не только в подетальном PDF.
+downloadSummaryBtn.addEventListener('click', () => {
+  const originalLabel = downloadSummaryBtn.textContent;
+  downloadSummaryBtn.disabled = true;
+  downloadSummaryBtn.textContent = 'Готовим отчёт…';
+
+  downloadSummaryReport(getFileGroups(), err => {
+    if (err) showToast('Не удалось создать сводный отчёт: ' + (err.message || String(err)), 'error');
+    downloadSummaryBtn.disabled = false;
+    downloadSummaryBtn.textContent = originalLabel;
   }, exportOptions());
 });

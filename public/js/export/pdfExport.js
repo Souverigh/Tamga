@@ -150,7 +150,7 @@ function buildOffscreenContainer(groups, { maskSensitive = false, branding = nul
 // просто не попадёт в PDF. Таймаут — на случай недоступного/медленного URL
 // логотипа: экспорт не должен зависать навсегда из-за одной картинки, лучше
 // отдать PDF без лого, чем не отдать вообще ничего.
-function waitForImage(img, timeoutMs = 4000) {
+export function waitForImage(img, timeoutMs = 4000) {
   if (!img) return Promise.resolve();
   if (img.complete) return Promise.resolve();
   return new Promise(resolve => {
@@ -161,7 +161,10 @@ function waitForImage(img, timeoutMs = 4000) {
   });
 }
 
-function sliceCanvasToPdf(canvas) {
+// filenamePrefix — вынесен параметром (Ethan, 7 сен 2026, сводный отчёт по
+// пачке, см. export/summaryReport.js), чтобы переиспользовать этот же конвейер
+// нарезки canvas->PDF без дублирования — раньше имя файла было зашито здесь.
+export function sliceCanvasToPdf(canvas, filenamePrefix = 'tamga') {
   const pdfWidth = 595.28; // A4 в pt
   const pdfHeight = 841.89;
   const margin = 30;
@@ -190,7 +193,7 @@ function sliceCanvasToPdf(canvas) {
   }
 
   const stamp = new Date().toISOString().slice(0, 10);
-  doc.save(`tamga_${stamp}.pdf`);
+  doc.save(`${filenamePrefix}_${stamp}.pdf`);
 }
 
 // onDone(errorOrNull) вызывается по завершении — вызывающий код решает, что делать с кнопкой.
