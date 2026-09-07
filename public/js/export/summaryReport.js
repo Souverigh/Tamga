@@ -9,11 +9,12 @@
 // Полностью на данных, уже посчитанных в браузере (results.js:getFileGroups —
 // confidence и warnings считаются один раз при рендере/смене типа, см. её
 // комментарии) — ни новых запросов к серверу, ни изменений в Supabase не
-// требуется. Переиспользует конвейер рендера PDF из pdfExport.js (waitForImage/
-// sliceCanvasToPdf) — та же логика "офскрин DOM -> html2canvas -> нарезка на
-// страницы", ради которой уже решены проблемы с кириллицей и постраничностью.
+// требуется. Переиспользует общий конвейер рендера PDF из pdfExport.js
+// (renderContainerToCanvas/sliceCanvasToPdf) — та же логика "офскрин DOM ->
+// html2canvas -> нарезка на страницы", ради которой уже решены проблемы с
+// кириллицей и постраничностью.
 
-import { waitForImage, sliceCanvasToPdf } from './pdfExport.js';
+import { sliceCanvasToPdf, renderContainerToCanvas } from './pdfExport.js';
 
 // Порог "требует проверки" — та же граница 85%, что уже используется для
 // жёлтого/зелёного бейджа уверенности в UI (results.js) и в самом pdfExport.js —
@@ -168,19 +169,18 @@ export function downloadSummaryReport(groups, onDone, options) {
   if (groups.length === 0) return;
 
   const { container, logoImg } = buildSummaryContainer(groups, options);
-  document.body.appendChild(container);
+  renderContainerToCanvas(container, logoImg).then(canvas => {
+    sliceCanvasToPdf(canvas, 'tamga_svodka');
+    onDone(null);
+  }).catch(err => onDone(err));
+}
 
-  waitForImage(logoImg).then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))).then(() => {
-    html2canvas(container, { scale: 2, backgroundColor: '#ffffff', useCORS: true }).then(canvas => {
-      document.body.removeChild(container);
-      if (canvas.width === 0 || canvas.height === 0) {
-        throw new Error('Не удалось отрисовать сводный отчёт (пустой холст)');
-      }
-      sliceCanvasToPdf(canvas, 'tamga_svodka');
-      onDone(null);
-    }).catch(err => {
-      if (document.body.contains(container)) document.body.removeChild(container);
-      onDone(err);
-    });
-  });
+// Для ZIP-экспорта пачки (см. export/zipExport.js) — тот же рендер, что у
+// downloadSummaryReport выше, но возвращает Promise<Blob|null> (null, если
+// пачка пуста) вместо прямого скачивания через doc.save().
+export function buildSummaryBlob(groups, options) {
+  if (groups.length === 0) return Promise.resolve(null);
+  const { container, logoImg } = buildSummaryContainer(groups, options);
+  return renderContainerToCanvas(container, logoImg)
+    .then(canvas => sliceCanvasToPdf(canvas, 'tamga_svodka', { returnBlob: true }));
 }

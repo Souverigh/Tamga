@@ -16,6 +16,7 @@ import { downloadPdf } from './export/pdfExport.js';
 import { downloadSummaryReport } from './export/summaryReport.js';
 import { downloadCsv } from './export/csvExport.js';
 import { downloadJson } from './export/jsonExport.js';
+import { downloadZip } from './export/zipExport.js';
 import { initFileList, getSelectedFiles, getSelectedDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
 import {
   startProgress, finishProgress, setOverallProgress,
@@ -127,6 +128,7 @@ const downloadBtn = document.getElementById('downloadBtn');
 const downloadXlsxBtn = document.getElementById('downloadXlsxBtn');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 const downloadSummaryBtn = document.getElementById('downloadSummaryBtn');
+const downloadZipBtn = document.getElementById('downloadZipBtn');
 const downloadCsvBtn = document.getElementById('downloadCsvBtn');
 const downloadJsonBtn = document.getElementById('downloadJsonBtn');
 const maskSensitiveToggle = document.getElementById('maskSensitiveToggle');
@@ -527,5 +529,21 @@ downloadSummaryBtn.addEventListener('click', () => {
     if (err) showToast('Не удалось создать сводный отчёт: ' + (err.message || String(err)), 'error');
     downloadSummaryBtn.disabled = false;
     downloadSummaryBtn.textContent = originalLabel;
+  }, exportOptions());
+});
+
+// ZIP-экспорт пачки (см. export/zipExport.js) — все 6 форматов одним архивом
+// (Ethan, 7 сен 2026: "Все 6 форматов (включая PDF и сводный отчёт)"),
+// exportOptions() те же, что у остальных кнопок — единообразное маскирование/
+// брендирование внутри архива, как и в отдельных кнопках экспорта.
+downloadZipBtn.addEventListener('click', () => {
+  const originalLabel = downloadZipBtn.textContent;
+  downloadZipBtn.disabled = true;
+  downloadZipBtn.textContent = 'Собираем архив…';
+
+  downloadZip(getFileGroups(), err => {
+    if (err) showToast('Не удалось собрать ZIP: ' + (err.message || String(err)), 'error');
+    downloadZipBtn.disabled = false;
+    downloadZipBtn.textContent = originalLabel;
   }, exportOptions());
 });

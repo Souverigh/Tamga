@@ -172,10 +172,39 @@ export function waitForImage(img, timeoutMs = 4000) {
   });
 }
 
+// Общий конвейер "офскрин-контейнер -> ждать лого -> html2canvas -> canvas,
+// с очисткой контейнера в любом исходе" — раньше был продублирован здесь и в
+// summaryReport.js (два отдельных .then()-цепочки с одинаковой структурой).
+// Вынесен отдельно ради ZIP-экспорта пачки (Ethan, 7 сен 2026, "ZIP-экспорт
+// пачки" — см. export/zipExport.js): и подетальный PDF, и сводный отчёт
+// нужно уметь рендерить БЕЗ немедленного скачивания, чтобы положить оба в
+// архив, а без общего хелпера пришлось бы дублировать эту логику трижды.
+export function renderContainerToCanvas(container, logoImg) {
+  document.body.appendChild(container);
+  return waitForImage(logoImg)
+    .then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    .then(() => html2canvas(container, { scale: 2, backgroundColor: '#ffffff', useCORS: true }))
+    .then(canvas => {
+      document.body.removeChild(container);
+      if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Не удалось отрисовать содержимое (пустой холст)');
+      }
+      return canvas;
+    })
+    .catch(err => {
+      if (document.body.contains(container)) document.body.removeChild(container);
+      throw err;
+    });
+}
+
 // filenamePrefix — вынесен параметром (Ethan, 7 сен 2026, сводный отчёт по
 // пачке, см. export/summaryReport.js), чтобы переиспользовать этот же конвейер
 // нарезки canvas->PDF без дублирования — раньше имя файла было зашито здесь.
-export function sliceCanvasToPdf(canvas, filenamePrefix = 'tamga') {
+// options.returnBlob (Ethan, 7 сен 2026, ZIP-экспорт пачки) — вернуть готовый
+// PDF как Blob (doc.output('blob')) вместо скачивания через doc.save():
+// нужно, чтобы положить PDF в архив вместе с остальными форматами вместо
+// того, чтобы браузер тут же скачал его отдельным файлом.
+export function sliceCanvasToPdf(canvas, filenamePrefix = 'tamga', { returnBlob = false } = {}) {
   const pdfWidth = 595.28; // A4 в pt
   const pdfHeight = 841.89;
   const margin = 30;
@@ -203,6 +232,8 @@ export function sliceCanvasToPdf(canvas, filenamePrefix = 'tamga') {
     first = false;
   }
 
+  if (returnBlob) return doc.output('blob');
+
   const stamp = new Date().toISOString().slice(0, 10);
   doc.save(`${filenamePrefix}_${stamp}.pdf`);
 }
@@ -214,26 +245,18 @@ export function downloadPdf(groups, onDone, options) {
   if (groups.length === 0) return;
 
   const { container, logoImg } = buildOffscreenContainer(groups, options);
-  document.body.appendChild(container);
+  renderContainerToCanvas(container, logoImg).then(canvas => {
+    sliceCanvasToPdf(canvas);
+    onDone(null);
+  }).catch(err => onDone(err));
+}
 
-  waitForImage(logoImg).then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))).then(() => {
-    // useCORS — нужен, если в контейнере есть логотип клиента с другого домена
-    // (Supabase Storage и т.п.): без этого html2canvas либо бросит ошибку на
-    // "загрязнённом" (tainted) canvas, либо тихо отрисует пустое место вместо
-    // картинки. Публичные объекты Supabase Storage отдают Access-Control-Allow-Origin
-    // по умолчанию — если у конкретного клиента логотип на другом хостинге без
-    // CORS, картинка просто не попадёт в PDF (см. catch ниже — весь экспорт
-    // из-за одной картинки не должен падать).
-    html2canvas(container, { scale: 2, backgroundColor: '#ffffff', useCORS: true }).then(canvas => {
-      document.body.removeChild(container);
-      if (canvas.width === 0 || canvas.height === 0) {
-        throw new Error('Не удалось отрисовать содержимое для PDF (пустой холст)');
-      }
-      sliceCanvasToPdf(canvas);
-      onDone(null);
-    }).catch(err => {
-      if (document.body.contains(container)) document.body.removeChild(container);
-      onDone(err);
-    });
-  });
+// Для ZIP-экспорта пачки (см. export/zipExport.js) — тот же рендер, что у
+// downloadPdf выше, но возвращает Promise<Blob|null> (null, если пачка
+// пуста) вместо прямого скачивания через doc.save().
+export function buildPdfBlob(groups, options) {
+  if (groups.length === 0) return Promise.resolve(null);
+  const { container, logoImg } = buildOffscreenContainer(groups, options);
+  return renderContainerToCanvas(container, logoImg)
+    .then(canvas => sliceCanvasToPdf(canvas, 'tamga', { returnBlob: true }));
 }
