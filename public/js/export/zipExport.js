@@ -38,7 +38,7 @@ function buildXlsxArrayBuffer(groups, { maskSensitive = false, branding = null }
 
   const rows = [];
   if (branding && branding.displayName) {
-    rows.push([`${branding.displayName} — извлечённые данные (Тамга)`]);
+    rows.push([`${branding.displayName} — извлечённые данные (АДРЕ)`]);
     rows.push([]);
   }
   rows.push(['Файл', 'Тип документа', 'Поле', 'Значение', 'Уверенность поля (%)']);
@@ -60,7 +60,7 @@ function buildXlsxArrayBuffer(groups, { maskSensitive = false, branding = null }
   if (branding && branding.displayName) {
     wb.Props = { Title: `${branding.displayName} — извлечённые данные`, Company: branding.displayName };
   }
-  XLSX.utils.book_append_sheet(wb, ws, 'Тамга');
+  XLSX.utils.book_append_sheet(wb, ws, 'АДРЕ');
 
   const itemsByType = new Map();
   groups.forEach(({ fileName, docType, items: rawItems, columns, columnKeys }) => {
@@ -93,10 +93,10 @@ export function downloadZip(groups, onDone, options = {}) {
   const stamp = new Date().toISOString().slice(0, 10);
   const zip = new JSZip();
 
-  zip.file(`tamga_${stamp}.txt`, buildAllText(groups));
-  zip.file(`tamga_${stamp}.csv`, '\uFEFF' + buildCsv(groups, options));
-  zip.file(`tamga_${stamp}.json`, buildJson(groups, options));
-  zip.file(`tamga_${stamp}.xlsx`, buildXlsxArrayBuffer(groups, options));
+  zip.file(`adre_${stamp}.txt`, buildAllText(groups));
+  zip.file(`adre_${stamp}.csv`, '\uFEFF' + buildCsv(groups, options));
+  zip.file(`adre_${stamp}.json`, buildJson(groups, options));
+  zip.file(`adre_${stamp}.xlsx`, buildXlsxArrayBuffer(groups, options));
 
   // PDF и сводный отчёт — асинхронные (html2canvas), остальные форматы выше
   // строятся синхронно из уже готовых данных браузера. Оба Promise идут
@@ -106,14 +106,14 @@ export function downloadZip(groups, onDone, options = {}) {
     buildPdfBlob(groups, options),
     buildSummaryBlob(groups, options)
   ]).then(([pdfBlob, summaryBlob]) => {
-    if (pdfBlob) zip.file(`tamga_${stamp}.pdf`, pdfBlob);
-    if (summaryBlob) zip.file(`tamga_svodka_${stamp}.pdf`, summaryBlob);
+    if (pdfBlob) zip.file(`adre_${stamp}.pdf`, pdfBlob);
+    if (summaryBlob) zip.file(`adre_svodka_${stamp}.pdf`, summaryBlob);
     return zip.generateAsync({ type: 'blob' });
   }).then(zipBlob => {
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `tamga_${stamp}.zip`;
+    a.download = `adre_${stamp}.zip`;
     a.click();
     URL.revokeObjectURL(url);
     onDone(null);

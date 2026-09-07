@@ -75,7 +75,7 @@ export function downloadCsv(groups, options) {
   const a = document.createElement('a');
   a.href = url;
   const stamp = new Date().toISOString().slice(0, 10);
-  a.download = `tamga_${stamp}.csv`;
+  a.download = `adre_${stamp}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

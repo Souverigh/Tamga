@@ -82,7 +82,7 @@ function applyFacade(config) {
       if (seal) brandEl.appendChild(seal);
       brandEl.appendChild(document.createTextNode(config.displayName));
     }
-    document.title = document.title.replace('Тамга', config.displayName);
+    document.title = document.title.replace('АДРЕ', config.displayName);
   }
   if (config.accentColor) {
     document.documentElement.style.setProperty('--accent', config.accentColor);

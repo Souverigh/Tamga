@@ -13,7 +13,7 @@ export function downloadTxt(groups) {
   const a = document.createElement('a');
   a.href = url;
   const stamp = new Date().toISOString().slice(0, 10);
-  a.download = `tamga_${stamp}.txt`;
+  a.download = `adre_${stamp}.txt`;
   a.click();
   URL.revokeObjectURL(url);
 }

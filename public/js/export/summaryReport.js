@@ -127,7 +127,7 @@ function buildSummaryContainer(groups, { branding = null } = {}) {
     headerRow.appendChild(logoImg);
   }
   const titleEl = document.createElement('h1');
-  titleEl.textContent = branding && branding.displayName ? `${branding.displayName} — сводный отчёт` : 'Тамга — сводный отчёт';
+  titleEl.textContent = branding && branding.displayName ? `${branding.displayName} — сводный отчёт` : 'АДРЕ — сводный отчёт';
   titleEl.style.cssText = `font-size:18px; margin:0; color:${accent};`;
   headerRow.appendChild(titleEl);
   container.appendChild(headerRow);
@@ -170,7 +170,7 @@ export function downloadSummaryReport(groups, onDone, options) {
 
   const { container, logoImg } = buildSummaryContainer(groups, options);
   renderContainerToCanvas(container, logoImg).then(canvas => {
-    sliceCanvasToPdf(canvas, 'tamga_svodka');
+    sliceCanvasToPdf(canvas, 'adre_svodka');
     onDone(null);
   }).catch(err => onDone(err));
 }
@@ -182,5 +182,5 @@ export function buildSummaryBlob(groups, options) {
   if (groups.length === 0) return Promise.resolve(null);
   const { container, logoImg } = buildSummaryContainer(groups, options);
   return renderContainerToCanvas(container, logoImg)
-    .then(canvas => sliceCanvasToPdf(canvas, 'tamga_svodka', { returnBlob: true }));
+    .then(canvas => sliceCanvasToPdf(canvas, 'adre_svodka', { returnBlob: true }));
 }

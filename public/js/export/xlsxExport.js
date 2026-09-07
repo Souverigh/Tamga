@@ -1,7 +1,7 @@
 // Экспорт извлечённых полей (не всего текста) в Excel через SheetJS.
 // Принимает уже готовые данные (массив групп {fileName, docType, fields, items}).
 // Табличные типы заполняют fields пустым массивом и items товарными строками —
-// для них на листе «Тамга» пойдёт пустая строка-заглушка (как раньше для файлов
+// для них на листе «АДРЕ» пойдёт пустая строка-заглушка (как раньше для файлов
 // без полей), а сами товары идут на отдельных листах — по одному листу на
 // каждый встретившийся табличный тип, т.к. у разных табличных типов (накладная,
 // справочник номенклатуры) разные наборы колонок и их нельзя свести в одну таблицу.
@@ -24,7 +24,7 @@ export function downloadXlsx(groups, { maskSensitive = false, branding = null } 
 
   const rows = [];
   if (branding && branding.displayName) {
-    rows.push([`${branding.displayName} — извлечённые данные (Тамга)`]);
+    rows.push([`${branding.displayName} — извлечённые данные (АДРЕ)`]);
     rows.push([]); // пустая строка-отступ перед таблицей
   }
   rows.push(['Файл', 'Тип документа', 'Поле', 'Значение', 'Уверенность поля (%)']);
@@ -53,7 +53,7 @@ export function downloadXlsx(groups, { maskSensitive = false, branding = null } 
     // строке-заголовку выше, не вместо неё: свойства мало кто открывает.
     wb.Props = { Title: `${branding.displayName} — извлечённые данные`, Company: branding.displayName };
   }
-  XLSX.utils.book_append_sheet(wb, ws, 'Тамга');
+  XLSX.utils.book_append_sheet(wb, ws, 'АДРЕ');
 
   // Группируем товарные строки по типу документа — у каждого табличного типа
   // свои колонки/ключи (см. docSchema.js), поэтому один общий лист не подходит.
@@ -82,5 +82,5 @@ export function downloadXlsx(groups, { maskSensitive = false, branding = null } 
   });
 
   const stamp = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `tamga_${stamp}.xlsx`);
+  XLSX.writeFile(wb, `adre_${stamp}.xlsx`);
 }

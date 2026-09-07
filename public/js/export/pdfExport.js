@@ -76,14 +76,14 @@ function buildOffscreenContainer(groups, { maskSensitive = false, branding = nul
     headerRow.appendChild(logoImg);
 
     const titleEl = document.createElement('h1');
-    titleEl.textContent = branding.displayName ? `${branding.displayName} — извлечённые данные` : 'Тамга — извлечённые данные';
+    titleEl.textContent = branding.displayName ? `${branding.displayName} — извлечённые данные` : 'АДРЕ — извлечённые данные';
     titleEl.style.cssText = `font-size:18px; margin:0; color:${accent};`;
     headerRow.appendChild(titleEl);
 
     container.appendChild(headerRow);
   } else {
     const titleEl = document.createElement('h1');
-    titleEl.textContent = branding && branding.displayName ? `${branding.displayName} — извлечённые данные` : 'Тамга — извлечённые данные';
+    titleEl.textContent = branding && branding.displayName ? `${branding.displayName} — извлечённые данные` : 'АДРЕ — извлечённые данные';
     titleEl.style.cssText = `font-size:18px; margin:0 0 16px; color:${accent};`;
     container.appendChild(titleEl);
   }
@@ -204,7 +204,7 @@ export function renderContainerToCanvas(container, logoImg) {
 // PDF как Blob (doc.output('blob')) вместо скачивания через doc.save():
 // нужно, чтобы положить PDF в архив вместе с остальными форматами вместо
 // того, чтобы браузер тут же скачал его отдельным файлом.
-export function sliceCanvasToPdf(canvas, filenamePrefix = 'tamga', { returnBlob = false } = {}) {
+export function sliceCanvasToPdf(canvas, filenamePrefix = 'adre', { returnBlob = false } = {}) {
   const pdfWidth = 595.28; // A4 в pt
   const pdfHeight = 841.89;
   const margin = 30;
@@ -258,5 +258,5 @@ export function buildPdfBlob(groups, options) {
   if (groups.length === 0) return Promise.resolve(null);
   const { container, logoImg } = buildOffscreenContainer(groups, options);
   return renderContainerToCanvas(container, logoImg)
-    .then(canvas => sliceCanvasToPdf(canvas, 'tamga', { returnBlob: true }));
+    .then(canvas => sliceCanvasToPdf(canvas, 'adre', { returnBlob: true }));
 }
