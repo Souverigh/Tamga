@@ -73,13 +73,27 @@ const newTypeHint = document.getElementById('newTypeHint');
 const confirmCustomTypeBtn = document.getElementById('confirmCustomTypeBtn');
 const cancelCustomTypeBtn = document.getElementById('cancelCustomTypeBtn');
 
+const businessRulesList = document.getElementById('businessRulesList');
+const addBusinessRuleBtn = document.getElementById('addBusinessRuleBtn');
+const businessRuleEditor = document.getElementById('businessRuleEditor');
+const ruleBaseField = document.getElementById('ruleBaseField');
+const ruleValueField = document.getElementById('ruleValueField');
+const ruleExpectedPercent = document.getElementById('ruleExpectedPercent');
+const ruleTolerancePercent = document.getElementById('ruleTolerancePercent');
+const ruleLevel = document.getElementById('ruleLevel');
+const confirmBusinessRuleBtn = document.getElementById('confirmBusinessRuleBtn');
+const cancelBusinessRuleBtn = document.getElementById('cancelBusinessRuleBtn');
+
 let editingId = null; // null — создаём нового клиента; иначе id редактируемой строки
 let editingOverrideType = null; // null — добавляем новое переопределение; иначе редактируем существующее
 let editingCustomTypeName = null; // аналогично, для кастомных типов
+let editingBusinessRuleIndex = null; // аналогично, для бизнес-правил (индекс в state.businessRules)
 
-// Состояние формы для трёх структурированных блоков — отдельно от простых
-// text-полей (те читаются прямо из DOM в buildPayload).
-let state = { fieldOverrides: {}, customDocTypes: {}, legacyFields: [] };
+// Состояние формы для структурированных блоков — отдельно от простых
+// text-полей (те читаются прямо из DOM в buildPayload). businessRules —
+// массив (не объект по ключу, как остальные три) — правил может быть
+// несколько НА ОДНО И ТО ЖЕ поле (например, разные допуски для разных пар).
+let state = { fieldOverrides: {}, customDocTypes: {}, legacyFields: [], businessRules: [] };
 
 // Табличные типы (накладная/УПД и т.д.) теперь тоже поддерживают override —
 // для них значения переопределения означают КОЛОНКИ, а не подписи полей (см.
@@ -233,6 +247,7 @@ function badgesFor(client) {
   if (client.formatting && (client.formatting.dateFormat || client.formatting.decimalSeparator)) badges.push('Формат');
   if (client.formatting && client.formatting.maxConcurrency) badges.push(`Приоритет ×${client.formatting.maxConcurrency}`);
   if (client.formatting && client.formatting.webhookUrl) badges.push('Вебхук');
+  if (client.formatting && Array.isArray(client.formatting.businessRules) && client.formatting.businessRules.length) badges.push(`Правил: ${client.formatting.businessRules.length}`);
   if (client.display_name || client.logo_url || client.accent_color) badges.push('Фасад');
   return badges;
 }
@@ -501,6 +516,92 @@ confirmCustomTypeBtn.addEventListener('click', () => {
   renderCustomTypesList();
 });
 
+// --- Блок «Настраиваемые бизнес-правила» ---
+// Единственный тип в первой версии — percentage_match (Ethan, 7 сен 2026,
+// "чтобы сами компании делали их под свои нужды", пример: "НДС ≈ 12% от
+// суммы"). См. public/js/postprocess/businessRules.js — тот же формат
+// объекта правила, что рендерится/сохраняется здесь.
+
+function ruleSummaryText(rule) {
+  const levelLabel = rule.level === 'info' ? 'информация' : 'ошибка';
+  return `«${rule.valueField}» ≈ ${rule.expectedPercent}% от «${rule.baseField}» (допуск ±${rule.tolerancePercent ?? 1}, уровень: ${levelLabel})`;
+}
+
+function renderBusinessRulesList() {
+  businessRulesList.innerHTML = '';
+  state.businessRules.forEach((rule, index) => {
+    const item = document.createElement('div');
+    item.className = 'admin-override-item';
+
+    const main = document.createElement('div');
+    main.className = 'admin-override-item-main';
+    const title = document.createElement('div');
+    title.className = 'admin-override-item-title';
+    title.textContent = ruleSummaryText(rule);
+    main.appendChild(title);
+    item.appendChild(main);
+
+    const btns = document.createElement('div');
+    const editBtn = document.createElement('button');
+    editBtn.className = 'admin-link-btn';
+    editBtn.textContent = 'Изменить';
+    editBtn.style.marginRight = '10px';
+    editBtn.addEventListener('click', () => openBusinessRuleEditor(index));
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'admin-override-item-remove';
+    removeBtn.textContent = 'Удалить';
+    removeBtn.addEventListener('click', () => { state.businessRules.splice(index, 1); renderBusinessRulesList(); });
+    btns.appendChild(editBtn);
+    btns.appendChild(removeBtn);
+    item.appendChild(btns);
+
+    businessRulesList.appendChild(item);
+  });
+}
+
+function openBusinessRuleEditor(existingIndex) {
+  editingBusinessRuleIndex = existingIndex != null ? existingIndex : null;
+  const existing = existingIndex != null ? state.businessRules[existingIndex] : null;
+  ruleBaseField.value = existing ? existing.baseField : '';
+  ruleValueField.value = existing ? existing.valueField : '';
+  ruleExpectedPercent.value = existing ? existing.expectedPercent : '';
+  ruleTolerancePercent.value = existing && existing.tolerancePercent != null ? existing.tolerancePercent : '';
+  ruleLevel.value = existing ? (existing.level || 'error') : 'error';
+
+  businessRuleEditor.style.display = 'block';
+  businessRuleEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+addBusinessRuleBtn.addEventListener('click', () => openBusinessRuleEditor(null));
+cancelBusinessRuleBtn.addEventListener('click', () => { businessRuleEditor.style.display = 'none'; });
+confirmBusinessRuleBtn.addEventListener('click', () => {
+  const baseField = ruleBaseField.value.trim();
+  const valueField = ruleValueField.value.trim();
+  const expectedPercent = Number(ruleExpectedPercent.value);
+  if (!baseField || !valueField || !ruleExpectedPercent.value.trim() || !Number.isFinite(expectedPercent)) {
+    alert('Укажите поле-базу, проверяемое поле и ожидаемый процент (число).');
+    return;
+  }
+  const rule = {
+    type: 'percentage_match',
+    baseField,
+    valueField,
+    expectedPercent,
+    // Пусто в поле допуска — не отправляем tolerancePercent вовсе, сервер
+    // сам подставит значение по умолчанию (1, см. lib/customFieldsLookup.js) —
+    // тот же приём, что webhookSecret/maxConcurrency выше в этом файле.
+    tolerancePercent: ruleTolerancePercent.value.trim() ? Number(ruleTolerancePercent.value) : undefined,
+    level: ruleLevel.value
+  };
+  if (editingBusinessRuleIndex != null) {
+    state.businessRules[editingBusinessRuleIndex] = rule;
+  } else {
+    state.businessRules.push(rule);
+  }
+  businessRuleEditor.style.display = 'none';
+  renderBusinessRulesList();
+});
+
 // --- Форма создания/редактирования клиента ---
 
 function resetForm() {
@@ -525,9 +626,11 @@ function resetForm() {
   formError.style.display = 'none';
   fieldOverrideEditor.style.display = 'none';
   customTypeEditor.style.display = 'none';
-  state = { fieldOverrides: {}, customDocTypes: {}, legacyFields: [] };
+  businessRuleEditor.style.display = 'none';
+  state = { fieldOverrides: {}, customDocTypes: {}, legacyFields: [], businessRules: [] };
   renderFieldOverridesList();
   renderCustomTypesList();
+  renderBusinessRulesList();
   renderLegacyFields();
   renderPasswordStatus(false);
   updateSwatch();
@@ -636,9 +739,11 @@ function openForm(client) {
     state.fieldOverrides = client.field_overrides ? JSON.parse(JSON.stringify(client.field_overrides)) : {};
     state.customDocTypes = client.custom_doc_types ? JSON.parse(JSON.stringify(client.custom_doc_types)) : {};
     state.legacyFields = Array.isArray(client.fields) ? [...client.fields] : [];
+    state.businessRules = (client.formatting && Array.isArray(client.formatting.businessRules)) ? JSON.parse(JSON.stringify(client.formatting.businessRules)) : [];
     renderPasswordStatus(!!client.has_password);
     renderFieldOverridesList();
     renderCustomTypesList();
+    renderBusinessRulesList();
     renderLegacyFields();
     updateSwatch();
     loadUsageSummary(client.id);
@@ -671,6 +776,9 @@ function buildPayload() {
     formatting.webhookUrl = fWebhookUrl.value.trim();
     if (fWebhookSecret.value.trim()) formatting.webhookSecret = fWebhookSecret.value.trim();
   }
+  // Настраиваемые бизнес-правила (см. блок выше) — та же логика хранения
+  // внутри formatting, что maxConcurrency/webhookUrl.
+  if (state.businessRules.length) formatting.businessRules = state.businessRules;
 
   const legacyFields = legacyChipEditor ? legacyChipEditor.getValues() : state.legacyFields;
 

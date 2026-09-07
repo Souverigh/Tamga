@@ -201,7 +201,10 @@ export async function initBranding() {
         logoUrl: config.logoUrl || null,
         accentColor: config.accentColor || null,
         // Число или null — см. api/client-config.js и lib/customFieldsLookup.js.
-        maxConcurrency: typeof config.maxConcurrency === 'number' ? config.maxConcurrency : null
+        maxConcurrency: typeof config.maxConcurrency === 'number' ? config.maxConcurrency : null,
+        // Настраиваемые бизнес-правила (Ethan, 7 сен 2026) — используются
+        // в public/js/ui/results.js:checkBusinessRules, см. комментарий там.
+        businessRules: Array.isArray(config.businessRules) ? config.businessRules : []
       };
     }
   } catch (err) {

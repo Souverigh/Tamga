@@ -196,6 +196,40 @@
         </div>
       </div>
 
+      <h3 class="admin-section-title">Настраиваемые бизнес-правила <span class="admin-hint">— проверка процентного соотношения между двумя полями, например «НДС ≈ 12% от суммы»</span></h3>
+      <div id="businessRulesList" class="admin-override-list"></div>
+      <button class="btn-secondary" id="addBusinessRuleBtn" type="button">+ Добавить правило</button>
+
+      <div id="businessRuleEditor" class="admin-editor-box" style="display:none;">
+        <div class="admin-field-group">
+          <label class="admin-label">Поле-база <span class="admin-hint">точное название поля, напр. «Сумма»</span></label>
+          <input type="text" id="ruleBaseField" class="admin-input" placeholder="Сумма">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Проверяемое поле <span class="admin-hint">точное название поля, напр. «Сумма НДС»</span></label>
+          <input type="text" id="ruleValueField" class="admin-input" placeholder="Сумма НДС">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Ожидаемый процент от поля-базы</label>
+          <input type="number" id="ruleExpectedPercent" class="admin-input" step="0.01" placeholder="12" style="max-width:160px;">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Допуск <span class="admin-hint">± процентных пунктов от поля-базы; по умолчанию 1</span></label>
+          <input type="number" id="ruleTolerancePercent" class="admin-input" step="0.01" min="0" max="50" placeholder="1" style="max-width:160px;">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Уровень предупреждения</label>
+          <select id="ruleLevel" class="admin-input" style="max-width:220px;">
+            <option value="error">Ошибка (красным)</option>
+            <option value="info">Информация (жёлтым)</option>
+          </select>
+        </div>
+        <div class="admin-form-actions">
+          <button class="btn-primary" id="confirmBusinessRuleBtn" type="button">Добавить</button>
+          <button class="btn-secondary" id="cancelBusinessRuleBtn" type="button">Отмена</button>
+        </div>
+      </div>
+
       <div class="admin-form-actions">
         <button class="btn-primary" id="saveClientBtn" type="button">Сохранить</button>
         <button class="btn-secondary" id="cancelFormBtn" type="button">Отмена</button>

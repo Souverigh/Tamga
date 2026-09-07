@@ -6,6 +6,7 @@ import { DOC_TYPES, isTableType, columnsForType, keysForType } from '../config/d
 import { extractFieldsHeuristic } from '../extraction/heuristicExtractor.js';
 import { checkBusinessRules } from '../postprocess/businessRules.js';
 import { findDuplicates } from '../postprocess/duplicateDetection.js';
+import { getClientBranding } from '../branding.js';
 
 const resultsPanel = document.getElementById('resultsPanel');
 const pageResults = document.getElementById('pageResults');
@@ -242,8 +243,15 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
   // Дубли идут первыми (найдены один раз на всю пачку, не зависят от текущего
   // типа документа этой карточки) — бизнес-правила пересчитываются на каждый
   // вызов (см. typeSelect ниже), дубли просто добавляются к ним неизменными.
+  // Настраиваемые правила клиента (Ethan, 7 сен 2026, formatting.businessRules,
+  // см. lib/customFieldsLookup.js) читаются из getClientBranding() — тот же
+  // кэш, что уже используют exportOptions()/фасад (см. branding.js), не
+  // отдельный сетевой запрос. null/нет клиента — checkBusinessRules получит
+  // [] вторым аргументом, встроенные два правила дат работают как раньше.
   function renderWarnings(currentFields) {
-    const warnings = [...duplicateWarnings, ...checkBusinessRules(currentFields)];
+    const branding = getClientBranding();
+    const clientRules = (branding && branding.businessRules) || [];
+    const warnings = [...duplicateWarnings, ...checkBusinessRules(currentFields, clientRules)];
     group._tamgaWarnings = warnings;
     warningsContainer.innerHTML = '';
     const box = buildWarningsBox(warnings);
