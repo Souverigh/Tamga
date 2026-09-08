@@ -85,6 +85,40 @@ function readNameValue(fields, nameSpec) {
   return values.map(normalizeIdentityValue).join('|');
 }
 
+// Запасной вариант для типов БЕЗ записи в IDENTITY_FIELDS — то есть для
+// любого кастомного типа клиента (Ethan, 8 сен 2026: "прислал документ
+// медицинской страховки 3 раза, дублей не нашла" — IDENTITY_FIELDS вообще
+// не знает о кастомных типах, до этой правки они молча пропускались целиком,
+// см. историю ниже). Для кастомного типа своей карты "что здесь номер, а что
+// ФИО" нет и быть не может — поля называет сам клиент как угодно через
+// /admin. Поэтому вместо identity-поля сравниваем ВСЕ поля документа целиком:
+// если каждое поле (по лейблу) совпадает буквально после нормализации — это
+// дубль. Надёжно ловит "прислал тот же файл ещё раз" (самый частый случай на
+// практике), не пытаясь угадать, какое из произвольных полей клиента — это
+// уникальный идентификатор (риск ложного срабатывания на двух РАЗНЫХ, но
+// частично похожих документах одного кастомного типа этим сознательно не
+// берём на себя — лучше пропустить редкий дубль, чем склеить два разных
+// документа между собой).
+function genericFieldsMatch(fieldsA, fieldsB) {
+  if (!Array.isArray(fieldsA) || !Array.isArray(fieldsB) || !fieldsA.length || fieldsA.length !== fieldsB.length) return false;
+  const mapA = new Map(fieldsA.map(f => [f.label, f.value]));
+  const mapB = new Map(fieldsB.map(f => [f.label, f.value]));
+  if (mapA.size !== mapB.size) return false;
+
+  let hasNonEmpty = false;
+  for (const [label, valueA] of mapA) {
+    if (!mapB.has(label)) return false; // разный набор полей — не сравниваем вообще (не должно случаться для одного и того же типа, но не гадаем)
+    const valueB = mapB.get(label);
+    const normA = valueA ? normalizeIdentityValue(valueA) : '';
+    const normB = valueB ? normalizeIdentityValue(valueB) : '';
+    if (normA !== normB) return false;
+    if (normA) hasNonEmpty = true;
+  }
+  // Все поля пусты в обоих документах — не основание считать их дублями
+  // (два одинаково нечитабельных скана разных документов дадут ту же картину).
+  return hasNonEmpty;
+}
+
 // fileResults — тот же массив, что передаётся в showResults() (см.
 // ui/results.js): [{fileName, docType, fields, ...}, ...].
 // Возвращает Map<fileName, [{duplicateOf, reason}, ...]> — массив, а не
@@ -99,27 +133,36 @@ export function findDuplicates(fileResults) {
       const b = fileResults[j];
       if (a.docType !== b.docType) continue; // сравниваем только документы одного типа
       const identity = IDENTITY_FIELDS[a.docType];
-      if (!identity) continue; // табличные типы и любые не описанные явно — пропускаем
 
       let reason = null;
 
-      const numA = findValue(a.fields, identity.number);
-      const numB = findValue(b.fields, identity.number);
-      if (numA && numB && String(numA).trim() && String(numB).trim()
-          && normalizeIdentityValue(numA) === normalizeIdentityValue(numB)) {
-        reason = `«${identity.number}» совпадает: "${String(numA).trim()}"`;
-      } else if (!numA && !numB) {
-        // Номер пуст в ОБОИХ файлах (не в одном — иначе один читаемый, другой
-        // нет, это не основание считать их одинаковыми) — пробуем запасной
-        // признак: ФИО/стороны И дата одновременно.
-        const nameA = readNameValue(a.fields, identity.name);
-        const nameB = readNameValue(b.fields, identity.name);
-        const dateA = identity.date ? findValue(a.fields, identity.date) : null;
-        const dateB = identity.date ? findValue(b.fields, identity.date) : null;
-        if (nameA && nameB && nameA === nameB && dateA && dateB
-            && String(dateA).trim() && String(dateB).trim()
-            && normalizeIdentityValue(dateA) === normalizeIdentityValue(dateB)) {
-          reason = 'ФИО и дата совпадают (номер документа не распознан ни на одном из файлов)';
+      if (!identity) {
+        // Кастомный тип клиента (или любой другой не описанный явно тип) —
+        // см. genericFieldsMatch выше. Табличные типы сюда естественно не
+        // попадают: у них fields=[] всегда, genericFieldsMatch на пустом
+        // массиве сразу вернёт false.
+        if (genericFieldsMatch(a.fields, b.fields)) {
+          reason = 'все поля документа совпадают';
+        }
+      } else {
+        const numA = findValue(a.fields, identity.number);
+        const numB = findValue(b.fields, identity.number);
+        if (numA && numB && String(numA).trim() && String(numB).trim()
+            && normalizeIdentityValue(numA) === normalizeIdentityValue(numB)) {
+          reason = `«${identity.number}» совпадает: "${String(numA).trim()}"`;
+        } else if (!numA && !numB) {
+          // Номер пуст в ОБОИХ файлах (не в одном — иначе один читаемый, другой
+          // нет, это не основание считать их одинаковыми) — пробуем запасной
+          // признак: ФИО/стороны И дата одновременно.
+          const nameA = readNameValue(a.fields, identity.name);
+          const nameB = readNameValue(b.fields, identity.name);
+          const dateA = identity.date ? findValue(a.fields, identity.date) : null;
+          const dateB = identity.date ? findValue(b.fields, identity.date) : null;
+          if (nameA && nameB && nameA === nameB && dateA && dateB
+              && String(dateA).trim() && String(dateB).trim()
+              && normalizeIdentityValue(dateA) === normalizeIdentityValue(dateB)) {
+            reason = 'ФИО и дата совпадают (номер документа не распознан ни на одном из файлов)';
+          }
         }
       }
 
