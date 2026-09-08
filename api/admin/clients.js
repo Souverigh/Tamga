@@ -67,8 +67,8 @@ function validateAndNormalize(body) {
   // "не трогать" (PATCH не должен молча стирать пароль, если форма его просто
   // не прислала, см. admin.js: поле всегда пустое при открытии карточки).
   if (body.access_password) {
-    if (typeof body.access_password !== 'string' || body.access_password.length < 4) {
-      return { error: 'Пароль доступа к сайту должен быть строкой не короче 4 символов' };
+    if (typeof body.access_password !== 'string' || body.access_password.length < 8) {
+      return { error: 'Пароль доступа к сайту должен быть строкой не короче 8 символов' };
     }
     row.access_password_hash = hashPassword(body.access_password);
   } else if (body.remove_access_password) {
@@ -197,7 +197,7 @@ function validateAndNormalize(body) {
 }
 
 module.exports = async (req, res) => {
-  const auth = checkAdminSecret(req);
+  const auth = await checkAdminSecret(req);
   if (!auth.ok) {
     res.status(auth.status).json({ error: auth.message });
     return;

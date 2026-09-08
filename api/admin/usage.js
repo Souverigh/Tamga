@@ -15,7 +15,7 @@ const { getUsageSummary } = require('../../lib/usageAnalytics');
 // (включая случай, когда Supabase недоступен — см. lib/usageAnalytics.js,
 // это read-side тоже fail-safe, не 500).
 module.exports = async (req, res) => {
-  const auth = checkAdminSecret(req);
+  const auth = await checkAdminSecret(req);
   if (!auth.ok) {
     res.status(auth.status).json({ error: auth.message });
     return;

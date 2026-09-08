@@ -1,5 +1,7 @@
 const { getClientConfig } = require('../lib/customFieldsLookup');
 const { verifyPassword, signToken } = require('../lib/clientAuth');
+const { checkClientAuthRateLimit, recordClientAuthFailure } = require('../lib/authRateLimit');
+const { extractClientIp } = require('../lib/anonymousUsage');
 
 // POST /api/client-auth  { clientSlug, password }
 //
@@ -13,6 +15,11 @@ const { verifyPassword, signToken } = require('../lib/clientAuth');
 // и "неверный пароль" — везде один и тот же ответ 401 с общим текстом, чтобы
 // не давать угадывающему пароль лишней информации о том, существует ли вообще
 // такой slug или защищён ли он паролем.
+//
+// Троттлинг попыток (Ethan, 7 сен 2026, аудит безопасности) — см.
+// lib/authRateLimit.js: до 5 неудачных попыток за 15 минут на пару (slug, IP).
+// Проверка лимита — ДО сравнения пароля (заблокированный запрос не тратит
+// scrypt впустую), запись неудачи — ТОЛЬКО когда пароль оказался неверным.
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Метод не поддерживается, используйте POST' });
@@ -27,9 +34,17 @@ module.exports = async (req, res) => {
     return;
   }
 
+  const clientIp = extractClientIp(req);
+  const rateLimit = await checkClientAuthRateLimit({ clientSlug, ip: clientIp });
+  if (!rateLimit.allowed) {
+    res.status(429).json({ error: 'Слишком много попыток входа, попробуйте позже', retryAfterSeconds: rateLimit.retryAfterSeconds });
+    return;
+  }
+
   try {
     const config = await getClientConfig({ clientSlug });
     if (!config || !config.passwordHash || !verifyPassword(password, config.passwordHash)) {
+      await recordClientAuthFailure({ clientSlug, ip: clientIp });
       res.status(401).json(genericError);
       return;
     }
