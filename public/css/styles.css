@@ -353,6 +353,11 @@
   .btn-primary:disabled{ background:#C9C9C4; cursor:not-allowed; }
   .btn-secondary{ background:transparent; color:var(--ink); border:1px solid var(--line-strong); }
   .btn-secondary:hover{ border-color:var(--ink); background:#F4F4F1; }
+  /* Иконки в кнопках скачивания (Ethan, 8 сен 2026: "иконки для разных типов
+     скачиваний") — inline SVG, наследует цвет текста кнопки (currentColor),
+     без сторонних иконочных шрифтов/библиотек — тот же принцип "ноль
+     зависимостей", что и во всём остальном фронтенде. */
+  .btn-icon{ vertical-align:-3px; margin-right:7px; flex-shrink:0; }
   .btn-row{ display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
 
   .lang-note{
