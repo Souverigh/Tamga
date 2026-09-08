@@ -17,7 +17,7 @@ import { downloadSummaryReport } from './export/summaryReport.js';
 import { downloadCsv } from './export/csvExport.js';
 import { downloadJson } from './export/jsonExport.js';
 import { downloadZip } from './export/zipExport.js';
-import { initFileList, getSelectedFiles, getSelectedDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
+import { initFileList, getSelectedFiles, getSelectedDocTypes, getExtraDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
 import {
   startProgress, finishProgress, setOverallProgress,
   createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError,
@@ -306,6 +306,20 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
 // страниц (индексу), а НЕ по тому, какой запрос вернулся первым: при параллельных
 // запросах случайная задержка сети иначе решала бы, какая страница считается
 // главной — а это должно зависеть от структуры документа, а не от таймингов сети.
+// isKnownDocType — DOC_TYPES ИЛИ кастомный тип этого клиента (Ethan, 8 сен
+// 2026: настоящая причина, по которой кастомный тип всегда падал до
+// "Другое" — finalizeFileResult ниже проверял docType только по стандартному
+// DOC_TYPES (lib/docSchema.js), не зная о кастомных типах клиента вообще, и
+// молча заменял ЛЮБОЙ кастомный тип на "Другое" — даже когда сервер (или сам
+// человек вручную, см. selectedDocTypes в fileList.js) верно определил именно
+// кастомный тип. Это НЕ имело отношения к качеству классификации Gemini (см.
+// коммит про добавление списка полей в подсказку) — сброс происходил уже НА
+// КЛИЕНТЕ, после ответа сервера. Объявлена на уровне модуля, а не внутри
+// finalizeFileResult — нужна и в try, и в catch этой функции (см. ниже).
+function isKnownDocType(t) {
+  return DOC_TYPES.includes(t) || getExtraDocTypes().includes(t);
+}
+
 function finalizeFileResult(entry, mode) {
   let fileDocType = entry.presetType;
   let fileFields = null;
@@ -338,7 +352,9 @@ function finalizeFileResult(entry, mode) {
     if (!entry.presetType && !fileDocType && mode === 'tesseract') {
       fileDocType = classifyByKeywords(joinedText);
     }
-    if (!fileDocType || !DOC_TYPES.includes(fileDocType)) fileDocType = 'Другое';
+    // isKnownDocType (см. объявление на уровне модуля выше) — DOC_TYPES ИЛИ
+    // кастомный тип этого клиента, не только стандартные 21.
+    if (!fileDocType || !isKnownDocType(fileDocType)) fileDocType = 'Другое';
 
     // Извлечение полей (независимый модуль) — только если Gemini их ещё не вернул в этом же запросе.
     fields = isTableType(fileDocType) ? [] : (fileFields || extractFieldsHeuristic(joinedText, fileDocType));
@@ -347,7 +363,7 @@ function finalizeFileResult(entry, mode) {
     items = fileItems || [];
   } catch (e) {
     console.error('Классификация/извлечение полей упали, файл всё равно вернём с текстом:', e);
-    fileDocType = DOC_TYPES.includes(fileDocType) ? fileDocType : 'Другое';
+    fileDocType = isKnownDocType(fileDocType) ? fileDocType : 'Другое';
   }
 
   return { fileName: entry.file.name, pages: entry.pageTexts, docType: fileDocType, fields, items, columns: fileColumns, columnKeys: fileColumnKeys, confidence: fileConfidence };

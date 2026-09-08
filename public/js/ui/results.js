@@ -3,6 +3,7 @@
 // пользователем) состояния для экспорта. Не знает, как текст был распознан.
 
 import { DOC_TYPES, isTableType, columnsForType, keysForType } from '../config/docSchema.js';
+import { getExtraDocTypes } from './fileList.js';
 import { extractFieldsHeuristic } from '../extraction/heuristicExtractor.js';
 import { checkBusinessRules } from '../postprocess/businessRules.js';
 import { findDuplicates } from '../postprocess/duplicateDetection.js';
@@ -229,6 +230,23 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
     if (t === docType) opt.selected = true;
     typeSelect.appendChild(opt);
   });
+  // Кастомные типы клиента (Ethan, 8 сен 2026: тот же баг, что и в
+  // app.js:finalizeFileResult, но здесь — что этот select вообще не умел
+  // ПОКАЗАТЬ/выбрать кастомный тип, раз его не было среди <option>) — тот же
+  // паттерн "optgroup Ваши типы", что и в fileList.js (селектор ДО распознавания).
+  const extraDocTypes = getExtraDocTypes();
+  if (extraDocTypes.length) {
+    const group = document.createElement('optgroup');
+    group.label = 'Ваши типы';
+    extraDocTypes.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      if (t === docType) opt.selected = true;
+      group.appendChild(opt);
+    });
+    typeSelect.appendChild(group);
+  }
   typeRow.appendChild(typeLabel);
   typeRow.appendChild(typeSelect);
   collapsible.appendChild(typeRow);
