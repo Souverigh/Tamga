@@ -41,12 +41,27 @@ initBranding();
 // её видеть. getClientSlug() читает URL/localStorage синхронно (см.
 // branding.js) — не нужно ждать initBranding(), сетевой запрос ни при чём.
 const settingsLink = document.getElementById('settingsLink');
+const clientSlugForUi = getClientSlug();
 if (settingsLink) {
-  const clientSlug = getClientSlug();
-  if (clientSlug) {
-    settingsLink.href = `/settings/?client=${encodeURIComponent(clientSlug)}`;
+  if (clientSlugForUi) {
+    settingsLink.href = `/settings/?client=${encodeURIComponent(clientSlugForUi)}`;
     settingsLink.style.display = 'inline-flex';
   }
+}
+
+// Заметка о бесплатном дневном лимите (Ethan, 8 сен 2026: "явно указать об
+// этом") — ровно наоборот условие: видна ТОЛЬКО анонимным посетителям без
+// ?client=slug (у настроенных клиентов свой лимит — разовый пакет страниц,
+// page_limit, эта заметка к ним не относится и вводила бы в заблуждение).
+// Конкретное число (3) не хардкожено здесь намеренно — если лимит когда-то
+// поменяется (см. lib/anonymousUsage.js:DEFAULT_DAILY_LIMIT), про этот текст
+// придётся вспомнить и поправить руками, тот же компромисс, что и с текстом
+// самой ошибки при исчерпании лимита (api/recognize.js вставляет реальное
+// число туда динамически, а тут — нет, т.к. лимит по конструкции сервера, не
+// приходит на клиент отдельным запросом ради одной строки текста).
+const freeLimitNote = document.getElementById('freeLimitNote');
+if (freeLimitNote && !clientSlugForUi) {
+  freeLimitNote.style.display = 'block';
 }
 
 // Сколько страниц распознавать одновременно в режиме Gemini. Раньше запросы шли

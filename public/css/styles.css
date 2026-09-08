@@ -43,6 +43,11 @@
   .brand .seal::after{ bottom:-1.5px; right:-1.5px; border-left:none; border-top:none; }
   .brand .seal span{ font-size:0.62rem; font-family:'IBM Plex Mono', monospace; color:var(--accent); font-weight:500; }
   .tagline{color:var(--ink-soft); font-size:0.98rem; max-width:46ch; margin:14px 0 32px; line-height:1.55;}
+  /* Явное указание бесплатного дневного лимита (Ethan, 8 сен 2026: "явно
+     указать об этом") — видно только анонимным посетителям без ?client=slug,
+     см. app.js. У настроенных клиентов свой лимит (page_limit, разовый пакет),
+     эта заметка про них не должна показываться вообще. */
+  .free-limit-note{ color:var(--accent-deep); font-size:0.9rem; margin:-20px 0 28px; font-weight:600; }
 
   .panel{
     background:var(--surface); border:1px solid var(--line); border-radius:6px;
