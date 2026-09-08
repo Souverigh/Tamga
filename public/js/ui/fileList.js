@@ -16,14 +16,20 @@ const MAX_FILES = 50;
 // а не попытка незаметно засунуть туда же 50 файлов с бесплатного сайта.
 const FREE_MAX_FILES = 5;
 
-let selectedFiles = []; // File[]
+let selectedFiles = []; // (File | GroupObject)[] — GroupObject: { __group, id, name, files: File[] }
 let selectedDocTypes = []; // string[], параллельно selectedFiles — 'auto' или значение из DOC_TYPES/extraDocTypes
-let previewUrls = []; // string[], object URL на каждый файл — для просмотра/скачивания оригинала
+let previewUrls = []; // string[], object URL на каждый файл (для группы — превью первого файла) — для просмотра/скачивания
 let onChange = () => {};
 // Кастомные типы документов текущего клиентского пилота (см. branding.js,
 // tamga_api_key_fields.custom_doc_types) — подгружаются асинхронно, поэтому
 // могут появиться уже после того, как человек начал добавлять файлы.
 let extraDocTypes = [];
+// Индексы в selectedFiles, отмеченные чекбоксом для объединения в документ
+// (Ethan, 8 сен 2026: "договор на 5 страниц, сфотографировал 5 раз, а они
+// вообще не связаны") — см. groupSelectedFiles/openGroupOrderOverlay ниже.
+// Сбрасывается при любом структурном изменении списка (render()) — индексы
+// иначе легко устаревают (файл удалили/добавили — нумерация съехала).
+let groupSelection = new Set();
 
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
@@ -32,6 +38,7 @@ const fileList = document.getElementById('fileList');
 const fileCountLabel = document.getElementById('fileCountLabel');
 const fileListItems = document.getElementById('fileListItems');
 const clearAllBtn = document.getElementById('clearAllBtn');
+const groupSelectedBtn = document.getElementById('groupSelectedBtn');
 const manualTypeToggle = document.getElementById('manualTypeToggle');
 const actionRow = document.getElementById('actionRow');
 const recognizeBtn = document.getElementById('recognizeBtn');
@@ -57,24 +64,216 @@ function addFiles(fileListObj) {
   render(truncated);
 }
 
+function updateGroupButtonVisibility() {
+  const count = groupSelection.size;
+  if (count >= 2) {
+    groupSelectedBtn.style.display = 'inline-flex';
+    groupSelectedBtn.textContent = `Объединить в документ (${count})`;
+  } else {
+    groupSelectedBtn.style.display = 'none';
+  }
+}
+
+// Полноэкранный оверлей проверки/перестановки порядка страниц перед
+// объединением (Ethan, 8 сен 2026: "а как человек может разглядеть номера
+// страниц, если на фотках нечётко" — решение: миниатюры кликабельны, как и в
+// обычном списке файлов, открывают оригинал в полный размер). Стартовый
+// порядок — по времени съёмки файла (lastModified): если человек фотографировал
+// страницы одну за другой по порядку (обычный случай), ничего поправлять не
+// придётся вообще; кнопки вверх/вниз — на случай, если порядок всё же не совпал.
+// Возвращает Promise<File[] | null> — null при отмене.
+function openGroupOrderOverlay(files) {
+  return new Promise(resolve => {
+    let order = [...files].sort((a, b) => (a.lastModified || 0) - (b.lastModified || 0));
+    const urlByFile = new Map(files.map(f => [f, URL.createObjectURL(f)]));
+
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    const box = document.createElement('div');
+    box.className = 'confirm-box group-order-box';
+
+    const title = document.createElement('div');
+    title.className = 'confirm-message';
+    title.style.marginBottom = '4px';
+    title.textContent = `Порядок страниц (${order.length})`;
+    box.appendChild(title);
+
+    const hint = document.createElement('div');
+    hint.className = 'group-order-hint';
+    hint.textContent = 'Расставлены по времени съёмки. Нажмите на миниатюру, чтобы увеличить, и поправьте порядок стрелками, если что-то не так.';
+    box.appendChild(hint);
+
+    const list = document.createElement('div');
+    list.className = 'group-order-list';
+    box.appendChild(list);
+
+    function renderList() {
+      list.innerHTML = '';
+      order.forEach((f, i) => {
+        const item = document.createElement('div');
+        item.className = 'group-order-item';
+
+        const num = document.createElement('div');
+        num.className = 'group-order-num';
+        num.textContent = String(i + 1);
+        item.appendChild(num);
+
+        const thumbLink = document.createElement('a');
+        thumbLink.className = 'group-order-thumb';
+        thumbLink.href = urlByFile.get(f);
+        thumbLink.target = '_blank';
+        thumbLink.rel = 'noopener';
+        thumbLink.title = 'Открыть в полный размер';
+        const img = document.createElement('img');
+        img.src = urlByFile.get(f);
+        img.alt = '';
+        thumbLink.appendChild(img);
+        item.appendChild(thumbLink);
+
+        const name = document.createElement('div');
+        name.className = 'group-order-name';
+        name.textContent = f.name;
+        item.appendChild(name);
+
+        const moves = document.createElement('div');
+        moves.className = 'group-order-moves';
+        const upBtn = document.createElement('button');
+        upBtn.type = 'button';
+        upBtn.textContent = '↑';
+        upBtn.title = 'Переместить выше';
+        upBtn.disabled = i === 0;
+        upBtn.addEventListener('click', () => {
+          [order[i - 1], order[i]] = [order[i], order[i - 1]];
+          renderList();
+        });
+        const downBtn = document.createElement('button');
+        downBtn.type = 'button';
+        downBtn.textContent = '↓';
+        downBtn.title = 'Переместить ниже';
+        downBtn.disabled = i === order.length - 1;
+        downBtn.addEventListener('click', () => {
+          [order[i + 1], order[i]] = [order[i], order[i + 1]];
+          renderList();
+        });
+        moves.appendChild(upBtn);
+        moves.appendChild(downBtn);
+        item.appendChild(moves);
+
+        list.appendChild(item);
+      });
+    }
+    renderList();
+
+    const actions = document.createElement('div');
+    actions.className = 'btn-row confirm-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn-secondary';
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Отмена';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn-primary';
+    confirmBtn.type = 'button';
+    confirmBtn.textContent = 'Объединить';
+    actions.appendChild(cancelBtn);
+    actions.appendChild(confirmBtn);
+    box.appendChild(actions);
+
+    overlay.appendChild(box);
+
+    function cleanup() {
+      urlByFile.forEach(u => URL.revokeObjectURL(u));
+      overlay.remove();
+    }
+    cancelBtn.addEventListener('click', () => { cleanup(); resolve(null); });
+    confirmBtn.addEventListener('click', () => { cleanup(); resolve(order); });
+    overlay.addEventListener('click', e => { if (e.target === overlay) { cleanup(); resolve(null); } });
+
+    document.body.appendChild(overlay);
+  });
+}
+
+// Объединяет отмеченные чекбоксами файлы в одну группу (многостраничный
+// "виртуальный файл") — дальше идёт по уже существующему пути многостраничных
+// документов (см. app.js:loadPageImages), тому же, что уже работает для PDF.
+function groupSelectedFiles() {
+  if (groupSelection.size < 2) return;
+  const indices = [...groupSelection].sort((a, b) => a - b);
+  const files = indices.map(i => selectedFiles[i]);
+
+  openGroupOrderOverlay(files).then(orderedFiles => {
+    if (!orderedFiles) return; // отмена в оверлее — ничего не меняем
+
+    const groupObj = {
+      __group: true,
+      id: `group_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name: `Документ (${orderedFiles.length} файлов)`,
+      files: orderedFiles
+    };
+
+    // Убираем исходные файлы С КОНЦА (чтобы индексы не съезжали при splice),
+    // вставляем группу на место первого по счёту (наименьший индекс) из
+    // выбранных — группа остаётся примерно там же, где были её файлы.
+    const insertAt = indices[0];
+    for (let k = indices.length - 1; k >= 0; k--) {
+      selectedFiles.splice(indices[k], 1);
+      selectedDocTypes.splice(indices[k], 1);
+    }
+    selectedFiles.splice(insertAt, 0, groupObj);
+    selectedDocTypes.splice(insertAt, 0, 'auto');
+
+    render(false);
+  });
+}
+
+// Возвращает файлы группы обратно в список как отдельные строки.
+function ungroupAt(idx) {
+  const groupObj = selectedFiles[idx];
+  if (!groupObj || !groupObj.__group) return;
+  selectedFiles.splice(idx, 1, ...groupObj.files);
+  selectedDocTypes.splice(idx, 1, ...groupObj.files.map(() => 'auto'));
+  render(false);
+}
+
 function buildFileRow(file, idx) {
+  const isGroup = !!(file && file.__group);
   const row = document.createElement('div');
   row.className = 'file-row';
 
-  const thumb = document.createElement('a');
+  // Чекбокс объединения — только для обычных файлов-картинок, не PDF (тот уже
+  // сам многостраничный) и не уже собранной группы (группу в группу не кладём).
+  if (!isGroup && file.type !== 'application/pdf') {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'group-select';
+    checkbox.title = 'Выбрать для объединения в один документ';
+    checkbox.checked = groupSelection.has(idx);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) groupSelection.add(idx); else groupSelection.delete(idx);
+      updateGroupButtonVisibility();
+    });
+    row.appendChild(checkbox);
+  }
+
+  const thumb = document.createElement(isGroup ? 'div' : 'a');
   thumb.className = 'file-thumb';
-  thumb.href = previewUrls[idx];
-  thumb.target = '_blank';
-  thumb.rel = 'noopener';
-  thumb.title = 'Открыть оригинал в новой вкладке';
-  if (file.type === 'application/pdf') {
-    thumb.classList.add('file-thumb-pdf');
-    thumb.textContent = 'PDF';
+  if (isGroup) {
+    thumb.classList.add('file-thumb-stack');
+    thumb.textContent = String(file.files.length);
+    thumb.title = `${file.files.length} файлов объединены в один документ`;
   } else {
-    const img = document.createElement('img');
-    img.src = previewUrls[idx];
-    img.alt = '';
-    thumb.appendChild(img);
+    thumb.href = previewUrls[idx];
+    thumb.target = '_blank';
+    thumb.rel = 'noopener';
+    thumb.title = 'Открыть оригинал в новой вкладке';
+    if (file.type === 'application/pdf') {
+      thumb.classList.add('file-thumb-pdf');
+      thumb.textContent = 'PDF';
+    } else {
+      const img = document.createElement('img');
+      img.src = previewUrls[idx];
+      img.alt = '';
+      thumb.appendChild(img);
+    }
   }
   row.appendChild(thumb);
 
@@ -83,20 +282,24 @@ function buildFileRow(file, idx) {
   const name = document.createElement('div');
   name.className = 'name';
   name.textContent = file.name;
-  name.title = `${file.name} (${formatSize(file.size)})`; // полное имя и размер — по наведению/долгому нажатию
+  name.title = isGroup
+    ? `${file.name}: ${file.files.map(f => f.name).join(', ')}`
+    : `${file.name} (${formatSize(file.size)})`; // полное имя и размер — по наведению/долгому нажатию
   info.appendChild(name);
   row.appendChild(info);
 
   const controls = document.createElement('div');
   controls.className = 'file-row-controls';
 
-  const downloadFileBtn = document.createElement('a');
-  downloadFileBtn.className = 'file-download';
-  downloadFileBtn.href = previewUrls[idx];
-  downloadFileBtn.download = file.name;
-  downloadFileBtn.title = 'Скачать оригинал файла';
-  downloadFileBtn.textContent = '⬇';
-  controls.appendChild(downloadFileBtn);
+  if (!isGroup) {
+    const downloadFileBtn = document.createElement('a');
+    downloadFileBtn.className = 'file-download';
+    downloadFileBtn.href = previewUrls[idx];
+    downloadFileBtn.download = file.name;
+    downloadFileBtn.title = 'Скачать оригинал файла';
+    downloadFileBtn.textContent = '⬇';
+    controls.appendChild(downloadFileBtn);
+  }
 
   const typeSelect = document.createElement('select');
   typeSelect.className = 'file-type-select';
@@ -129,10 +332,23 @@ function buildFileRow(file, idx) {
   });
   controls.appendChild(typeSelect);
 
+  if (isGroup) {
+    const ungroupBtn = document.createElement('button');
+    ungroupBtn.className = 'ungroup-file';
+    ungroupBtn.type = 'button';
+    ungroupBtn.textContent = 'Разгруппировать';
+    ungroupBtn.title = 'Вернуть как отдельные файлы';
+    ungroupBtn.addEventListener('click', () => {
+      if (recognizeBtn.disabled) return;
+      ungroupAt(idx);
+    });
+    controls.appendChild(ungroupBtn);
+  }
+
   const removeBtn = document.createElement('button');
   removeBtn.className = 'remove-file';
   removeBtn.textContent = '×';
-  removeBtn.title = 'Убрать этот файл';
+  removeBtn.title = isGroup ? 'Убрать весь документ' : 'Убрать этот файл';
   removeBtn.addEventListener('click', () => {
     if (recognizeBtn.disabled) return; // идёт распознавание
     selectedFiles.splice(idx, 1);
@@ -147,7 +363,17 @@ function buildFileRow(file, idx) {
 
 function render(truncated) {
   previewUrls.forEach(u => { if (u) URL.revokeObjectURL(u); }); // освобождаем память от предыдущего рендера
-  previewUrls = selectedFiles.map(f => URL.createObjectURL(f));
+  // Для группы — превью первого файла (страница 1), сама группа не Blob и
+  // URL.createObjectURL на ней бы упал.
+  previewUrls = selectedFiles.map(f => (f && f.__group)
+    ? (f.files && f.files[0] ? URL.createObjectURL(f.files[0]) : null)
+    : URL.createObjectURL(f));
+
+  // Индексы для объединения всегда сбрасываем при перерисовке — любое
+  // структурное изменение списка (добавили/убрали/сгруппировали файл) сдвигает
+  // нумерацию, держать отмеченные чекбоксы актуальными не стоит усложнения.
+  groupSelection.clear();
+  updateGroupButtonVisibility();
 
   if (selectedFiles.length === 0) {
     fileList.style.display = 'none';
@@ -196,6 +422,10 @@ export function initFileList({ onChange: onChangeCallback }) {
     selectedFiles = [];
     selectedDocTypes = [];
     render(false);
+  });
+  groupSelectedBtn.addEventListener('click', () => {
+    if (recognizeBtn.disabled) return;
+    groupSelectedFiles();
   });
   // Выбор типа документа по умолчанию скрыт (см. .file-type-select в styles.css) —
   // показываем его только если пользователь явно попросил уточнить тип вручную.
@@ -263,5 +493,8 @@ export function setExtraDocTypes(names) {
 export function setControlsDisabled(disabled) {
   fileListItems.querySelectorAll('.remove-file').forEach(el => el.disabled = disabled);
   fileListItems.querySelectorAll('.file-type-select').forEach(el => el.disabled = disabled);
+  fileListItems.querySelectorAll('.group-select').forEach(el => el.disabled = disabled);
+  fileListItems.querySelectorAll('.ungroup-file').forEach(el => el.disabled = disabled);
   clearAllBtn.disabled = disabled;
+  groupSelectedBtn.disabled = disabled;
 }

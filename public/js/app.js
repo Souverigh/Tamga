@@ -215,7 +215,23 @@ function unlockControls() {
   postProcessCheckbox.disabled = false;
 }
 
+// file — обычный File (PDF или картинка) ИЛИ объект-группа из fileList.js
+// ({ __group: true, files: File[] }) — несколько отдельных фото, которые
+// пользователь вручную объединил в один многостраничный документ (Ethan,
+// 8 сен 2026: "договор на 5 страниц, сфотографировал 5 раз"). Дальше идёт по
+// тому же пути, что уже работает для многостраничного PDF: recognizePage
+// вызывается на КАЖДУЮ страницу с одним и тем же presetType, а finalizeFileResult
+// берёт тип/поля с первой подходящей страницы — то есть достаточно, чтобы
+// первая (по факту съёмки/после ручной перестановки) страница была самой
+// "информативной" (с шапкой/названием документа), как и для обычного PDF.
 async function loadPageImages(file) {
+  if (file && file.__group) {
+    // Группа — всегда картинки (fileList.js не даёт добавить PDF в группу) —
+    // loadImageFile на каждый файл по отдельности, затем в один плоский список
+    // страниц В ТОМ ПОРЯДКЕ, что установлен в оверлее перестановки.
+    const perFilePages = await Promise.all(file.files.map(f => loadImageFile(f)));
+    return perFilePages.flat();
+  }
   return file.type === 'application/pdf' ? loadPdfPages(file) : loadImageFile(file);
 }
 
