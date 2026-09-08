@@ -1,5 +1,5 @@
 const { getClientConfig, clearConfigCache } = require('../lib/customFieldsLookup');
-const { requireClientSettingsAuth } = require('../lib/clientAuth');
+const { requireClientSettingsAuth, verifyPassword, hashPassword } = require('../lib/clientAuth');
 const { validateFieldOverrides, validateCustomDocTypes, validateBusinessRules, validateBranding } = require('../lib/clientConfigValidation');
 
 // GET/PATCH /api/client-settings?slug=acme — самообслуживание клиента (Ethan,
@@ -17,10 +17,12 @@ const { validateFieldOverrides, validateCustomDocTypes, validateBusinessRules, v
 // Что можно менять самому клиенту (согласовано с Ethan явно, 8 сен 2026):
 // - field_overrides — свои названия полей для стандартных типов документов
 // - custom_doc_types — свои типы документов целиком
-// - formatting.businessRules — свои условия проверки (только percentage_match,
-//   см. public/js/postprocess/businessRules.js)
+// - formatting.businessRules — свои условия проверки (5 готовых типов, см.
+//   public/js/postprocess/businessRules.js)
 // - display_name / logo_url / accent_color — свой брендинг
-// Всё остальное (api_key, page_limit, pages_used, access_password_hash,
+// - пароль сайта (см. отдельную ветку ниже: current_password + new_password) —
+//   Ethan, 8 сен 2026: "чтобы он сам мог менять пароль".
+// Всё остальное (api_key, page_limit, pages_used,
 // formatting.webhookUrl/webhookSecret/maxConcurrency/dateFormat/decimalSeparator)
 // остаётся доступно ТОЛЬКО через /admin — этот эндпоинт их не читает и не пишет.
 //
@@ -89,10 +91,46 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // PATCH — сначала валидируем ВСЁ присланное, ничего не пишем, если
-    // хоть одно поле не прошло проверку (частичная запись при ошибке была бы
-    // хуже, чем явный отказ целиком).
+    // PATCH — смена пароля обрабатывается ОТДЕЛЬНО от остальных настроек и
+    // не смешивается с ними в одном запросе (см. settings.js — отдельная
+    // кнопка "Сменить пароль", отдельный fetch). Требуем ТЕКУЩИЙ пароль,
+    // несмотря на то что запрос уже прошёл проверку токена — токен живёт
+    // 24 часа в sessionStorage, а смена пароля это достаточно чувствительное
+    // действие, чтобы не полагаться только на "было залогинено когда-то
+    // сегодня" (тот же принцип, что и смена пароля с подтверждением текущего
+    // в большинстве обычных сервисов).
     const body = req.body || {};
+    if ('current_password' in body || 'new_password' in body) {
+      const currentPassword = body.current_password;
+      const newPassword = body.new_password;
+      if (!currentPassword || !newPassword) {
+        res.status(400).json({ error: 'Нужны и текущий, и новый пароль' });
+        return;
+      }
+      if (typeof newPassword !== 'string' || newPassword.length < 8) {
+        res.status(400).json({ error: 'Новый пароль должен быть строкой не короче 8 символов' });
+        return;
+      }
+      const rawRow = await fetchRawRow(supabaseUrl, serviceKey, clientSlug);
+      if (!rawRow || !verifyPassword(currentPassword, rawRow.access_password_hash)) {
+        res.status(401).json({ error: 'Текущий пароль неверен' });
+        return;
+      }
+      const r = await fetch(`${supabaseUrl}/rest/v1/tamga_api_key_fields?client_slug=eq.${encodeURIComponent(clientSlug)}`, {
+        method: 'PATCH',
+        headers: supabaseHeaders(serviceKey, { Prefer: 'return=representation' }),
+        body: JSON.stringify({ access_password_hash: hashPassword(newPassword), updated_at: new Date().toISOString() })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(typeof data === 'object' ? JSON.stringify(data) : String(data));
+      clearConfigCache(); // старый пароль/токен не должен продолжать работать из кэша ещё минуту
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    // PATCH настроек (не пароля) — сначала валидируем ВСЁ присланное, ничего
+    // не пишем, если хоть одно поле не прошло проверку (частичная запись при
+    // ошибке была бы хуже, чем явный отказ целиком).
     const updates = {};
 
     if ('field_overrides' in body) {

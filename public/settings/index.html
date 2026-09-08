@@ -104,21 +104,82 @@
 
       <div id="businessRuleEditor" class="admin-editor-box" style="display:none;">
         <div class="admin-field-group">
-          <label class="admin-label">Поле-база</label>
-          <input type="text" id="ruleBaseField" class="admin-input" placeholder="Сумма">
+          <label class="admin-label">Тип правила</label>
+          <select id="ruleType" class="admin-input">
+            <option value="percentage_match">Процентное соотношение</option>
+            <option value="sum_match">Сумма полей ≈ другое поле</option>
+            <option value="date_order">Порядок дат</option>
+            <option value="required_field">Обязательное поле</option>
+            <option value="range_check">Диапазон значения</option>
+          </select>
         </div>
-        <div class="admin-field-group">
-          <label class="admin-label">Проверяемое поле</label>
-          <input type="text" id="ruleValueField" class="admin-input" placeholder="Сумма НДС">
+
+        <div id="ruleGroupPercentage">
+          <div class="admin-field-group">
+            <label class="admin-label">Поле-база</label>
+            <input type="text" id="ruleBaseField" class="admin-input" placeholder="Сумма">
+          </div>
+          <div class="admin-field-group">
+            <label class="admin-label">Проверяемое поле</label>
+            <input type="text" id="ruleValueField" class="admin-input" placeholder="Сумма НДС">
+          </div>
+          <div class="admin-field-group">
+            <label class="admin-label">Ожидаемый процент от поля-базы</label>
+            <input type="number" id="ruleExpectedPercent" class="admin-input" step="0.01" placeholder="12" style="max-width:160px;">
+          </div>
         </div>
-        <div class="admin-field-group">
-          <label class="admin-label">Ожидаемый процент от поля-базы</label>
-          <input type="number" id="ruleExpectedPercent" class="admin-input" step="0.01" placeholder="12" style="max-width:160px;">
+
+        <div id="ruleGroupSum" style="display:none;">
+          <div class="admin-field-group">
+            <label class="admin-label">Складываемые поля <span class="admin-hint">через запятую</span></label>
+            <input type="text" id="ruleSumFields" class="admin-input" placeholder="Строка 1, Строка 2, Строка 3">
+          </div>
+          <div class="admin-field-group">
+            <label class="admin-label">Итоговое поле</label>
+            <input type="text" id="ruleTargetField" class="admin-input" placeholder="Итого">
+          </div>
         </div>
-        <div class="admin-field-group">
-          <label class="admin-label">Допуск <span class="admin-hint">± процентных пунктов от поля-базы; по умолчанию 1</span></label>
-          <input type="number" id="ruleTolerancePercent" class="admin-input" step="0.01" min="0" max="50" placeholder="1" style="max-width:160px;">
+
+        <div id="ruleGroupDateOrder" style="display:none;">
+          <div class="admin-field-group">
+            <label class="admin-label">Более раннее поле-дата</label>
+            <input type="text" id="ruleEarlierField" class="admin-input" placeholder="Дата начала">
+          </div>
+          <div class="admin-field-group">
+            <label class="admin-label">Более позднее поле-дата</label>
+            <input type="text" id="ruleLaterField" class="admin-input" placeholder="Дата окончания">
+          </div>
         </div>
+
+        <div id="ruleGroupRequired" style="display:none;">
+          <div class="admin-field-group">
+            <label class="admin-label">Обязательное поле</label>
+            <input type="text" id="ruleRequiredField" class="admin-input" placeholder="ИНН">
+          </div>
+        </div>
+
+        <div id="ruleGroupRange" style="display:none;">
+          <div class="admin-field-group">
+            <label class="admin-label">Поле</label>
+            <input type="text" id="ruleRangeField" class="admin-input" placeholder="Сумма">
+          </div>
+          <div class="admin-field-group">
+            <label class="admin-label">Минимум <span class="admin-hint">необязательно</span></label>
+            <input type="number" id="ruleRangeMin" class="admin-input" step="0.01" style="max-width:160px;">
+          </div>
+          <div class="admin-field-group">
+            <label class="admin-label">Максимум <span class="admin-hint">необязательно</span></label>
+            <input type="number" id="ruleRangeMax" class="admin-input" step="0.01" style="max-width:160px;">
+          </div>
+        </div>
+
+        <div id="ruleGroupTolerance">
+          <div class="admin-field-group">
+            <label class="admin-label">Допуск <span class="admin-hint">± процентных пунктов; по умолчанию 1</span></label>
+            <input type="number" id="ruleTolerancePercent" class="admin-input" step="0.01" min="0" max="50" placeholder="1" style="max-width:160px;">
+          </div>
+        </div>
+
         <div class="admin-field-group">
           <label class="admin-label">Уровень предупреждения</label>
           <select id="ruleLevel" class="admin-input" style="max-width:220px;">
@@ -137,6 +198,21 @@
         <span id="saveStatus" class="admin-note"></span>
       </div>
       <div id="saveError" class="admin-error" style="display:none;"></div>
+
+      <h3 class="admin-section-title">Смена пароля</h3>
+      <div class="admin-field-group">
+        <label class="admin-label">Текущий пароль</label>
+        <input type="password" id="currentPasswordInput" class="admin-input" autocomplete="current-password">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Новый пароль <span class="admin-hint">не короче 8 символов</span></label>
+        <input type="password" id="newPasswordInput" class="admin-input" autocomplete="new-password">
+      </div>
+      <div class="admin-form-actions">
+        <button class="btn-secondary" id="changePasswordBtn" type="button">Сменить пароль</button>
+        <span id="passwordChangeStatus" class="admin-note"></span>
+      </div>
+      <div id="passwordChangeError" class="admin-error" style="display:none;"></div>
     </div>
 
   </section>

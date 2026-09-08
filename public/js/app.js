@@ -45,7 +45,7 @@ if (settingsLink) {
   const clientSlug = getClientSlug();
   if (clientSlug) {
     settingsLink.href = `/settings/?client=${encodeURIComponent(clientSlug)}`;
-    settingsLink.style.display = 'inline';
+    settingsLink.style.display = 'inline-flex';
   }
 }
 

@@ -76,9 +76,24 @@ const cancelCustomTypeBtn = document.getElementById('cancelCustomTypeBtn');
 const businessRulesList = document.getElementById('businessRulesList');
 const addBusinessRuleBtn = document.getElementById('addBusinessRuleBtn');
 const businessRuleEditor = document.getElementById('businessRuleEditor');
+const ruleType = document.getElementById('ruleType');
+const ruleGroupPercentage = document.getElementById('ruleGroupPercentage');
+const ruleGroupSum = document.getElementById('ruleGroupSum');
+const ruleGroupDateOrder = document.getElementById('ruleGroupDateOrder');
+const ruleGroupRequired = document.getElementById('ruleGroupRequired');
+const ruleGroupRange = document.getElementById('ruleGroupRange');
+const ruleGroupTolerance = document.getElementById('ruleGroupTolerance');
 const ruleBaseField = document.getElementById('ruleBaseField');
 const ruleValueField = document.getElementById('ruleValueField');
 const ruleExpectedPercent = document.getElementById('ruleExpectedPercent');
+const ruleSumFields = document.getElementById('ruleSumFields');
+const ruleTargetField = document.getElementById('ruleTargetField');
+const ruleEarlierField = document.getElementById('ruleEarlierField');
+const ruleLaterField = document.getElementById('ruleLaterField');
+const ruleRequiredField = document.getElementById('ruleRequiredField');
+const ruleRangeField = document.getElementById('ruleRangeField');
+const ruleRangeMin = document.getElementById('ruleRangeMin');
+const ruleRangeMax = document.getElementById('ruleRangeMax');
 const ruleTolerancePercent = document.getElementById('ruleTolerancePercent');
 const ruleLevel = document.getElementById('ruleLevel');
 const confirmBusinessRuleBtn = document.getElementById('confirmBusinessRuleBtn');
@@ -517,14 +532,35 @@ confirmCustomTypeBtn.addEventListener('click', () => {
 });
 
 // --- Блок «Настраиваемые бизнес-правила» ---
-// Единственный тип в первой версии — percentage_match (Ethan, 7 сен 2026,
-// "чтобы сами компании делали их под свои нужды", пример: "НДС ≈ 12% от
-// суммы"). См. public/js/postprocess/businessRules.js — тот же формат
-// объекта правила, что рендерится/сохраняется здесь.
+// Ethan, 7 сен 2026 ("чтобы сами компании делали их под свои нужды", пример:
+// "НДС ≈ 12% от суммы"), расширено 8 сен 2026 с одного типа до пяти (после
+// явного вопроса про свободные формулы — Ethan сам выбрал конструктор из
+// готовых типов, увидев пример заготовленного списка правил). См.
+// public/js/postprocess/businessRules.js — тот же формат объекта правила,
+// что рендерится/сохраняется здесь.
+
+function splitFields(text) {
+  return text.split(',').map(s => s.trim()).filter(Boolean);
+}
 
 function ruleSummaryText(rule) {
   const levelLabel = rule.level === 'info' ? 'информация' : 'ошибка';
-  return `«${rule.valueField}» ≈ ${rule.expectedPercent}% от «${rule.baseField}» (допуск ±${rule.tolerancePercent ?? 1}, уровень: ${levelLabel})`;
+  switch (rule.type) {
+    case 'percentage_match':
+      return `«${rule.valueField}» ≈ ${rule.expectedPercent}% от «${rule.baseField}» (допуск ±${rule.tolerancePercent ?? 1}, уровень: ${levelLabel})`;
+    case 'sum_match':
+      return `Сумма «${rule.sumFields.join('», «')}» ≈ «${rule.targetField}» (допуск ±${rule.tolerancePercent ?? 1}, уровень: ${levelLabel})`;
+    case 'date_order':
+      return `«${rule.earlierField}» не позже «${rule.laterField}» (уровень: ${levelLabel})`;
+    case 'required_field':
+      return `«${rule.field}» обязательно для заполнения (уровень: ${levelLabel})`;
+    case 'range_check': {
+      const bounds = [rule.min != null ? `от ${rule.min}` : null, rule.max != null ? `до ${rule.max}` : null].filter(Boolean).join(' ');
+      return `«${rule.field}» ${bounds} (уровень: ${levelLabel})`;
+    }
+    default:
+      return rule.type;
+  }
 }
 
 function renderBusinessRulesList() {
@@ -559,15 +595,40 @@ function renderBusinessRulesList() {
   });
 }
 
+// Показывает только группу полей, относящуюся к выбранному типу правила.
+function updateRuleGroupVisibility() {
+  const type = ruleType.value;
+  ruleGroupPercentage.style.display = type === 'percentage_match' ? 'block' : 'none';
+  ruleGroupSum.style.display = type === 'sum_match' ? 'block' : 'none';
+  ruleGroupDateOrder.style.display = type === 'date_order' ? 'block' : 'none';
+  ruleGroupRequired.style.display = type === 'required_field' ? 'block' : 'none';
+  ruleGroupRange.style.display = type === 'range_check' ? 'block' : 'none';
+  ruleGroupTolerance.style.display = (type === 'percentage_match' || type === 'sum_match') ? 'block' : 'none';
+}
+ruleType.addEventListener('change', updateRuleGroupVisibility);
+
 function openBusinessRuleEditor(existingIndex) {
   editingBusinessRuleIndex = existingIndex != null ? existingIndex : null;
   const existing = existingIndex != null ? state.businessRules[existingIndex] : null;
-  ruleBaseField.value = existing ? existing.baseField : '';
-  ruleValueField.value = existing ? existing.valueField : '';
-  ruleExpectedPercent.value = existing ? existing.expectedPercent : '';
-  ruleTolerancePercent.value = existing && existing.tolerancePercent != null ? existing.tolerancePercent : '';
+
+  ruleType.value = existing ? existing.type : 'percentage_match';
+  ruleType.disabled = !!existing; // при редактировании тип не меняем — проще создать заново
   ruleLevel.value = existing ? (existing.level || 'error') : 'error';
 
+  ruleBaseField.value = existing && existing.type === 'percentage_match' ? existing.baseField : '';
+  ruleValueField.value = existing && existing.type === 'percentage_match' ? existing.valueField : '';
+  ruleExpectedPercent.value = existing && existing.type === 'percentage_match' ? existing.expectedPercent : '';
+  ruleSumFields.value = existing && existing.type === 'sum_match' ? existing.sumFields.join(', ') : '';
+  ruleTargetField.value = existing && existing.type === 'sum_match' ? existing.targetField : '';
+  ruleEarlierField.value = existing && existing.type === 'date_order' ? existing.earlierField : '';
+  ruleLaterField.value = existing && existing.type === 'date_order' ? existing.laterField : '';
+  ruleRequiredField.value = existing && existing.type === 'required_field' ? existing.field : '';
+  ruleRangeField.value = existing && existing.type === 'range_check' ? existing.field : '';
+  ruleRangeMin.value = existing && existing.type === 'range_check' && existing.min != null ? existing.min : '';
+  ruleRangeMax.value = existing && existing.type === 'range_check' && existing.max != null ? existing.max : '';
+  ruleTolerancePercent.value = existing && existing.tolerancePercent != null ? existing.tolerancePercent : '';
+
+  updateRuleGroupVisibility();
   businessRuleEditor.style.display = 'block';
   businessRuleEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -575,24 +636,51 @@ function openBusinessRuleEditor(existingIndex) {
 addBusinessRuleBtn.addEventListener('click', () => openBusinessRuleEditor(null));
 cancelBusinessRuleBtn.addEventListener('click', () => { businessRuleEditor.style.display = 'none'; });
 confirmBusinessRuleBtn.addEventListener('click', () => {
-  const baseField = ruleBaseField.value.trim();
-  const valueField = ruleValueField.value.trim();
-  const expectedPercent = Number(ruleExpectedPercent.value);
-  if (!baseField || !valueField || !ruleExpectedPercent.value.trim() || !Number.isFinite(expectedPercent)) {
-    alert('Укажите поле-базу, проверяемое поле и ожидаемый процент (число).');
-    return;
+  const type = ruleType.value;
+  const level = ruleLevel.value;
+  const tolerancePercent = ruleTolerancePercent.value.trim() ? Number(ruleTolerancePercent.value) : undefined;
+  let rule = null;
+
+  if (type === 'percentage_match') {
+    const baseField = ruleBaseField.value.trim();
+    const valueField = ruleValueField.value.trim();
+    const expectedPercent = Number(ruleExpectedPercent.value);
+    if (!baseField || !valueField || !ruleExpectedPercent.value.trim() || !Number.isFinite(expectedPercent)) {
+      alert('Укажите поле-базу, проверяемое поле и ожидаемый процент (число).');
+      return;
+    }
+    rule = { type, baseField, valueField, expectedPercent, tolerancePercent, level };
+  } else if (type === 'sum_match') {
+    const sumFields = splitFields(ruleSumFields.value);
+    const targetField = ruleTargetField.value.trim();
+    if (!sumFields.length || !targetField) {
+      alert('Укажите хотя бы одно складываемое поле и итоговое поле.');
+      return;
+    }
+    rule = { type, sumFields, targetField, tolerancePercent, level };
+  } else if (type === 'date_order') {
+    const earlierField = ruleEarlierField.value.trim();
+    const laterField = ruleLaterField.value.trim();
+    if (!earlierField || !laterField) {
+      alert('Укажите оба поля-даты.');
+      return;
+    }
+    rule = { type, earlierField, laterField, level };
+  } else if (type === 'required_field') {
+    const field = ruleRequiredField.value.trim();
+    if (!field) { alert('Укажите поле.'); return; }
+    rule = { type, field, level };
+  } else if (type === 'range_check') {
+    const field = ruleRangeField.value.trim();
+    const hasMin = ruleRangeMin.value.trim() !== '';
+    const hasMax = ruleRangeMax.value.trim() !== '';
+    if (!field || (!hasMin && !hasMax)) {
+      alert('Укажите поле и хотя бы одну границу (минимум или максимум).');
+      return;
+    }
+    rule = { type, field, min: hasMin ? Number(ruleRangeMin.value) : null, max: hasMax ? Number(ruleRangeMax.value) : null, level };
   }
-  const rule = {
-    type: 'percentage_match',
-    baseField,
-    valueField,
-    expectedPercent,
-    // Пусто в поле допуска — не отправляем tolerancePercent вовсе, сервер
-    // сам подставит значение по умолчанию (1, см. lib/customFieldsLookup.js) —
-    // тот же приём, что webhookSecret/maxConcurrency выше в этом файле.
-    tolerancePercent: ruleTolerancePercent.value.trim() ? Number(ruleTolerancePercent.value) : undefined,
-    level: ruleLevel.value
-  };
+
   if (editingBusinessRuleIndex != null) {
     state.businessRules[editingBusinessRuleIndex] = rule;
   } else {

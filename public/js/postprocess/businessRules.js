@@ -13,13 +13,16 @@
 // Настраиваемые правила (Ethan, 7 сен 2026, "чтобы сами компании делали их
 // под свои нужды") — clientRules, второй параметр checkBusinessRules,
 // приходит из конфига клиента в Supabase (formatting.businessRules, см.
-// lib/customFieldsLookup.js:getClientConfig, задаётся через /admin —
-// public/admin/admin.js). Ethan явно выбрал ОДИН тип правил для первой
-// версии — процентное соотношение между двумя полями (пример: "сумма НДС ≈
-// 12% от суммы") — а не полностью свободные формулы клиента: конструктор из
-// готовых типов безопаснее и предсказуемее, чем мини-язык вычислений внутри
-// админки. Остальные обсуждавшиеся типы (порядок двух произвольных дат,
-// "поле не должно быть пустым") в эту версию не вошли — см. TECH_DEBT.md.
+// lib/customFieldsLookup.js:getClientConfig, задаётся через /admin или
+// /settings — самообслуживание клиента). Изначально (7 сен) Ethan выбрал
+// ОДИН тип правил — процентное соотношение между двумя полями (пример:
+// "сумма НДС ≈ 12% от суммы"). 8 сен, после явного вопроса про свободные
+// формулы клиента (сумма чисел, "любая логика") — принцип остался тем же
+// (конструктор из готовых типов, НЕ мини-язык вычислений — Ethan сам выбрал
+// этот вариант, увидев пример заготовленного списка правил), но набор
+// расширен до пяти: percentage_match, sum_match (сумма полей ≈ другое поле),
+// date_order (порядок ЛЮБЫХ двух дат — обобщение правила ниже), required_field
+// (поле не пустое), range_check (числовое поле в диапазоне). См. RULE_CHECKERS.
 //
 // level: 'error' — вероятная ошибка распознавания (одна из дат/значений
 // прочитана неверно), 'info' — не ошибка, а факт о документе, который стоит
@@ -124,6 +127,88 @@ function checkPercentageMatch(fields, rule) {
   };
 }
 
+// rule — { type: 'sum_match', sumFields: [...], targetField, tolerancePercent?,
+// level? } — Ethan, 8 сен 2026: "чтобы он посчитал сумму всех числе" (сумма
+// строк документа должна сходиться с итоговым полем). Если ХОТЯ БЫ ОДНО из
+// sumFields не нашлось/не число — молча пропускаем (та же философия, что и
+// у percentage_match: лучше не проверить, чем посчитать сумму по неполным
+// данным и выдать ложное замечание).
+function checkSumMatch(fields, rule) {
+  const addends = rule.sumFields.map(f => parseAmount(findValue(fields, f)));
+  if (addends.some(v => v == null)) return null;
+  const targetValue = parseAmount(findValue(fields, rule.targetField));
+  if (targetValue == null) return null;
+
+  const sum = addends.reduce((acc, v) => acc + v, 0);
+  const tolerancePercent = Number.isFinite(Number(rule.tolerancePercent)) ? Number(rule.tolerancePercent) : DEFAULT_TOLERANCE_PERCENT;
+  const toleranceAmount = Math.abs(targetValue) * tolerancePercent / 100;
+  if (Math.abs(sum - targetValue) <= toleranceAmount) return null;
+
+  const level = rule.level === 'info' ? 'info' : 'error';
+  const roundedSum = Math.round(sum * 100) / 100;
+  return {
+    level,
+    message: `Сумма полей «${rule.sumFields.join('», «')}» (${roundedSum}) не сходится с «${rule.targetField}» (${targetValue}), проверьте вручную.`
+  };
+}
+
+// rule — { type: 'date_order', earlierField, laterField, level? } —
+// обобщение изначально жёстко зашитого правила "дата выдачи не позже даты
+// окончания" на ЛЮБУЮ пару дат клиента (Ethan, 8 сен 2026).
+function checkDateOrder(fields, rule) {
+  const earlier = parseDate(findValue(fields, rule.earlierField));
+  const later = parseDate(findValue(fields, rule.laterField));
+  if (!earlier || !later) return null;
+  if (earlier.getTime() <= later.getTime()) return null;
+
+  const level = rule.level === 'info' ? 'info' : 'error';
+  return {
+    level,
+    message: `«${rule.earlierField}» позже «${rule.laterField}» — вероятно, одна из дат распознана неверно, стоит проверить вручную.`
+  };
+}
+
+// rule — { type: 'required_field', field, level? } — единственный тип
+// правила, который срабатывает на ПУСТОЕ значение (остальные молча
+// пропускают проверку при отсутствии данных — здесь отсутствие данных и
+// есть предмет проверки).
+function checkRequiredField(fields, rule) {
+  const value = findValue(fields, rule.field);
+  if (value && String(value).trim()) return null;
+
+  const level = rule.level === 'info' ? 'info' : 'error';
+  return { level, message: `Поле «${rule.field}» не заполнено.` };
+}
+
+// rule — { type: 'range_check', field, min, max, level? } — min/max: число
+// или null (граница не задана). Если поле не нашлось/не число — молча
+// пропускаем (нечего сравнивать с диапазоном).
+function checkRangeCheck(fields, rule) {
+  const value = parseAmount(findValue(fields, rule.field));
+  if (value == null) return null;
+
+  const level = rule.level === 'info' ? 'info' : 'error';
+  if (rule.min != null && value < rule.min) {
+    return { level, message: `«${rule.field}» (${value}) меньше минимума ${rule.min}, проверьте вручную.` };
+  }
+  if (rule.max != null && value > rule.max) {
+    return { level, message: `«${rule.field}» (${value}) больше максимума ${rule.max}, проверьте вручную.` };
+  }
+  return null;
+}
+
+// Диспетчер по типу правила — единственное место, которое нужно расширить,
+// когда появится новый тип (Ethan, 8 сен 2026: список типов согласован явно,
+// НЕ свободные формулы клиента — конструктор из готовых типов остаётся
+// принципом, просто расширен с одного до пяти типов).
+const RULE_CHECKERS = {
+  percentage_match: checkPercentageMatch,
+  sum_match: checkSumMatch,
+  date_order: checkDateOrder,
+  required_field: checkRequiredField,
+  range_check: checkRangeCheck
+};
+
 // clientRules — настроенные клиентом правила (см. выше), по умолчанию [] —
 // вызовы без второго аргумента (если где-то остались) работают как раньше,
 // только со встроенными двумя правилами дат.
@@ -151,8 +236,9 @@ export function checkBusinessRules(fields, clientRules = []) {
 
   if (Array.isArray(clientRules)) {
     clientRules.forEach(rule => {
-      if (!rule || rule.type !== 'percentage_match') return; // единственный поддерживаемый тип в первой версии
-      const result = checkPercentageMatch(fields, rule);
+      const checker = rule && RULE_CHECKERS[rule.type];
+      if (!checker) return; // неизвестный тип — молча пропускаем (уже отфильтрован на чтении/записи, но не гадаем)
+      const result = checker(fields, rule);
       if (result) warnings.push(result);
     });
   }

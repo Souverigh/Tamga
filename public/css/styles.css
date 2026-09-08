@@ -32,10 +32,6 @@
   h1,h2,h3{font-family:'Space Grotesk', sans-serif; font-weight:600; margin:0;}
 
   header{display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:2px;}
-  /* Ссылка на самообслуживание (Ethan, 8 сен 2026) — видна только клиентам с
-     ?client=slug, см. public/js/app.js. */
-  .settings-link{ font-size:0.85rem; color:var(--ink-soft); text-decoration:underline; }
-  .settings-link:hover{ color:var(--accent-deep); }
   .brand{font-family:'Space Grotesk', sans-serif; font-size:1.5rem; font-weight:700; display:flex; align-items:center; gap:10px; letter-spacing:-0.01em;}
   .brand .seal{ flex-shrink:0; display:flex; align-items:center; justify-content:center;
     width:34px; height:34px; border:1.5px solid var(--ink); border-radius:8px; position:relative;
@@ -336,6 +332,16 @@
     min-height:44px;
   }
   button:active{ transform:scale(0.98); }
+  /* Ссылка-кнопка (напр. "Настройки" в шапке, см. app.js) — <a>, а не
+     <button>, поэтому базовый селектор button{} её не задевает вообще. */
+  a.btn-primary, a.btn-secondary{
+    font-family:'Inter', sans-serif; font-size:0.9rem; font-weight:600;
+    border-radius:5px; padding:12px 20px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center;
+    min-height:44px; text-decoration:none; box-sizing:border-box;
+    transition:background .12s, border-color .12s, transform .05s;
+  }
+  a.btn-secondary:active, a.btn-primary:active{ transform:scale(0.98); }
   #recognizeBtn{ font-size:1rem; padding:15px 24px; min-height:52px; }
   .btn-primary{ background:var(--ink); color:#fff; }
   .btn-primary:hover:not(:disabled){ background:var(--accent); }
