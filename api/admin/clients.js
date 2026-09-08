@@ -1,8 +1,8 @@
 const crypto = require('crypto');
 const { checkAdminSecret } = require('../../lib/adminAuth');
-const { DOC_TYPES } = require('../../lib/docSchema');
 const { hashPassword } = require('../../lib/clientAuth');
 const { clearConfigCache } = require('../../lib/customFieldsLookup');
+const { validateFieldOverrides, validateCustomDocTypes, validateBusinessRules } = require('../../lib/clientConfigValidation');
 
 // Админский CRUD над tamga_api_key_fields (конфиги клиентов — см. customFieldsLookup.js) —
 // заменяет ручную правку через Supabase Table Editor на простую форму (см. public/admin/).
@@ -87,35 +87,18 @@ function validateAndNormalize(body) {
   // JSON-ответе для них генерируются автоматически (col0, col1, ...), см.
   // lib/extraction.js:resolveTableColumns. Формат override один и тот же
   // (массив строк) для карточных и табличных типов — различие только в том,
-  // как этот массив интерпретируется дальше по пайплайну.
-  if (row.field_overrides !== undefined && row.field_overrides !== null) {
-    if (typeof row.field_overrides !== 'object' || Array.isArray(row.field_overrides)) {
-      return { error: 'field_overrides должен быть объектом вида { "Название стандартного типа": ["Поле1", "Поле2"] } (для табличных типов — названия колонок)' };
-    }
-    for (const [type, fields] of Object.entries(row.field_overrides)) {
-      if (!DOC_TYPES.includes(type)) {
-        return { error: `field_overrides: "${type}" не входит в стандартный список типов документов` };
-      }
-      if (!Array.isArray(fields) || !fields.every(f => typeof f === 'string') || !fields.length) {
-        return { error: `field_overrides["${type}"] должен быть непустым массивом строк` };
-      }
-    }
-    if (!Object.keys(row.field_overrides).length) row.field_overrides = null;
+  // как этот массив интерпретируется дальше по пайплайну. Валидация — общая
+  // с api/client-settings.js, см. lib/clientConfigValidation.js.
+  if (row.field_overrides !== undefined) {
+    const { error, value } = validateFieldOverrides(row.field_overrides);
+    if (error) return { error };
+    row.field_overrides = value;
   }
 
-  if (row.custom_doc_types !== undefined && row.custom_doc_types !== null) {
-    if (typeof row.custom_doc_types !== 'object' || Array.isArray(row.custom_doc_types)) {
-      return { error: 'custom_doc_types должен быть объектом вида { "Название типа": { "fields": ["Поле1"], "hint": "..." } }' };
-    }
-    for (const [type, entry] of Object.entries(row.custom_doc_types)) {
-      if (DOC_TYPES.includes(type)) {
-        return { error: `custom_doc_types: "${type}" совпадает со стандартным типом — используйте field_overrides для переопределения полей стандартного типа вместо кастомного типа с тем же именем` };
-      }
-      if (!entry || typeof entry !== 'object' || !Array.isArray(entry.fields) || !entry.fields.every(f => typeof f === 'string')) {
-        return { error: `custom_doc_types["${type}"].fields должен быть массивом строк` };
-      }
-    }
-    if (!Object.keys(row.custom_doc_types).length) row.custom_doc_types = null;
+  if (row.custom_doc_types !== undefined) {
+    const { error, value } = validateCustomDocTypes(row.custom_doc_types);
+    if (error) return { error };
+    row.custom_doc_types = value;
   }
 
   if (row.formatting !== undefined && row.formatting !== null) {
@@ -165,13 +148,29 @@ function validateAndNormalize(body) {
       delete row.formatting.webhookUrl;
       delete row.formatting.webhookSecret;
     }
+    // Настраиваемые бизнес-правила (Ethan, 7 сен 2026) — валидация общая с
+    // api/client-settings.js, см. lib/clientConfigValidation.js. ВАЖНО: этой
+    // проверки не хватало изначально (8 сен 2026, найдено при подготовке
+    // самообслуживания клиентов) — сохранение клиента БЕЗ других полей
+    // formatting (дата/разделитель/приоритет/вебхук) тихо стирало уже
+    // сохранённые бизнес-правила, см. предупреждение ниже про "те же грабли".
+    if (row.formatting.businessRules !== undefined) {
+      const { error, value } = validateBusinessRules(row.formatting.businessRules);
+      if (error) return { error };
+      if (value.length) row.formatting.businessRules = value;
+      else delete row.formatting.businessRules;
+    }
     // ВАЖНО: должно перечислять ВСЕ поддерживаемые ключи formatting — раньше
     // здесь проверялись только dateFormat/decimalSeparator, из-за чего
     // formatting с ЕДИНСТВЕННО заданным maxConcurrency (без даты/разделителя)
     // тихо схлопывался в null и настройка приоритета никогда бы не сохранялась.
     // webhookUrl добавлен в этот же список по той же причине — не наступать
-    // на те же грабли второй раз.
-    if (!row.formatting.dateFormat && !row.formatting.decimalSeparator && !row.formatting.maxConcurrency && !row.formatting.webhookUrl) row.formatting = null;
+    // на те же грабли второй раз. businessRules был здесь пропущен и наступил
+    // на те же грабли в третий раз (см. комментарий выше) — добавлен сейчас.
+    if (!row.formatting.dateFormat && !row.formatting.decimalSeparator && !row.formatting.maxConcurrency
+        && !row.formatting.webhookUrl && !(row.formatting.businessRules && row.formatting.businessRules.length)) {
+      row.formatting = null;
+    }
   }
 
   // Разовый пакет страниц (см. lib/customFieldsLookup.js:consumeUsage). Пустая
