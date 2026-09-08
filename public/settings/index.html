@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Настройки — АДРЕ</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+<div class="wrap admin-wrap">
+
+  <header>
+    <div class="brand"><span class="seal"><span>А</span></span>Настройки</div>
+  </header>
+  <p class="tagline">Свои поля, типы документов, бизнес-правила и брендинг — без обращения к поддержке.</p>
+
+  <!-- Нет ?client=slug в ссылке вообще — настроек в принципе нет, куда сохранять неизвестно -->
+  <section id="noSlug" class="panel" style="display:none;">
+    <p>Эта страница открывается по персональной ссылке с адресом вашей компании
+      (например, <span class="admin-mono">?client=acme</span>) — обратитесь к вашему менеджеру, если ссылки нет под рукой.</p>
+  </section>
+
+  <!-- Гейт паролем — тем же, что и для входа в сам инструмент распознавания -->
+  <section id="gate" class="panel" style="display:none;">
+    <div class="step-label">Вход в настройки</div>
+    <input type="password" id="passwordInput" class="admin-input" placeholder="Пароль" autocomplete="current-password">
+    <button class="btn-primary" id="gateBtn" type="button" style="margin-top:12px;">Войти</button>
+    <div id="gateError" class="admin-error" style="display:none;"></div>
+  </section>
+
+  <!-- Пароль вообще не задан для этого клиента — самообслуживание не включено -->
+  <section id="noPassword" class="panel" style="display:none;">
+    <p>Настройки станут доступны, как только для вашего сайта будет задан пароль — обратитесь к вашему менеджеру.</p>
+  </section>
+
+  <!-- Основной экран — скрыт до входа -->
+  <section id="settingsMain" style="display:none;">
+
+    <div class="panel">
+      <h3 class="admin-section-title" style="margin-top:0;">Брендинг</h3>
+      <div class="admin-field-group">
+        <label class="admin-label">Название компании</label>
+        <input type="text" id="fDisplayName" class="admin-input" placeholder="напр. Acme Consulting">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Логотип <span class="admin-hint">ссылка на изображение, должна начинаться с https://</span></label>
+        <input type="text" id="fLogoUrl" class="admin-input" placeholder="https://...">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Основной цвет</label>
+        <div class="admin-color-row">
+          <span class="admin-swatch" id="colorSwatch"></span>
+          <input type="text" id="fAccentColor" class="admin-input" placeholder="#2A4FE0" style="max-width:160px;">
+        </div>
+      </div>
+
+      <h3 class="admin-section-title">Переопределение полей <span class="admin-hint">— свой список полей для стандартного типа документа</span></h3>
+      <div id="fieldOverridesList" class="admin-override-list"></div>
+      <button class="btn-secondary" id="addFieldOverrideBtn" type="button">+ Добавить переопределение</button>
+
+      <div id="fieldOverrideEditor" class="admin-editor-box" style="display:none;">
+        <div class="admin-field-group">
+          <label class="admin-label">Тип документа</label>
+          <select id="overrideTypeSelect" class="admin-input"></select>
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Поля <span class="admin-hint">через запятую</span></label>
+          <input type="text" id="overrideFieldsInput" class="admin-input" placeholder="ФИО, Дата рождения, Серия и номер">
+        </div>
+        <div class="admin-form-actions">
+          <button class="btn-primary" id="confirmFieldOverrideBtn" type="button">Сохранить</button>
+          <button class="btn-secondary" id="cancelFieldOverrideBtn" type="button">Отмена</button>
+        </div>
+      </div>
+
+      <h3 class="admin-section-title">Свои типы документов <span class="admin-hint">— типы, которых нет в стандартном списке</span></h3>
+      <div id="customTypesList" class="admin-override-list"></div>
+      <button class="btn-secondary" id="addCustomTypeBtn" type="button">+ Добавить тип</button>
+
+      <div id="customTypeEditor" class="admin-editor-box" style="display:none;">
+        <div class="admin-field-group">
+          <label class="admin-label">Название типа</label>
+          <input type="text" id="newTypeName" class="admin-input" placeholder="напр. Заявка на кредит">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Поля <span class="admin-hint">через запятую</span></label>
+          <input type="text" id="newTypeFields" class="admin-input" placeholder="ФИО, Номер группы, Номер подписки">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Подсказка <span class="admin-hint">необязательно — опишите, как узнать такой документ, особенно если он на другом языке</span></label>
+          <input type="text" id="newTypeHint" class="admin-input" placeholder="напр. американская карта медстраховки, на английском">
+        </div>
+        <div class="admin-form-actions">
+          <button class="btn-primary" id="confirmCustomTypeBtn" type="button">Сохранить</button>
+          <button class="btn-secondary" id="cancelCustomTypeBtn" type="button">Отмена</button>
+        </div>
+      </div>
+
+      <h3 class="admin-section-title">Бизнес-правила <span class="admin-hint">— проверка процентного соотношения между двумя полями, например «НДС ≈ 12% от суммы»</span></h3>
+      <div id="businessRulesList" class="admin-override-list"></div>
+      <button class="btn-secondary" id="addBusinessRuleBtn" type="button">+ Добавить правило</button>
+
+      <div id="businessRuleEditor" class="admin-editor-box" style="display:none;">
+        <div class="admin-field-group">
+          <label class="admin-label">Поле-база</label>
+          <input type="text" id="ruleBaseField" class="admin-input" placeholder="Сумма">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Проверяемое поле</label>
+          <input type="text" id="ruleValueField" class="admin-input" placeholder="Сумма НДС">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Ожидаемый процент от поля-базы</label>
+          <input type="number" id="ruleExpectedPercent" class="admin-input" step="0.01" placeholder="12" style="max-width:160px;">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Допуск <span class="admin-hint">± процентных пунктов от поля-базы; по умолчанию 1</span></label>
+          <input type="number" id="ruleTolerancePercent" class="admin-input" step="0.01" min="0" max="50" placeholder="1" style="max-width:160px;">
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">Уровень предупреждения</label>
+          <select id="ruleLevel" class="admin-input" style="max-width:220px;">
+            <option value="error">Ошибка (красным)</option>
+            <option value="info">Информация (жёлтым)</option>
+          </select>
+        </div>
+        <div class="admin-form-actions">
+          <button class="btn-primary" id="confirmBusinessRuleBtn" type="button">Сохранить</button>
+          <button class="btn-secondary" id="cancelBusinessRuleBtn" type="button">Отмена</button>
+        </div>
+      </div>
+
+      <div class="admin-form-actions" style="margin-top:26px;">
+        <button class="btn-primary" id="saveAllBtn" type="button">Сохранить изменения</button>
+        <span id="saveStatus" class="admin-note"></span>
+      </div>
+      <div id="saveError" class="admin-error" style="display:none;"></div>
+    </div>
+
+  </section>
+
+</div>
+<script type="module" src="/settings/settings.js"></script>
+</body>
+</html>

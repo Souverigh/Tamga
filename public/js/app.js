@@ -35,6 +35,20 @@ import { initBranding, getClientSlug, getClientToken, getClientBranding } from '
 // Не блокирует остальную инициализацию: fail-open при сбое сети.
 initBranding();
 
+// Ссылка "Настройки" (Ethan, 8 сен 2026: самообслуживание клиентов — свои
+// поля/типы/бизнес-правила/бренд, см. public/settings/) — видна только когда
+// открыт клиентский пилот (?client=slug), обычным посетителям сайта незачем
+// её видеть. getClientSlug() читает URL/localStorage синхронно (см.
+// branding.js) — не нужно ждать initBranding(), сетевой запрос ни при чём.
+const settingsLink = document.getElementById('settingsLink');
+if (settingsLink) {
+  const clientSlug = getClientSlug();
+  if (clientSlug) {
+    settingsLink.href = `/settings/?client=${encodeURIComponent(clientSlug)}`;
+    settingsLink.style.display = 'inline';
+  }
+}
+
 // Сколько страниц распознавать одновременно в режиме Gemini. Раньше запросы шли
 // строго по одному (файл-за-файлом, страница-за-страницей) — весь пакет из,
 // скажем, 10 однострочных документов ждал 10 последовательных round-trip'ов.

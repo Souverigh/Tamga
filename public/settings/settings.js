@@ -1,0 +1,438 @@
+// Самообслуживание клиента (Ethan, 8 сен 2026: "чтобы клиенты сами меняли
+// поля/добавляли типы документов/устанавливали свои бизнес-правила") — в
+// дополнение к /admin (там Ethan, доступ ко ВСЕМ клиентам сразу; здесь —
+// сам клиент, доступ ТОЛЬКО к своей странице, через ?client=slug).
+//
+// Пароль — тот же, что и для входа в сам инструмент распознавания (Ethan
+// выбрал этот вариант явно, из двух предложенных). Токен хранится в
+// sessionStorage под тем же ключом, что уже использует public/js/branding.js
+// (tamga_client_token:<slug>) — если человек уже вошёл на основном сайте в
+// этой же вкладке, повторно пароль вводить не нужно.
+//
+// См. api/client-settings.js — тот же backend, что здесь дёргается.
+
+import { DOC_TYPES } from '../js/config/docSchema.js';
+
+const params = new URLSearchParams(window.location.search);
+const slug = (params.get('client') || '').trim();
+
+const TOKEN_KEY_PREFIX = 'tamga_client_token:';
+function getToken() { return slug ? sessionStorage.getItem(TOKEN_KEY_PREFIX + slug) : null; }
+function setToken(t) { sessionStorage.setItem(TOKEN_KEY_PREFIX + slug, t); }
+
+const noSlugSection = document.getElementById('noSlug');
+const gateSection = document.getElementById('gate');
+const noPasswordSection = document.getElementById('noPassword');
+const mainSection = document.getElementById('settingsMain');
+
+const passwordInput = document.getElementById('passwordInput');
+const gateBtn = document.getElementById('gateBtn');
+const gateError = document.getElementById('gateError');
+
+const fDisplayName = document.getElementById('fDisplayName');
+const fLogoUrl = document.getElementById('fLogoUrl');
+const fAccentColor = document.getElementById('fAccentColor');
+const colorSwatch = document.getElementById('colorSwatch');
+
+const fieldOverridesList = document.getElementById('fieldOverridesList');
+const addFieldOverrideBtn = document.getElementById('addFieldOverrideBtn');
+const fieldOverrideEditor = document.getElementById('fieldOverrideEditor');
+const overrideTypeSelect = document.getElementById('overrideTypeSelect');
+const overrideFieldsInput = document.getElementById('overrideFieldsInput');
+const confirmFieldOverrideBtn = document.getElementById('confirmFieldOverrideBtn');
+const cancelFieldOverrideBtn = document.getElementById('cancelFieldOverrideBtn');
+
+const customTypesList = document.getElementById('customTypesList');
+const addCustomTypeBtn = document.getElementById('addCustomTypeBtn');
+const customTypeEditor = document.getElementById('customTypeEditor');
+const newTypeName = document.getElementById('newTypeName');
+const newTypeFields = document.getElementById('newTypeFields');
+const newTypeHint = document.getElementById('newTypeHint');
+const confirmCustomTypeBtn = document.getElementById('confirmCustomTypeBtn');
+const cancelCustomTypeBtn = document.getElementById('cancelCustomTypeBtn');
+
+const businessRulesList = document.getElementById('businessRulesList');
+const addBusinessRuleBtn = document.getElementById('addBusinessRuleBtn');
+const businessRuleEditor = document.getElementById('businessRuleEditor');
+const ruleBaseField = document.getElementById('ruleBaseField');
+const ruleValueField = document.getElementById('ruleValueField');
+const ruleExpectedPercent = document.getElementById('ruleExpectedPercent');
+const ruleTolerancePercent = document.getElementById('ruleTolerancePercent');
+const ruleLevel = document.getElementById('ruleLevel');
+const confirmBusinessRuleBtn = document.getElementById('confirmBusinessRuleBtn');
+const cancelBusinessRuleBtn = document.getElementById('cancelBusinessRuleBtn');
+
+const saveAllBtn = document.getElementById('saveAllBtn');
+const saveStatus = document.getElementById('saveStatus');
+const saveError = document.getElementById('saveError');
+
+// Состояние формы — то же самое, что уходит в PATCH /api/client-settings при
+// сохранении. editingX хранит, что именно сейчас редактируется (null — новая запись).
+let state = { fieldOverrides: {}, customDocTypes: {}, businessRules: [] };
+let editingOverrideType = null;
+let editingCustomTypeName = null;
+let editingBusinessRuleIndex = null;
+
+function splitFields(text) {
+  return text.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+// --- Переопределение полей ---
+
+function renderFieldOverridesList() {
+  fieldOverridesList.innerHTML = '';
+  Object.keys(state.fieldOverrides).forEach(type => {
+    const item = document.createElement('div');
+    item.className = 'admin-override-item';
+    const main = document.createElement('div');
+    main.className = 'admin-override-item-main';
+    const title = document.createElement('div');
+    title.className = 'admin-override-item-title';
+    title.textContent = type;
+    main.appendChild(title);
+    const fieldsWrap = document.createElement('div');
+    fieldsWrap.className = 'admin-override-item-fields';
+    state.fieldOverrides[type].forEach(f => {
+      const badge = document.createElement('span');
+      badge.className = 'admin-badge';
+      badge.textContent = f;
+      fieldsWrap.appendChild(badge);
+    });
+    main.appendChild(fieldsWrap);
+    item.appendChild(main);
+
+    const btns = document.createElement('div');
+    const editBtn = document.createElement('button');
+    editBtn.className = 'admin-link-btn';
+    editBtn.textContent = 'Изменить';
+    editBtn.style.marginRight = '10px';
+    editBtn.addEventListener('click', () => openFieldOverrideEditor(type));
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'admin-override-item-remove';
+    removeBtn.textContent = 'Удалить';
+    removeBtn.addEventListener('click', () => { delete state.fieldOverrides[type]; renderFieldOverridesList(); });
+    btns.appendChild(editBtn);
+    btns.appendChild(removeBtn);
+    item.appendChild(btns);
+
+    fieldOverridesList.appendChild(item);
+  });
+}
+
+function openFieldOverrideEditor(existingType) {
+  editingOverrideType = existingType || null;
+  overrideTypeSelect.innerHTML = '';
+  const usedTypes = Object.keys(state.fieldOverrides);
+  DOC_TYPES.filter(t => t === existingType || !usedTypes.includes(t)).forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    overrideTypeSelect.appendChild(opt);
+  });
+  overrideTypeSelect.value = existingType || overrideTypeSelect.options[0].value;
+  overrideTypeSelect.disabled = !!existingType;
+  overrideFieldsInput.value = existingType ? state.fieldOverrides[existingType].join(', ') : '';
+  fieldOverrideEditor.style.display = 'block';
+  fieldOverrideEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+addFieldOverrideBtn.addEventListener('click', () => {
+  if (!DOC_TYPES.some(t => !Object.keys(state.fieldOverrides).includes(t))) {
+    alert('Переопределения уже добавлены для всех стандартных типов документов.');
+    return;
+  }
+  openFieldOverrideEditor(null);
+});
+cancelFieldOverrideBtn.addEventListener('click', () => { fieldOverrideEditor.style.display = 'none'; });
+confirmFieldOverrideBtn.addEventListener('click', () => {
+  const type = overrideTypeSelect.value;
+  const fields = splitFields(overrideFieldsInput.value);
+  if (!type || !fields.length) { alert('Выберите тип и укажите хотя бы одно поле.'); return; }
+  state.fieldOverrides[type] = fields;
+  fieldOverrideEditor.style.display = 'none';
+  renderFieldOverridesList();
+});
+
+// --- Свои типы документов ---
+
+function renderCustomTypesList() {
+  customTypesList.innerHTML = '';
+  Object.keys(state.customDocTypes).forEach(name => {
+    const entry = state.customDocTypes[name];
+    const item = document.createElement('div');
+    item.className = 'admin-override-item';
+    const main = document.createElement('div');
+    main.className = 'admin-override-item-main';
+    const title = document.createElement('div');
+    title.className = 'admin-override-item-title';
+    title.textContent = name;
+    main.appendChild(title);
+    if (entry.hint) {
+      const hint = document.createElement('div');
+      hint.className = 'admin-override-item-hint';
+      hint.textContent = entry.hint;
+      main.appendChild(hint);
+    }
+    const fieldsWrap = document.createElement('div');
+    fieldsWrap.className = 'admin-override-item-fields';
+    entry.fields.forEach(f => {
+      const badge = document.createElement('span');
+      badge.className = 'admin-badge';
+      badge.textContent = f;
+      fieldsWrap.appendChild(badge);
+    });
+    main.appendChild(fieldsWrap);
+    item.appendChild(main);
+
+    const btns = document.createElement('div');
+    const editBtn = document.createElement('button');
+    editBtn.className = 'admin-link-btn';
+    editBtn.textContent = 'Изменить';
+    editBtn.style.marginRight = '10px';
+    editBtn.addEventListener('click', () => openCustomTypeEditor(name));
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'admin-override-item-remove';
+    removeBtn.textContent = 'Удалить';
+    removeBtn.addEventListener('click', () => { delete state.customDocTypes[name]; renderCustomTypesList(); });
+    btns.appendChild(editBtn);
+    btns.appendChild(removeBtn);
+    item.appendChild(btns);
+
+    customTypesList.appendChild(item);
+  });
+}
+
+function openCustomTypeEditor(existingName) {
+  editingCustomTypeName = existingName || null;
+  newTypeName.value = existingName || '';
+  newTypeName.disabled = !!existingName;
+  const entry = existingName ? state.customDocTypes[existingName] : null;
+  newTypeFields.value = entry ? entry.fields.join(', ') : '';
+  newTypeHint.value = entry && entry.hint ? entry.hint : '';
+  customTypeEditor.style.display = 'block';
+  customTypeEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+addCustomTypeBtn.addEventListener('click', () => openCustomTypeEditor(null));
+cancelCustomTypeBtn.addEventListener('click', () => { customTypeEditor.style.display = 'none'; });
+confirmCustomTypeBtn.addEventListener('click', () => {
+  const name = newTypeName.value.trim();
+  const fields = splitFields(newTypeFields.value);
+  if (!name || !fields.length) { alert('Укажите название типа и хотя бы одно поле.'); return; }
+  if (DOC_TYPES.includes(name)) { alert('Это название совпадает со стандартным типом документа — используйте «Переопределение полей» вместо создания нового типа.'); return; }
+  if (!editingCustomTypeName && state.customDocTypes[name]) { alert('Тип с таким названием уже есть.'); return; }
+  if (editingCustomTypeName && editingCustomTypeName !== name) delete state.customDocTypes[editingCustomTypeName];
+  state.customDocTypes[name] = { fields };
+  if (newTypeHint.value.trim()) state.customDocTypes[name].hint = newTypeHint.value.trim();
+  customTypeEditor.style.display = 'none';
+  renderCustomTypesList();
+});
+
+// --- Бизнес-правила ---
+
+function ruleSummaryText(rule) {
+  const levelLabel = rule.level === 'info' ? 'информация' : 'ошибка';
+  return `«${rule.valueField}» ≈ ${rule.expectedPercent}% от «${rule.baseField}» (допуск ±${rule.tolerancePercent ?? 1}, уровень: ${levelLabel})`;
+}
+
+function renderBusinessRulesList() {
+  businessRulesList.innerHTML = '';
+  state.businessRules.forEach((rule, index) => {
+    const item = document.createElement('div');
+    item.className = 'admin-override-item';
+    const main = document.createElement('div');
+    main.className = 'admin-override-item-main';
+    const title = document.createElement('div');
+    title.className = 'admin-override-item-title';
+    title.textContent = ruleSummaryText(rule);
+    main.appendChild(title);
+    item.appendChild(main);
+
+    const btns = document.createElement('div');
+    const editBtn = document.createElement('button');
+    editBtn.className = 'admin-link-btn';
+    editBtn.textContent = 'Изменить';
+    editBtn.style.marginRight = '10px';
+    editBtn.addEventListener('click', () => openBusinessRuleEditor(index));
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'admin-override-item-remove';
+    removeBtn.textContent = 'Удалить';
+    removeBtn.addEventListener('click', () => { state.businessRules.splice(index, 1); renderBusinessRulesList(); });
+    btns.appendChild(editBtn);
+    btns.appendChild(removeBtn);
+    item.appendChild(btns);
+
+    businessRulesList.appendChild(item);
+  });
+}
+
+function openBusinessRuleEditor(existingIndex) {
+  editingBusinessRuleIndex = existingIndex != null ? existingIndex : null;
+  const existing = existingIndex != null ? state.businessRules[existingIndex] : null;
+  ruleBaseField.value = existing ? existing.baseField : '';
+  ruleValueField.value = existing ? existing.valueField : '';
+  ruleExpectedPercent.value = existing ? existing.expectedPercent : '';
+  ruleTolerancePercent.value = existing && existing.tolerancePercent != null ? existing.tolerancePercent : '';
+  ruleLevel.value = existing ? (existing.level || 'error') : 'error';
+  businessRuleEditor.style.display = 'block';
+  businessRuleEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+addBusinessRuleBtn.addEventListener('click', () => openBusinessRuleEditor(null));
+cancelBusinessRuleBtn.addEventListener('click', () => { businessRuleEditor.style.display = 'none'; });
+confirmBusinessRuleBtn.addEventListener('click', () => {
+  const baseField = ruleBaseField.value.trim();
+  const valueField = ruleValueField.value.trim();
+  const expectedPercent = Number(ruleExpectedPercent.value);
+  if (!baseField || !valueField || !ruleExpectedPercent.value.trim() || !Number.isFinite(expectedPercent)) {
+    alert('Укажите поле-базу, проверяемое поле и ожидаемый процент (число).');
+    return;
+  }
+  const rule = {
+    type: 'percentage_match',
+    baseField, valueField, expectedPercent,
+    tolerancePercent: ruleTolerancePercent.value.trim() ? Number(ruleTolerancePercent.value) : 1,
+    level: ruleLevel.value
+  };
+  if (editingBusinessRuleIndex != null) state.businessRules[editingBusinessRuleIndex] = rule;
+  else state.businessRules.push(rule);
+  businessRuleEditor.style.display = 'none';
+  renderBusinessRulesList();
+});
+
+// --- Загрузка/сохранение ---
+
+function applyLoadedConfig(data) {
+  state = {
+    fieldOverrides: data.fieldOverrides ? JSON.parse(JSON.stringify(data.fieldOverrides)) : {},
+    customDocTypes: data.customDocTypes ? JSON.parse(JSON.stringify(data.customDocTypes)) : {},
+    businessRules: Array.isArray(data.businessRules) ? JSON.parse(JSON.stringify(data.businessRules)) : []
+  };
+  fDisplayName.value = data.displayName || '';
+  fLogoUrl.value = data.logoUrl || '';
+  fAccentColor.value = data.accentColor || '';
+  colorSwatch.style.background = data.accentColor || 'var(--accent)';
+  renderFieldOverridesList();
+  renderCustomTypesList();
+  renderBusinessRulesList();
+}
+
+fAccentColor.addEventListener('input', () => {
+  colorSwatch.style.background = /^#[0-9a-fA-F]{6}$/.test(fAccentColor.value.trim()) ? fAccentColor.value.trim() : 'var(--accent)';
+});
+
+async function fetchSettings(token) {
+  const res = await fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, {
+    headers: { 'x-client-token': token }
+  });
+  const body = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, body };
+}
+
+async function saveSettings() {
+  saveError.style.display = 'none';
+  saveAllBtn.disabled = true;
+  saveStatus.textContent = 'Сохраняем…';
+  try {
+    const payload = {
+      field_overrides: Object.keys(state.fieldOverrides).length ? state.fieldOverrides : null,
+      custom_doc_types: Object.keys(state.customDocTypes).length ? state.customDocTypes : null,
+      business_rules: state.businessRules,
+      display_name: fDisplayName.value.trim() || null,
+      logo_url: fLogoUrl.value.trim() || null,
+      accent_color: fAccentColor.value.trim() || null
+    };
+    const res = await fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-client-token': getToken() },
+      body: JSON.stringify(payload)
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      saveError.textContent = body.error || 'Не удалось сохранить';
+      saveError.style.display = 'block';
+      saveStatus.textContent = '';
+      return;
+    }
+    applyLoadedConfig(body);
+    saveStatus.textContent = 'Сохранено ✓';
+    setTimeout(() => { saveStatus.textContent = ''; }, 3000);
+  } catch (err) {
+    saveError.textContent = 'Не удалось связаться с сервером, попробуйте ещё раз';
+    saveError.style.display = 'block';
+    saveStatus.textContent = '';
+  } finally {
+    saveAllBtn.disabled = false;
+  }
+}
+saveAllBtn.addEventListener('click', saveSettings);
+
+// --- Вход и первичная загрузка ---
+
+async function trySubmitPassword() {
+  const password = passwordInput.value;
+  if (!password) return;
+  gateError.style.display = 'none';
+  gateBtn.disabled = true;
+  try {
+    const res = await fetch('/api/client-auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientSlug: slug, password })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.token) {
+      gateError.textContent = data.error || 'Неверный пароль';
+      gateError.style.display = 'block';
+      gateBtn.disabled = false;
+      return;
+    }
+    setToken(data.token);
+    await loadAndShow(data.token);
+  } catch (err) {
+    gateError.textContent = 'Не удалось связаться с сервером, попробуйте ещё раз';
+    gateError.style.display = 'block';
+    gateBtn.disabled = false;
+  }
+}
+gateBtn.addEventListener('click', trySubmitPassword);
+passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') trySubmitPassword(); });
+
+async function loadAndShow(token) {
+  const { ok, status, body } = await fetchSettings(token);
+  if (ok) {
+    gateSection.style.display = 'none';
+    noPasswordSection.style.display = 'none';
+    mainSection.style.display = 'block';
+    applyLoadedConfig(body);
+    return;
+  }
+  gateBtn.disabled = false;
+  if (status === 403) {
+    // Пароль для этого клиента вообще не задан — самообслуживание недоступно
+    // (см. lib/clientAuth.js:requireClientSettingsAuth — сознательно строже
+    // обычного гейта сайта).
+    gateSection.style.display = 'none';
+    noPasswordSection.style.display = 'block';
+    return;
+  }
+  // 401 — токена нет/просрочен/неверный: показываем форму пароля.
+  gateSection.style.display = 'block';
+  mainSection.style.display = 'none';
+}
+
+async function init() {
+  if (!slug) {
+    noSlugSection.style.display = 'block';
+    return;
+  }
+  const token = getToken();
+  if (token) {
+    await loadAndShow(token);
+  } else {
+    gateSection.style.display = 'block';
+    passwordInput.focus();
+  }
+}
+
+init();
