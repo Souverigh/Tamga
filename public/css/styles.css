@@ -478,6 +478,37 @@
     .confirm-actions button{ width:100%; }
   }
 
+  /* Обратная связь (Ethan, 9 сен 2026: "кнопка, если человек туда нажимает —
+     открывается форма") — плавающая кнопка внизу справа, видна всегда,
+     независимо от статуса посетителя. Форма переиспользует .confirm-overlay/
+     .confirm-box выше (тот же визуальный язык, что и у остальных модалок). */
+  .feedback-fab{
+    position:fixed; right:20px; bottom:20px; z-index:999;
+    background:var(--ink); color:#fff; border:none; border-radius:999px;
+    padding:12px 18px; font-size:0.85rem; font-weight:600; cursor:pointer;
+    box-shadow:0 8px 20px rgba(22,23,28,0.25); transition:background .12s, transform .05s;
+  }
+  .feedback-fab:hover{ background:var(--accent); }
+  .feedback-fab:active{ transform:scale(0.97); }
+  @media (max-width:480px){
+    .feedback-fab{ right:14px; bottom:14px; padding:11px 16px; font-size:0.8rem; }
+  }
+  .feedback-intro{ font-size:0.85rem; color:var(--ink-soft); margin:0 0 16px; line-height:1.5; }
+  .feedback-field{ margin-bottom:14px; }
+  .feedback-label{ display:block; font-size:0.82rem; font-weight:600; margin-bottom:6px; }
+  .feedback-hint{ font-weight:400; color:var(--ink-soft); font-size:0.78rem; }
+  .feedback-textarea{
+    width:100%; box-sizing:border-box; font-family:'Inter', sans-serif; font-size:0.9rem;
+    padding:10px 12px; border:1px solid var(--line-strong); border-radius:6px;
+    background:var(--bg); resize:vertical; color:var(--ink);
+  }
+  .feedback-textarea:focus{ outline:none; border-color:var(--accent); background:#fff; }
+  .feedback-error{
+    color:var(--danger); background:var(--danger-tint); border-radius:6px;
+    padding:8px 12px; font-size:0.85rem; margin-bottom:12px;
+  }
+  .feedback-status{ font-size:0.85rem; color:var(--ink-soft); min-height:1.2em; margin-bottom:4px; }
+
   /* Гейт клиентского пилота (?client=slug с паролем, см. public/js/branding.js) —
      та же схема оверлея, что .confirm-overlay выше, но во весь экран поверх
      полностью скрытого приложения (#appRoot скрыт через html.tamga-gate-pending,

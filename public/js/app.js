@@ -18,6 +18,7 @@ import { downloadCsv } from './export/csvExport.js';
 import { downloadJson } from './export/jsonExport.js';
 import { downloadZip } from './export/zipExport.js';
 import { initFileList, getSelectedFiles, getSelectedDocTypes, getExtraDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
+import { initFeedback } from './ui/feedback.js';
 import {
   startProgress, finishProgress, setOverallProgress,
   createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError,
@@ -34,6 +35,7 @@ import { initBranding, refreshClientUsage, getClientSlug, getClientToken, getCli
 // White-label фасад для клиентских пилотов (?client=slug в URL) — см. branding.js.
 // Не блокирует остальную инициализацию: fail-open при сбое сети.
 initBranding();
+initFeedback(); // не зависит от branding/клиента — кнопка видна всегда, см. feedback.js
 
 // Сколько страниц распознавать одновременно в режиме Gemini. Раньше запросы шли
 // строго по одному (файл-за-файлом, страница-за-страницей) — весь пакет из,

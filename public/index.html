@@ -208,6 +208,35 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- Обратная связь (Ethan, 9 сен 2026: "для всех клиентов и даже на
+     бесплатной версии") — кнопка видна всегда, независимо от статуса
+     посетителя (клиент/анонимный/с паролем/без). -->
+<button id="feedbackBtn" class="feedback-fab" type="button" title="Сообщить о проблеме или задать вопрос">💬 Обратная связь</button>
+
+<div id="feedbackOverlay" class="confirm-overlay" style="display:none;">
+  <div class="confirm-box">
+    <div class="confirm-message" style="margin-bottom:4px;">Обратная связь</div>
+    <p class="feedback-intro">Нашли баг или есть вопрос — напишите нам, ответим на info@adre-cloud.app.</p>
+
+    <div class="feedback-field">
+      <label class="feedback-label" for="feedbackDescription">Что случилось? <span class="feedback-hint">обязательно</span></label>
+      <textarea id="feedbackDescription" class="feedback-textarea" rows="4" placeholder="Опишите проблему или вопрос…" maxlength="5000"></textarea>
+    </div>
+    <div class="feedback-field">
+      <label class="feedback-label" for="feedbackComment">Комментарий <span class="feedback-hint">необязательно</span></label>
+      <textarea id="feedbackComment" class="feedback-textarea" rows="2" placeholder="Что-то ещё, что стоит знать…" maxlength="5000"></textarea>
+    </div>
+
+    <div id="feedbackError" class="feedback-error" style="display:none;"></div>
+    <div id="feedbackStatus" class="feedback-status"></div>
+
+    <div class="btn-row confirm-actions">
+      <button class="btn-secondary" id="feedbackCancelBtn" type="button">Отмена</button>
+      <button class="btn-primary" id="feedbackSubmitBtn" type="button">Отправить</button>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="/js/app.js"></script>
 </body>
 </html>
