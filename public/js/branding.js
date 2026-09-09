@@ -68,6 +68,40 @@ function renderClientPlan(slug, config) {
   }
 }
 
+// Русское склонение "страница" по числу (1 страница, 2-4 страницы, 5-20/25-30
+// страниц и т.д. — стандартное правило по последней цифре с исключением на
+// 11-14). Нужно, т.к. дневной лимит теперь настраивается через переменную
+// окружения без передеплоя (Ethan, 9 сен 2026: "пока раскручиваемся, нужно
+// временно 20 страниц в день") — число в тексте баннера больше не константа,
+// значит и склонение слова рядом с ним нельзя зашить в HTML один раз.
+function pagesWord(n) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'страница';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'страницы';
+  return 'страниц';
+}
+
+// Подтягивает АКТУАЛЬНЫЙ дневной лимит с сервера (см. api/free-limit.js —
+// в свою очередь читает переменную окружения TAMGA_FREE_DAILY_PAGE_LIMIT) и
+// подставляет в баннер для анонимных посетителей. Fail-open по духу: сбой
+// сети просто оставляет число по умолчанию из HTML (3) — заметка о лимите не
+// настолько важна, чтобы ради неё блокировать что-либо ещё на странице.
+async function updateFreeLimitCount() {
+  const el = document.getElementById('freeLimitCount');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/free-limit');
+    if (!res.ok) return;
+    const { dailyLimit } = await res.json();
+    if (Number.isFinite(dailyLimit) && dailyLimit >= 1) {
+      el.textContent = `${dailyLimit} ${pagesWord(dailyLimit)}`;
+    }
+  } catch (_) {
+    // Тихо оставляем число по умолчанию из HTML — не критично для работы сайта.
+  }
+}
+
 export async function refreshClientUsage() {
   const slug = resolveClientSlug();
   if (!slug) return;
@@ -207,7 +241,11 @@ function showGate(slug) {
 export async function initBranding() {
   const slug = resolveClientSlug();
   renderClientPlan(slug, null);
-  if (!slug) { revealApp(); return; }
+  updateFreeLimitCount(); // fire-and-forget — не блокирует ничего на странице, независимо от ветки ниже
+  if (!slug) {
+    revealApp();
+    return;
+  }
 
   try {
     let token = getClientToken();
