@@ -250,9 +250,10 @@ function unlockControls() {
 // 8 сен 2026: "договор на 5 страниц, сфотографировал 5 раз"). Дальше идёт по
 // тому же пути, что уже работает для многостраничного PDF: recognizePage
 // вызывается на КАЖДУЮ страницу с одним и тем же presetType, а finalizeFileResult
-// берёт тип/поля с первой подходящей страницы — то есть достаточно, чтобы
-// первая (по факту съёмки/после ручной перестановки) страница была самой
-// "информативной" (с шапкой/названием документа), как и для обычного PDF.
+// объединяет поля со ВСЕХ страниц по названию поля (см. её собственный
+// комментарий) — тип документа по-прежнему берётся с первой подходящей
+// страницы, но конкретные значения полей могут прийти с любой страницы
+// группы (например, лицевая/обратная сторона техпаспорта автомобиля).
 async function loadPageImages(file) {
   if (file && file.__group) {
     // Группа — всегда картинки (fileList.js не даёт добавить PDF в группу) —
@@ -367,7 +368,19 @@ function isKnownDocType(t) {
 
 function finalizeFileResult(entry, mode) {
   let fileDocType = entry.presetType;
-  let fileFields = null;
+  // Ethan, 8 сен 2026: реальный случай — объединил лицевую и обратную сторону
+  // техпаспорта автомобиля в один документ (см. fileList.js:groupSelectedFiles),
+  // но марка/цвет (только на обратной стороне) не попали в результат. Раньше
+  // здесь брались ЦЕЛИКОМ поля с ПЕРВОЙ подходящей страницы — разумно для
+  // "статья на 5 страниц, шапка только на первой", но неверно для документов,
+  // где разные поля физически расположены на РАЗНЫХ страницах (техпаспорт —
+  // лицевая: владелец/номер регистрации, обратная: марка/цвет/VIN/год).
+  // Теперь — объединение ПО КАЖДОМУ ПОЛЮ (по label) со всех страниц: если
+  // поле с таким названием уже найдено с непустым значением на более ранней
+  // странице — оставляем его; если оно там было пустым (модель не смогла
+  // прочитать на той конкретной странице) — берём непустое значение с другой
+  // страницы, если оно там нашлось.
+  let fileFieldsMap = null; // Map<label, {label, value, confidence}>
   let fileItems = null;
   let fileColumns = null;
   let fileColumnKeys = null;
@@ -380,10 +393,17 @@ function finalizeFileResult(entry, mode) {
   for (const rec of entry.pageRecognized) {
     if (!rec) continue;
     if (!entry.presetType && fileDocType == null && rec.docType) fileDocType = rec.docType;
-    if (fileFields === null && rec.fields) fileFields = rec.fields;
+    if (rec.fields) {
+      if (!fileFieldsMap) fileFieldsMap = new Map();
+      for (const f of rec.fields) {
+        const existing = fileFieldsMap.get(f.label);
+        if (!existing || (!existing.value && f.value)) fileFieldsMap.set(f.label, f);
+      }
+    }
     if (fileItems === null && rec.items) { fileItems = rec.items; fileColumns = rec.columns || null; fileColumnKeys = rec.columnKeys || null; }
     fileConfidence = minConfidence(fileConfidence, rec.confidence);
   }
+  const fileFields = fileFieldsMap ? Array.from(fileFieldsMap.values()) : null;
 
   // Классификация и извлечение полей не должны молча ронять весь сценарий: если
   // здесь что-то пойдёт не так (например, неожиданный формат от Gemini или
