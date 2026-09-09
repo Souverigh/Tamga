@@ -110,7 +110,7 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
     // предсказуемо проходят после паузы. Остальные статусы (504, 500 и т.д.) отдаём
     // вызывающему коду как есть — там уже есть свой fallback (например, в app.js
     // follow-up просто не роняет страницу целиком, см. recognizePage).
-    if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_RETRY_ATTEMPTS) {
+    if (data?.code !== 'QUOTA_UNAVAILABLE' && RETRYABLE_STATUSES.has(res.status) && attempt < MAX_RETRY_ATTEMPTS) {
       const base = DEFAULT_RETRY_DELAY_MS[res.status] ?? FALLBACK_RETRY_DELAY_MS;
       // Небольшой джиттер (0-400мс) — при параллельном распознавании нескольких
       // страниц несколько запросов часто ловят один и тот же всплеск 503 почти

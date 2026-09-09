@@ -265,9 +265,8 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
   if (mode === 'gemini') {
     const onRetry = ({ attempt, maxAttempts, delayMs, status }) => {
       const sec = Math.ceil(delayMs / 1000);
-      // status === 429 — превышен лимит бесплатного тарифа; 503 — модель Gemini
-      // временно перегружена ("high demand"). Формулировка разная, повтор один и тот же.
-      const reason = status === 429 ? 'Превышен лимит запросов' : 'Сервис Gemini временно перегружен';
+      // HTTP-статус сам по себе не указывает, какой именно сервис недоступен.
+      const reason = status === 429 ? 'Превышен лимит запросов' : 'Сервис распознавания временно недоступен';
       onStatus(`${reason}, ждём ${sec} сек… (попытка ${attempt}/${maxAttempts})`);
     };
     const clientSlug = getClientSlug(); // white-label пилот (?client=slug) — см. branding.js

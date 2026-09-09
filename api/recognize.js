@@ -57,7 +57,7 @@ module.exports = async (req, res) => {
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {
-      res.status(err.status).json({ error: err.message });
+      res.status(err.status).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
     } else {
       console.error('recognize error:', err);
       res.status(500).json({ error: 'Внутренняя ошибка сервера' });
