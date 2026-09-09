@@ -6,6 +6,7 @@
 
 import { DOC_TYPES } from '../config/docSchema.js';
 import { getClientSlug } from '../branding.js';
+import { isHeic, convertHeicToJpeg, getResolvedHeicConversion } from '../utils/heicSupport.js';
 
 const MAX_FILES = 50;
 // Для анонимного бесплатного сайта (без ?client=slug) — пачка меньше, чем для
@@ -361,13 +362,30 @@ function buildFileRow(file, idx) {
   return row;
 }
 
+// Ethan, 8 сен 2026: HEIC-файлы (фото с iPhone) до конвертации выглядели бы
+// как "битая" миниатюра в списке (браузер не умеет отрисовать <img> из HEIC),
+// даже при том что сама обработка (см. imageLoader.js) их уже понимает.
+// thumbConversionStarted — чтобы не запускать конвертацию превью повторно
+// при каждой перерисовке (render() вызывается часто) — WeakSet по ссылке на
+// File, а не на индекс (индекс сдвигается при добавлении/удалении файлов).
+const thumbConversionStarted = new WeakSet();
+
 function render(truncated) {
   previewUrls.forEach(u => { if (u) URL.revokeObjectURL(u); }); // освобождаем память от предыдущего рендера
   // Для группы — превью первого файла (страница 1), сама группа не Blob и
-  // URL.createObjectURL на ней бы упал.
-  previewUrls = selectedFiles.map(f => (f && f.__group)
-    ? (f.files && f.files[0] ? URL.createObjectURL(f.files[0]) : null)
-    : URL.createObjectURL(f));
+  // URL.createObjectURL на ней бы упал. Для HEIC-файла (см. heicSupport.js) —
+  // если конвертация для превью уже готова (getResolvedHeicConversion),
+  // используем её; иначе временно превью того же исходного файла (браузер не
+  // отрисует HEIC, но это лучше, чем пустая ссылка, — а как только конвертация
+  // подоспеет ниже, render() перевызовется и уже подставит готовый результат).
+  previewUrls = selectedFiles.map(f => {
+    if (f && f.__group) {
+      const cover = f.files && f.files[0];
+      if (!cover) return null;
+      return URL.createObjectURL(getResolvedHeicConversion(cover) || cover);
+    }
+    return URL.createObjectURL(getResolvedHeicConversion(f) || f);
+  });
 
   // Индексы для объединения всегда сбрасываем при перерисовке — любое
   // структурное изменение списка (добавили/убрали/сгруппировали файл) сдвигает
@@ -395,6 +413,24 @@ function render(truncated) {
 
   fileListItems.innerHTML = '';
   selectedFiles.forEach((file, idx) => fileListItems.appendChild(buildFileRow(file, idx)));
+
+  // Донконвертируем превью HEIC-файлов асинхронно, не блокируя саму
+  // отрисовку строк выше. Для файла внутри группы — только обложка (первая
+  // страница), остальные страницы группы здесь не превьюшатся вообще (как и
+  // раньше) — известное ограничение, не относится к самой обработке.
+  selectedFiles.forEach(file => {
+    const target = (file && file.__group) ? (file.files && file.files[0]) : file;
+    if (target && isHeic(target) && !thumbConversionStarted.has(target)) {
+      thumbConversionStarted.add(target);
+      convertHeicToJpeg(target).then(() => {
+        // Файл мог быть убран из списка, пока шла конвертация — тогда просто
+        // не перерисовываем; если он всё ещё там (на любой позиции — индекс
+        // мог сдвинуться), render() ниже пересчитает превью заново и найдёт
+        // его исходя из АКТУАЛЬНОГО состояния selectedFiles на тот момент.
+        if (selectedFiles.includes(file)) render(false);
+      }).catch(err => console.error('Не удалось сконвертировать HEIC для превью:', target.name, err));
+    }
+  });
 
   onChange();
 }

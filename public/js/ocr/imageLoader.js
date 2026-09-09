@@ -1,12 +1,21 @@
-// Загрузка обычных изображений (JPG/PNG) и преобразование кадра (Image или Canvas) в base64.
-// Не знает ни про PDF, ни про то, какой движок распознавания будет использован дальше.
+// Загрузка обычных изображений (JPG/PNG/HEIC) и преобразование кадра (Image
+// или Canvas) в base64. Не знает про PDF; про то, какой движок распознавания
+// будет использован дальше — тоже не знает.
 
-export function loadImageFile(file) {
+import { isHeic, convertHeicToJpeg } from '../utils/heicSupport.js';
+
+export async function loadImageFile(file) {
+  // HEIC/HEIF (в основном фото с iPhone) браузер декодировать не умеет —
+  // new Image() ниже упал бы с общей ошибкой "файл повреждён", хотя файл
+  // совершенно исправен, просто в незнакомом браузеру формате (Ethan, 8 сен
+  // 2026). Конвертируем в JPEG заранее — дальше всё остальное работает как
+  // с обычной картинкой, без изменений.
+  const actualFile = isHeic(file) ? await convertHeicToJpeg(file) : file;
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve([img]);
     img.onerror = reject;
-    img.src = URL.createObjectURL(file);
+    img.src = URL.createObjectURL(actualFile);
   });
 }
 
