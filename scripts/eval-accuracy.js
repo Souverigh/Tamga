@@ -10,7 +10,6 @@ const fs = require('fs');
 const path = require('path');
 
 const { recognizeDocument } = require('../lib/recognize');
-const { isTableType } = require('../lib/docSchema');
 
 const ROOT = path.join(__dirname, '..');
 const GROUND_TRUTH_PATH = path.join(ROOT, 'eval', 'ground-truth.json');
@@ -96,16 +95,14 @@ async function evaluateOne(entry) {
   const base64 = fs.readFileSync(filePath).toString('base64');
   const mimeType = mimeTypeForFile(entry.file);
 
-  // Тот же двухшаговый путь, что и в public/js/app.js для авто-детекта:
-  // сначала классификация+текст без известного типа, и если определился
-  // табличный тип — второй запрос за items с уже известным типом.
+  // Ethan, 9 сен 2026 ("закрыть дыру с skipOcr"): дозапрос за строками
+  // таблицы для авто-детекта теперь ПОЛНОСТЬЮ ВНУТРИ recognizeDocument (см.
+  // lib/recognize.js) — раньше это было двумя отдельными вызовами прямо
+  // здесь (тот же паттерн, что был в public/js/app.js), теперь один вызов
+  // на файл, как и для любого другого типа документа.
   const first = await recognizeDocument({ base64, mimeType, docType: undefined });
-  let fields = first.fields;
-  let items = first.items;
-  if (isTableType(first.documentType)) {
-    const second = await recognizeDocument({ base64, mimeType, docType: first.documentType, skipOcr: true });
-    items = second.items;
-  }
+  const fields = first.fields;
+  const items = first.items;
 
   const docTypeCorrect = first.documentType === entry.docType;
   const result = {

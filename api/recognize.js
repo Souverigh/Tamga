@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType, docType, skipOcr, includeText, clientSlug } = req.body || {};
+    const { image, mimeType, docType, includeText, clientSlug } = req.body || {};
     let resolvedClientSlug = null;
 
     if (clientSlug) {
@@ -47,13 +47,11 @@ module.exports = async (req, res) => {
       base64: image,
       mimeType,
       docType,
-      skipOcr,
       // includeText: false — "Настройки распознавания" на странице (Ethan,
       // 9 сен 2026: "что если человеку не нужен полный текст"), человек сам
       // выключил галочку "Извлекать полный текст документа". Без неё в теле
       // запроса вообще (undefined) — recognizeDocument трактует как true, ничего
-      // не меняется для тех, кто её не трогал. НЕ влияет на списание страницы —
-      // см. комментарий у skipOcr/includeText в lib/recognize.js.
+      // не меняется для тех, кто её не трогал. НЕ влияет на списание страницы.
       includeText,
       clientSlug: resolvedClientSlug,
       // clientIp — только для анонимных запросов (без clientSlug): дневной

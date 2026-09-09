@@ -26,12 +26,15 @@ const { checkApiKey } = require('../../lib/apiKeyAuth');
 // null по той же причине, что и на уровне документа.
 //
 // Если docType передан и совпадает с одним из известных типов — классификация
-// не выполняется, поля извлекаются сразу под этот тип (короче и точнее запрос).
+// не выполняется, поля извлекаются сразу под этот тип (короче и точнее запрос,
+// и для табличных типов — за один вызов Gemini вместо двух, см. ниже).
 // Для табличных типов (сейчас — "Накладная / УПД", "Счёт-фактура / Инвойс",
 // "Акт выполненных работ", "Справочник номенклатуры") заполняется "items"
 // (массив строк по колонкам этого типа), а "fields" остаётся пустым; для
-// остальных типов — наоборот. Табличные типы поддерживаются только если
-// docType передан явно (см. lib/recognize.js).
+// остальных типов — наоборот. Табличные типы работают и БЕЗ явного docType —
+// сервер сам определит тип и при необходимости сделает внутренний дозапрос
+// за строками таблицы (один HTTP-вызов с вашей стороны в любом случае), но
+// передавать docType заранее, если он вам известен, всё равно быстрее.
 //
 // "columns"/"columnKeys" в ответе — реально использованная раскладка колонок
 // для этого запроса: стандартная (см. DOC_FIELDS в lib/docSchema.js) либо
@@ -90,9 +93,9 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType, docType, skipOcr, includeText, batchId } = req.body || {};
+    const { image, mimeType, docType, includeText, batchId } = req.body || {};
     const clientApiKey = req.headers['x-api-key'];
-    const result = await recognizeDocument({ base64: image, mimeType, docType, skipOcr, includeText, clientApiKey, batchId });
+    const result = await recognizeDocument({ base64: image, mimeType, docType, includeText, clientApiKey, batchId });
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {
