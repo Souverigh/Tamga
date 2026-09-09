@@ -120,6 +120,7 @@ const recognizeBtn = document.getElementById('recognizeBtn');
 const langSelect = document.getElementById('langSelect');
 const modeSelect = document.getElementById('modeSelect');
 const postProcessCheckbox = document.getElementById('postProcessCheckbox');
+const includeTextCheckbox = document.getElementById('includeTextCheckbox');
 const restoreBanner = document.getElementById('restoreBanner');
 const restoreBtn = document.getElementById('restoreBtn');
 const dismissRestoreBtn = document.getElementById('dismissRestoreBtn');
@@ -205,6 +206,7 @@ function lockControls() {
   langSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   modeSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   postProcessCheckbox.disabled = true;
+  includeTextCheckbox.disabled = true;
 }
 
 function unlockControls() {
@@ -213,6 +215,7 @@ function unlockControls() {
   langSelect.querySelectorAll('input').forEach(el => el.disabled = false);
   modeSelect.querySelectorAll('input').forEach(el => el.disabled = false);
   postProcessCheckbox.disabled = false;
+  includeTextCheckbox.disabled = false;
 }
 
 // file — обычный File (PDF или картинка) ИЛИ объект-группа из fileList.js
@@ -272,7 +275,12 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
     const clientSlug = getClientSlug(); // white-label пилот (?client=slug) — см. branding.js
     const clientToken = getClientToken(); // токен гейта паролем, если у клиента он задан — см. branding.js
     await geminiRateLimiter.acquire(signal);
-    const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug, clientToken });
+    // includeTextCheckbox — "Настройки распознавания" (Ethan, 9 сен 2026: "что
+    // если человеку не нужен полный текст"), читаем ЗДЕСЬ (не параметром функции)
+    // — тот же приём, что и postProcessCheckbox выше в этом файле. false — только
+    // если человек сам явно снял галочку (по умолчанию включена, см. index.html).
+    const includeText = includeTextCheckbox.checked;
+    const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug, clientToken, includeText });
     const needsTableFollowUp = !presetType && isTableType(result.docType) && (!result.items || result.items.length === 0);
     if (needsTableFollowUp) {
       onStatus('Извлекаем таблицу…');
