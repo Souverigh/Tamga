@@ -26,6 +26,7 @@ module.exports = async (req, res) => {
 
   try {
     const { image, mimeType, docType, skipOcr, clientSlug } = req.body || {};
+    let resolvedClientSlug = null;
 
     if (clientSlug) {
       // Отдельный запрос конфига здесь (recognizeDocument внутри лезет за ним ещё
@@ -34,6 +35,7 @@ module.exports = async (req, res) => {
       // про пароли/токены). Лишний запрос к Supabase дешёвый и происходит
       // только для clientSlug-запросов, не для обычных посетителей сайта.
       const config = await getClientConfig({ clientSlug });
+      if (config) resolvedClientSlug = clientSlug;
       const gate = checkClientGate({ clientSlug, passwordHash: config ? config.passwordHash : null, token: req.headers['x-client-token'] });
       if (!gate.ok) {
         res.status(gate.status).json({ error: gate.message });
@@ -46,11 +48,11 @@ module.exports = async (req, res) => {
       mimeType,
       docType,
       skipOcr,
-      clientSlug,
+      clientSlug: resolvedClientSlug,
       // clientIp — только для анонимных запросов (без clientSlug): дневной
       // лимит бесплатного сайта (см. lib/anonymousUsage.js). Для настроенных
       // клиентов не нужен — у них свой лимит по разовому пакету (page_limit).
-      clientIp: clientSlug ? undefined : extractClientIp(req)
+      clientIp: resolvedClientSlug ? undefined : extractClientIp(req)
     });
     res.status(200).json(result);
   } catch (err) {

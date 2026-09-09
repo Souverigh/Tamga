@@ -12,22 +12,20 @@
 // См. api/client-settings.js — тот же backend, что здесь дёргается.
 
 import { DOC_TYPES } from '../js/config/docSchema.js';
+import { createIdleSession } from '../js/idleSession.js';
 
 const params = new URLSearchParams(window.location.search);
 const slug = (params.get('client') || '').trim();
 
 const TOKEN_KEY_PREFIX = 'tamga_client_token:';
-function getToken() { return slug ? sessionStorage.getItem(TOKEN_KEY_PREFIX + slug) : null; }
-function setToken(t) { sessionStorage.setItem(TOKEN_KEY_PREFIX + slug, t); }
+const session = slug ? createIdleSession(TOKEN_KEY_PREFIX + slug) : null;
+function getToken() { return session ? session.get() : null; }
 
 const noSlugSection = document.getElementById('noSlug');
-const gateSection = document.getElementById('gate');
+const loadError = document.getElementById('loadError');
 const noPasswordSection = document.getElementById('noPassword');
 const mainSection = document.getElementById('settingsMain');
 
-const passwordInput = document.getElementById('passwordInput');
-const gateBtn = document.getElementById('gateBtn');
-const gateError = document.getElementById('gateError');
 
 const fDisplayName = document.getElementById('fDisplayName');
 const fLogoUrl = document.getElementById('fLogoUrl');
@@ -419,7 +417,7 @@ fAccentColor.addEventListener('input', () => {
 
 async function fetchSettings(token) {
   const res = await fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, {
-    headers: { 'x-client-token': token }
+    headers: token ? { 'x-client-token': token } : {}
   });
   const body = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, body };
@@ -505,56 +503,30 @@ changePasswordBtn.addEventListener('click', async () => {
 
 // --- Вход и первичная загрузка ---
 
-async function trySubmitPassword() {
-  const password = passwordInput.value;
-  if (!password) return;
-  gateError.style.display = 'none';
-  gateBtn.disabled = true;
-  try {
-    const res = await fetch('/api/client-auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientSlug: slug, password })
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.token) {
-      gateError.textContent = data.error || 'Неверный пароль';
-      gateError.style.display = 'block';
-      gateBtn.disabled = false;
-      return;
-    }
-    setToken(data.token);
-    await loadAndShow(data.token);
-  } catch (err) {
-    gateError.textContent = 'Не удалось связаться с сервером, попробуйте ещё раз';
-    gateError.style.display = 'block';
-    gateBtn.disabled = false;
-  }
+function returnToClient() {
+  session.clear();
+  mainSection.style.display = 'none';
+  window.location.replace(`/?client=${encodeURIComponent(slug)}`);
 }
-gateBtn.addEventListener('click', trySubmitPassword);
-passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') trySubmitPassword(); });
 
 async function loadAndShow(token) {
   const { ok, status, body } = await fetchSettings(token);
   if (ok) {
-    gateSection.style.display = 'none';
     noPasswordSection.style.display = 'none';
     mainSection.style.display = 'block';
     applyLoadedConfig(body);
     return;
   }
-  gateBtn.disabled = false;
+  mainSection.style.display = 'none';
   if (status === 403) {
     // Пароль для этого клиента вообще не задан — самообслуживание недоступно
     // (см. lib/clientAuth.js:requireClientSettingsAuth — сознательно строже
     // обычного гейта сайта).
-    gateSection.style.display = 'none';
     noPasswordSection.style.display = 'block';
     return;
   }
-  // 401 — токена нет/просрочен/неверный: показываем форму пароля.
-  gateSection.style.display = 'block';
-  mainSection.style.display = 'none';
+  if (status === 401) returnToClient();
+  else loadError.style.display = 'block';
 }
 
 async function init() {
@@ -562,12 +534,10 @@ async function init() {
     noSlugSection.style.display = 'block';
     return;
   }
-  const token = getToken();
-  if (token) {
-    await loadAndShow(token);
-  } else {
-    gateSection.style.display = 'block';
-    passwordInput.focus();
+  try {
+    await loadAndShow(getToken());
+  } catch (_) {
+    loadError.style.display = 'block';
   }
 }
 

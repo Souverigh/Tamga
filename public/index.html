@@ -9,7 +9,7 @@
   public/js/branding.js). Скрипт синхронный и стоит ДО остального контента —
   чтобы страница не мигнула обычным видом на долю секунды, пока branding.js
   ещё не успел спросить сервер, нужен ли пароль для этого slug. Сам факт
-  наличия slug в URL/localStorage не означает, что пароль реально нужен —
+  наличия slug в URL не означает, что пароль реально нужен —
   это выясняется асинхронно (см. initBranding), здесь только консервативная
   подстраховка от "мигания" на время этой проверки.
 -->
@@ -17,7 +17,7 @@
 <script>
   (function () {
     var params = new URLSearchParams(window.location.search);
-    var slug = params.get('client') || localStorage.getItem('tamga_client_slug');
+    var slug = (params.get('client') || '').trim();
     if (slug) document.documentElement.classList.add('tamga-gate-pending');
   })();
 </script>
@@ -44,6 +44,7 @@
   </header>
   <p class="tagline">Автоматическое извлечение данных из документов и классификация.</p>
   <p id="freeLimitNote" class="free-limit-note" style="display:none;">Бесплатно — 3 страницы в день без регистрации. Нужно больше? Напишите нам, чтобы подключить платный пакет.</p>
+  <p id="planUsageNote" class="free-limit-note" style="display:none;" aria-live="polite"></p>
 
   <div class="panel">
     <div class="step-label"><span class="step-num">1</span>Добавьте документ</div>

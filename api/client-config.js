@@ -23,6 +23,7 @@ const { checkClientGate } = require('../lib/clientAuth');
 // Отсутствие slug или ненайденный/пустой/без-пароля конфиг — не ошибка:
 // возвращаем {} и фронтенд просто использует брендинг по умолчанию (см. branding.js).
 module.exports = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Метод не поддерживается, используйте GET' });
     return;
@@ -35,7 +36,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const config = await getClientConfig({ clientSlug: slug });
+    const config = await getClientConfig({ clientSlug: slug, fresh: true });
     if (!config) {
       res.status(200).json({});
       return;
@@ -48,6 +49,9 @@ module.exports = async (req, res) => {
     }
 
     res.status(200).json({
+      isClient: true,
+      pageLimit: config.pageLimit,
+      pagesUsed: config.pagesUsed,
       displayName: config.displayName,
       logoUrl: config.logoUrl,
       accentColor: config.accentColor,

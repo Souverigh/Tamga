@@ -22,12 +22,8 @@
       (например, <span class="admin-mono">?client=acme</span>) — обратитесь к вашему менеджеру, если ссылки нет под рукой.</p>
   </section>
 
-  <!-- Гейт паролем — тем же, что и для входа в сам инструмент распознавания -->
-  <section id="gate" class="panel" style="display:none;">
-    <div class="step-label">Вход в настройки</div>
-    <input type="password" id="passwordInput" class="admin-input" placeholder="Пароль" autocomplete="current-password">
-    <button class="btn-primary" id="gateBtn" type="button" style="margin-top:12px;">Войти</button>
-    <div id="gateError" class="admin-error" style="display:none;"></div>
+  <section id="loadError" class="panel" style="display:none;">
+    <p>Не удалось загрузить настройки. Проверьте соединение и обновите страницу.</p>
   </section>
 
   <!-- Пароль вообще не задан для этого клиента — самообслуживание не включено -->

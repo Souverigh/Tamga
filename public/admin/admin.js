@@ -9,8 +9,10 @@
 // с тем, что реально знает бэкенд (lib/docSchema.js — серверная копия).
 
 import { DOC_TYPES, DOC_FIELDS, isTableType, columnsForType } from '../js/config/docSchema.js';
+import { createIdleSession } from '../js/idleSession.js';
 
 const SECRET_KEY = 'tamga_admin_secret';
+const session = createIdleSession(SECRET_KEY);
 
 const gate = document.getElementById('gate');
 const gateBtn = document.getElementById('gateBtn');
@@ -115,7 +117,7 @@ let state = { fieldOverrides: {}, customDocTypes: {}, legacyFields: [], business
 // lib/extraction.js:resolveTableColumns) — поэтому полный список типов, без фильтра.
 
 function adminFetch(path, options = {}) {
-  const secret = sessionStorage.getItem(SECRET_KEY);
+  const secret = session.get();
   return fetch(path, {
     ...options,
     headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret, ...(options.headers || {}) }
@@ -211,12 +213,12 @@ function createChipEditor(container, initialValues) {
 
 // --- Гейт по секрету ---
 
-async function tryEnter(secret) {
+async function tryEnter(secret, restoring = false) {
   gateError.style.display = 'none';
-  sessionStorage.setItem(SECRET_KEY, secret);
+  if (!restoring) session.set(secret);
   const res = await adminFetch('/api/admin/clients');
   if (res.status === 401 || res.status === 500) {
-    sessionStorage.removeItem(SECRET_KEY);
+    session.clear();
     const data = await res.json().catch(() => ({}));
     gateError.textContent = data.error || 'Не удалось войти';
     gateError.style.display = 'block';
@@ -228,6 +230,8 @@ async function tryEnter(secret) {
     return false;
   }
   const clients = await res.json();
+  if (!session.get()) return false;
+  secretInput.value = '';
   gate.style.display = 'none';
   adminMain.style.display = 'block';
   renderClients(clients);
@@ -237,8 +241,9 @@ async function tryEnter(secret) {
 gateBtn.addEventListener('click', () => tryEnter(secretInput.value.trim()));
 secretInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryEnter(secretInput.value.trim()); });
 
-if (sessionStorage.getItem(SECRET_KEY)) {
-  tryEnter(sessionStorage.getItem(SECRET_KEY));
+const savedSecret = session.get();
+if (savedSecret) {
+  tryEnter(savedSecret, true);
 }
 
 // --- Список клиентов ---

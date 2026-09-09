@@ -1,9 +1,7 @@
 // White-label фасад для клиентских пилотов (см. хендовер про вариант Б —
 // один код и деплой, клиент определяется по slug, а не форк на каждого).
 //
-// Slug приходит через ?client=acme в URL один раз, дальше живёт в localStorage —
-// клиенту не нужно каждый раз давать ссылку с параметром, достаточно один раз
-// открыть по ссылке с ?client=, дальше сайт сам помнит, кто это.
+// Клиент определяется только через ?client=acme. Главная без параметра — бесплатная.
 //
 // Гейт паролем (см. lib/clientAuth.js, /admin): если у клиента задан пароль,
 // /api/client-config отвечает 401 {gateRequired:true} без фасада — вместо
@@ -19,8 +17,8 @@
 // пустой slug/ненайденная запись — это нормальный случай, не ошибка).
 
 import { setExtraDocTypes } from './ui/fileList.js';
+import { createIdleSession } from './idleSession.js';
 
-const STORAGE_KEY = 'tamga_client_slug';
 const TOKEN_KEY_PREFIX = 'tamga_client_token:';
 
 // Кэш последнего успешно загруженного конфига клиента — визуальный фасад
@@ -46,12 +44,40 @@ export function getClientBranding() {
 
 function resolveClientSlug() {
   const params = new URLSearchParams(window.location.search);
-  const fromUrl = params.get('client');
-  if (fromUrl) {
-    localStorage.setItem(STORAGE_KEY, fromUrl);
-    return fromUrl;
+  return (params.get('client') || '').trim() || null;
+}
+
+function renderClientPlan(slug, config) {
+  const settings = document.getElementById('settingsLink');
+  const free = document.getElementById('freeLimitNote');
+  const usage = document.getElementById('planUsageNote');
+  const isClient = !!(slug && config && config.isClient);
+  const canOpenSettings = !!slug && (slug === 'admin' || isClient);
+  if (settings) {
+    settings.style.display = canOpenSettings ? 'inline-flex' : 'none';
+    if (canOpenSettings) settings.href = `/settings/?client=${encodeURIComponent(slug)}`;
   }
-  return localStorage.getItem(STORAGE_KEY) || null;
+  if (free) free.style.display = isClient || slug === 'admin' ? 'none' : 'block';
+  if (usage) {
+    usage.style.display = isClient ? 'block' : 'none';
+    if (isClient) {
+      usage.textContent = config.pageLimit == null
+        ? 'Тариф: безлимитный.'
+        : `Осталось ${Math.max(0, config.pageLimit - config.pagesUsed)} из ${config.pageLimit} страниц по тарифу.`;
+    }
+  }
+}
+
+export async function refreshClientUsage() {
+  const slug = resolveClientSlug();
+  if (!slug) return;
+  try {
+    const { ok, config } = await fetchClientConfig(slug, getClientToken());
+    if (ok) renderClientPlan(slug, config);
+  } catch (_) {
+    const usage = document.getElementById('planUsageNote');
+    if (usage) usage.textContent = 'Не удалось обновить остаток страниц. Обновите страницу.';
+  }
 }
 
 // Используется geminiRecognizeClient.js, чтобы приложить slug к каждому запросу
@@ -67,7 +93,7 @@ export function getClientSlug() {
 // как-то обошли (см. api/recognize.js:checkClientGate).
 export function getClientToken() {
   const slug = resolveClientSlug();
-  return slug ? sessionStorage.getItem(TOKEN_KEY_PREFIX + slug) : null;
+  return slug ? createIdleSession(TOKEN_KEY_PREFIX + slug).get() : null;
 }
 
 function applyFacade(config) {
@@ -156,7 +182,8 @@ function showGate(slug) {
           btn.disabled = false;
           return;
         }
-        sessionStorage.setItem(TOKEN_KEY_PREFIX + slug, data.token);
+        createIdleSession(TOKEN_KEY_PREFIX + slug).set(data.token);
+        input.value = '';
         gate.style.display = 'none';
         resolve(data.token);
       } catch (err) {
@@ -179,6 +206,7 @@ function showGate(slug) {
 // открывается не раньше валидного пароля, ни при каких сетевых сбоях.
 export async function initBranding() {
   const slug = resolveClientSlug();
+  renderClientPlan(slug, null);
   if (!slug) { revealApp(); return; }
 
   try {
@@ -192,6 +220,7 @@ export async function initBranding() {
 
     revealApp();
     if (ok && config) {
+      renderClientPlan(slug, config);
       applyFacade(config);
       applyCustomDocTypes(config);
       // Только безопасные для браузера поля — то же самое, что уже отдал
