@@ -10,3 +10,4 @@ node_modules
 eval/documents/
 eval/ground-truth.json
 eval/results/
+tmp/
