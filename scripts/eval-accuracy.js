@@ -109,7 +109,8 @@ async function evaluateOne(entry) {
     file: entry.file,
     expectedDocType: entry.docType,
     actualDocType: first.documentType,
-    docTypeCorrect
+    docTypeCorrect,
+    language: entry.language || '(не указан)'
   };
 
   if (!docTypeCorrect) {
@@ -186,6 +187,24 @@ async function main() {
     if (r.docTypeCorrect) byType[key].correct += 1;
   }
 
+  // По языку документа — та же идея, что byType, плюс отдельно точность
+  // полей/ячеек на язык (не только классификация), чтобы увидеть, например,
+  // что кыргызский определяется верно, но конкретные поля путаются чаще.
+  const byLanguage = {};
+  for (const r of withoutErrors) {
+    const key = r.language || '(не указан)';
+    byLanguage[key] = byLanguage[key] || {
+      total: 0, correct: 0,
+      fieldsCorrect: 0, fieldsTotal: 0,
+      itemsCorrect: 0, itemsTotal: 0
+    };
+    const stat = byLanguage[key];
+    stat.total += 1;
+    if (r.docTypeCorrect) stat.correct += 1;
+    if (r.fieldsCheck) { stat.fieldsCorrect += r.fieldsCheck.correct; stat.fieldsTotal += r.fieldsCheck.total; }
+    if (r.itemsCheck) { stat.itemsCorrect += r.itemsCheck.correct; stat.itemsTotal += r.itemsCheck.total; }
+  }
+
   let fieldsCorrectSum = 0, fieldsTotalSum = 0;
   let itemsCorrectSum = 0, itemsTotalSum = 0;
   for (const r of withoutErrors) {
@@ -198,6 +217,15 @@ async function main() {
   console.log('По типам:');
   for (const [type, stat] of Object.entries(byType)) {
     console.log(`  ${type}: ${stat.correct}/${stat.total} (${Math.round(100 * stat.correct / stat.total)}%)`);
+  }
+  if (Object.keys(byLanguage).some(k => k !== '(не указан)')) {
+    console.log('По языку документа:');
+    for (const [lang, stat] of Object.entries(byLanguage)) {
+      const typeAcc = `тип ${stat.correct}/${stat.total} (${Math.round(100 * stat.correct / stat.total)}%)`;
+      const fieldsAcc = stat.fieldsTotal ? `, поля ${stat.fieldsCorrect}/${stat.fieldsTotal} (${Math.round(100 * stat.fieldsCorrect / stat.fieldsTotal)}%)` : '';
+      const itemsAcc = stat.itemsTotal ? `, ячейки ${stat.itemsCorrect}/${stat.itemsTotal} (${Math.round(100 * stat.itemsCorrect / stat.itemsTotal)}%)` : '';
+      console.log(`  ${lang}: ${typeAcc}${fieldsAcc}${itemsAcc}`);
+    }
   }
   if (fieldsTotalSum) {
     console.log(`Поля (карточные типы): ${fieldsCorrectSum}/${fieldsTotalSum} (${Math.round(100 * fieldsCorrectSum / fieldsTotalSum)}%)`);
