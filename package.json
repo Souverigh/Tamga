@@ -7,6 +7,9 @@
     "node": ">=18"
   },
   "scripts": {
-    "eval": "node scripts/eval-accuracy.js"
+    "eval": "node scripts/eval-accuracy.js",
+    "test:consistency": "node scripts/test-consistency.js",
+    "test:pipeline": "node scripts/test-pipeline.js",
+    "test": "npm run test:consistency && npm run test:pipeline"
   }
 }

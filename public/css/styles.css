@@ -297,6 +297,12 @@
   }
   .fields-input:focus{ outline:none; border-color:var(--accent); background:#fff; }
 
+  .totals-heading{
+    font-size:0.78rem; font-weight:600; color:var(--ink-soft); text-transform:uppercase;
+    letter-spacing:0.03em; margin-bottom:6px;
+  }
+  .totals-table{ margin-top:-6px; }
+
   .line-items-table{
     margin-bottom:18px; border:1px solid var(--line); border-radius:4px;
     overflow-x:auto; overflow-y:hidden; max-width:100%; min-width:0;

@@ -37,10 +37,11 @@ export function buildCsv(groups, { maskSensitive = false } = {}) {
     if (confidence != null) {
       lines.push(toCsvRow([fileName, docType, '', 'Уверенность модели (%)', confidence, '']));
     }
-    if (isTableType(docType) && items && items.length) {
+    const hasItemsRows = isTableType(docType) && items && items.length;
+    if (hasItemsRows) {
       // columns/columnKeys с сервера (клиентский override) имеют приоритет над
       // статичной схемой — та же логика, что в xlsxExport.js. Уверенность по
-      // ячейке не запрашивается для табличных типов (см. lib/extraction.js —
+      // ячейке не запрашивается для СТРОК таблицы (см. lib/extraction.js —
       // скоуп фичи), колонка остаётся пустой для этих строк.
       const cols = columns || columnsForType(docType);
       const keys = columnKeys || keysForType(docType);
@@ -49,14 +50,22 @@ export function buildCsv(groups, { maskSensitive = false } = {}) {
           lines.push(toCsvRow([fileName, docType, i + 1, cols[k], item[key] || '', '']));
         });
       });
-    } else if (fields && fields.length) {
+    }
+    // fields — карточные поля для обычных типов, а для табличных типов с
+    // totals (Ethan, 9 сен 2026, "НДС стоит, но не распознаётся") это блок
+    // итогов документа. Отдельная от items ветка (НЕ else if!) — табличный
+    // тип может иметь одновременно и строки, и итоги, оба должны попасть в CSV.
+    // "Строка" оставляем пустой — итоги относятся к документу целиком, не к
+    // конкретной товарной позиции.
+    if (fields && fields.length) {
       // Уверенность на КОНКРЕТНОЕ поле (Ethan, 7 сен 2026, "уверенность по
-      // каждому полю") — только карточные типы (мы уже внутри ветки не-table),
-      // null (офлайн-режим/старый ответ без этого поля) — ячейка пустая.
+      // каждому полю") — null (офлайн-режим/старый ответ без этого поля) —
+      // ячейка пустая.
       fields.forEach(({ label, value, confidence: fieldConfidence }) => {
         lines.push(toCsvRow([fileName, docType, '', label, value, fieldConfidence == null ? '' : fieldConfidence]));
       });
-    } else if (confidence == null) {
+    }
+    if (!hasItemsRows && (!fields || !fields.length) && confidence == null) {
       // Пустая строка-заглушка только если вообще нечего написать про файл —
       // если confidence уже был написан выше, файл и так представлен в выводе.
       lines.push(toCsvRow([fileName, docType, '', '', '', '']));

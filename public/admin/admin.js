@@ -338,7 +338,132 @@ async function reloadClients() {
 
 // --- Блок «Переопределение полей» ---
 
+// Пикер полей для конструктора бизнес-правил (Ethan, 9 сен 2026: "могу
+// добавить такой же пикер в админку?" — портировано из public/settings/settings.js
+// один в один, оба места используют одинаковые id элементов формы правил).
+// Ниже — makeSearchablePicker (генерическая, без зависимостей от state) и
+// ruleFieldCatalog/refreshRuleFieldPickers (используют DOC_FIELDS/state этого
+// файла) — вынесены сюда, а не в отдельный общий модуль, т.к. оба файла и так
+// не делят код (разные HTML-страницы, разный набор допустимых действий).
+let ruleFieldPickersReady = false;
+
+function makeSearchablePicker(picker, placeholder) {
+  const labels = Array.from(picker.querySelectorAll('label'));
+  const details = document.createElement('details');
+  details.className = 'admin-picker-dropdown';
+  details.open = picker.dataset.open === 'true';
+  const summary = document.createElement('summary');
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.className = 'admin-input';
+  search.placeholder = placeholder;
+  search.setAttribute('aria-label', placeholder);
+  search.value = picker.dataset.search || '';
+  const list = document.createElement('div');
+  list.className = 'admin-picker-options';
+  labels.forEach(label => list.appendChild(label));
+  const empty = document.createElement('p');
+  empty.className = 'admin-note';
+  empty.textContent = 'Ничего не найдено. Попробуйте другое название.';
+  empty.setAttribute('role', 'status');
+  const normalize = value => value.toLocaleLowerCase('ru').replace(/ё/g, 'е').trim();
+  const filter = () => {
+    const terms = normalize(search.value).split(/\s+/).filter(Boolean);
+    picker.dataset.search = search.value;
+    labels.forEach(label => {
+      label.hidden = !terms.every(term => normalize(label.textContent).includes(term));
+    });
+    empty.hidden = labels.some(label => !label.hidden);
+  };
+  const updateSummary = () => {
+    const selected = labels.filter(label => label.querySelector('input').checked);
+    summary.textContent = selected.length
+      ? selected.map(label => label.querySelector('span').firstChild.textContent).join(', ')
+      : 'Выберите из списка';
+  };
+  search.addEventListener('input', filter);
+  list.addEventListener('change', updateSummary);
+  details.addEventListener('toggle', () => { picker.dataset.open = String(details.open); });
+  details.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { details.open = false; summary.focus(); }
+  });
+  details.append(summary, search, list, empty);
+  picker.appendChild(details);
+  filter();
+  updateSummary();
+}
+
+// Табличные типы (Ethan, 9 сен 2026, живой тест на /settings — тот же баг,
+// портированный сюда бы, если бы не был исправлен здесь заранее): checkBusinessRules
+// проверяет ТОЛЬКО fields, никогда items (построчную таблицу) — для табличных
+// типов единственные fields это totals (см. docSchema.js), не columns.
+function ruleFieldCatalog() {
+  const catalog = new Map();
+  const types = new Set([...DOC_TYPES, ...Object.keys(state.customDocTypes)]);
+  for (const type of types) {
+    const docFieldsEntry = DOC_FIELDS[type];
+    const isTable = docFieldsEntry && !Array.isArray(docFieldsEntry) && docFieldsEntry.mode === 'table';
+    let fields;
+    if (isTable) {
+      fields = docFieldsEntry.totals || [];
+    } else {
+      const schema = state.fieldOverrides[type] || state.customDocTypes[type]?.fields || docFieldsEntry || [];
+      fields = Array.isArray(schema) ? schema : [];
+    }
+    for (const field of fields) {
+      if (!catalog.has(field)) catalog.set(field, []);
+      catalog.get(field).push(type);
+    }
+  }
+  return catalog;
+}
+
+function refreshRuleFieldPickers() {
+  if (!ruleFieldPickersReady) return;
+  const catalog = ruleFieldCatalog();
+  for (const input of [ruleBaseField, ruleValueField, ruleSumFields, ruleTargetField, ruleEarlierField, ruleLaterField, ruleRequiredField, ruleRangeField]) {
+    const multiple = input === ruleSumFields;
+    const selected = multiple ? splitFields(input.value) : input.value ? [input.value] : [];
+    input.type = 'hidden';
+    let picker = document.getElementById(input.id + 'Picker');
+    if (!picker) {
+      picker = document.createElement('fieldset');
+      picker.id = input.id + 'Picker';
+      picker.className = 'admin-field-picker';
+      input.after(picker);
+    }
+    picker.replaceChildren();
+    const legend = document.createElement('legend');
+    legend.textContent = multiple ? 'Выберите одно или несколько полей' : 'Выберите одно поле';
+    picker.appendChild(legend);
+    const options = new Map(catalog);
+    selected.forEach(field => { if (!options.has(field)) options.set(field, []); });
+    for (const [field, types] of options) {
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = field;
+      checkbox.checked = selected.includes(field);
+      const text = document.createElement('span');
+      text.textContent = field;
+      const source = document.createElement('small');
+      source.textContent = types.length ? types.join(', ') : 'Поле удалено из списка документов — проверьте правило';
+      text.appendChild(source);
+      label.append(checkbox, text);
+      picker.appendChild(label);
+      checkbox.addEventListener('change', () => {
+        if (!multiple && checkbox.checked) {
+          picker.querySelectorAll('input').forEach(other => { if (other !== checkbox) other.checked = false; });
+        }
+        input.value = Array.from(picker.querySelectorAll('input:checked'), el => el.value).join(', ');
+      });
+    }
+    makeSearchablePicker(picker, 'Поиск по названию поля или типу документа');
+  }
+}
+
 function renderFieldOverridesList() {
+  refreshRuleFieldPickers();
   fieldOverridesList.innerHTML = '';
   const types = Object.keys(state.fieldOverrides);
   types.forEach(type => {
@@ -459,6 +584,7 @@ function renderLegacyFields() {
 // --- Блок «Кастомные типы документов» ---
 
 function renderCustomTypesList() {
+  refreshRuleFieldPickers();
   customTypesList.innerHTML = '';
   Object.keys(state.customDocTypes).forEach(name => {
     const entry = state.customDocTypes[name];
@@ -634,6 +760,8 @@ function openBusinessRuleEditor(existingIndex) {
   ruleTolerancePercent.value = existing && existing.tolerancePercent != null ? existing.tolerancePercent : '';
 
   updateRuleGroupVisibility();
+  ruleFieldPickersReady = true;
+  refreshRuleFieldPickers();
   businessRuleEditor.style.display = 'block';
   businessRuleEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
