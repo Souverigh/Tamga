@@ -102,6 +102,52 @@ let editingBusinessRuleIndex = null;
 let ruleFieldPickersReady = false;
 let selectedRuleDocTypes = null;
 
+function makeSearchablePicker(picker, placeholder) {
+  const labels = Array.from(picker.querySelectorAll('label'));
+  const details = document.createElement('details');
+  details.className = 'admin-picker-dropdown';
+  details.open = picker.dataset.open === 'true';
+  const summary = document.createElement('summary');
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.className = 'admin-input';
+  search.placeholder = placeholder;
+  search.setAttribute('aria-label', placeholder);
+  search.value = picker.dataset.search || '';
+  const list = document.createElement('div');
+  list.className = 'admin-picker-options';
+  labels.forEach(label => list.appendChild(label));
+  const empty = document.createElement('p');
+  empty.className = 'admin-note';
+  empty.textContent = 'Ничего не найдено. Попробуйте другое название.';
+  empty.setAttribute('role', 'status');
+  const normalize = value => value.toLocaleLowerCase('ru').replace(/ё/g, 'е').trim();
+  const filter = () => {
+    const terms = normalize(search.value).split(/\s+/).filter(Boolean);
+    picker.dataset.search = search.value;
+    labels.forEach(label => {
+      label.hidden = !terms.every(term => normalize(label.textContent).includes(term));
+    });
+    empty.hidden = labels.some(label => !label.hidden);
+  };
+  const updateSummary = () => {
+    const selected = labels.filter(label => label.querySelector('input').checked);
+    summary.textContent = selected.length
+      ? selected.map(label => label.querySelector('span').firstChild.textContent).join(', ')
+      : 'Выберите из списка';
+  };
+  search.addEventListener('input', filter);
+  list.addEventListener('change', updateSummary);
+  details.addEventListener('toggle', () => { picker.dataset.open = String(details.open); });
+  details.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { details.open = false; summary.focus(); }
+  });
+  details.append(summary, search, list, empty);
+  picker.appendChild(details);
+  filter();
+  updateSummary();
+}
+
 function renderRuleDocTypes() {
   if (!ruleFieldPickersReady) return;
   const picker = document.getElementById('ruleDocTypes');
@@ -114,6 +160,8 @@ function renderRuleDocTypes() {
     const label = document.createElement('label');
     const input = document.createElement('input');
     input.type = 'checkbox';
+    input.value = name;
+    input.dataset.all = String(all);
     input.checked = all ? selectedRuleDocTypes === null : selectedRuleDocTypes?.includes(name) || false;
     const text = document.createElement('span');
     text.textContent = name + (!all && !available.has(name) ? ' (тип удалён — проверьте правило)' : '');
@@ -125,11 +173,14 @@ function renderRuleDocTypes() {
         selectedRuleDocTypes = selectedRuleDocTypes || [];
         selectedRuleDocTypes = input.checked ? [...selectedRuleDocTypes, name] : selectedRuleDocTypes.filter(type => type !== name);
       }
-      renderRuleDocTypes();
+      picker.querySelectorAll('input[type="checkbox"]').forEach(option => {
+        option.checked = option.dataset.all === 'true' ? selectedRuleDocTypes === null : selectedRuleDocTypes?.includes(option.value) || false;
+      });
     });
   };
   addOption('Все документы', true);
   new Set([...available, ...(selectedRuleDocTypes || [])]).forEach(type => addOption(type));
+  makeSearchablePicker(picker, 'Поиск по типу документа');
 }
 
 // The catalog is derived from the same state as the document editors.
@@ -188,6 +239,7 @@ function refreshRuleFieldPickers() {
         input.value = Array.from(picker.querySelectorAll('input:checked'), el => el.value).join(', ');
       });
     }
+    makeSearchablePicker(picker, 'Поиск по названию поля или типу документа');
   }
 }
 
