@@ -190,8 +190,18 @@ function renderTotalsBlock(container, docType, currentFields) {
   heading.className = 'totals-heading';
   heading.textContent = 'Итоги документа';
   container.appendChild(heading);
-  const byLabel = new Map((currentFields || []).map(f => [f.label, f]));
-  const rows = totals.map(label => byLabel.get(label) || { label, value: '', confidence: null });
+  // Рендерим то, что РЕАЛЬНО пришло с сервера — БЕЗ повторного сопоставления
+  // по точному совпадению текста лейбла со статичным списком totals (было
+  // раньше: Ethan, 9 сен 2026, живой тест — сервер получил от Gemini верные
+  // 4 значения по minItems/maxItems в схеме, а блок на экране всё равно
+  // показывал пустоту, потому что byLabel.get(label) требовал ПОСИМВОЛЬНОЕ
+  // совпадение, а Gemini не гарантированно возвращает лейбл слово-в-слово,
+  // как в промпте — малейшее расхождение регистра/пробелов проваливало
+  // поиск). Статичный totals используется теперь ТОЛЬКО чтобы решить,
+  // показывать ли блок вообще, и как запасной вариант, если fields пуст
+  // (старый сохранённый результат/резерв на будущее — сейчас minItems в
+  // схеме такое не допускает, но лишняя защита не помешает).
+  const rows = (currentFields && currentFields.length) ? currentFields : totals.map(label => ({ label, value: '', confidence: null }));
   const rowsWrap = document.createElement('div');
   renderFieldsTable(rowsWrap, rows);
   container.appendChild(rowsWrap);
