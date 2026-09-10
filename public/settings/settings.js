@@ -184,12 +184,29 @@ function renderRuleDocTypes() {
 }
 
 // The catalog is derived from the same state as the document editors.
+//
+// Табличные типы (Ethan, 9 сен 2026, живой тест — правило искало "Сумма",
+// которой в fields нет вообще) — checkBusinessRules (lib/postprocess/
+// businessRules.js) проверяет ТОЛЬКО fields, никогда items (построчную
+// таблицу товаров). Для табличных типов единственные fields — это totals
+// (Сумма без НДС/Ставка/Сумма НДС/Итого, см. docSchema.js), а НЕ columns
+// построчной таблицы ('Наименование', 'Сумма' и т.п. — они физически
+// недоступны проверке правил). Раньше здесь брались columns (в т.ч. через
+// клиентский override, который относится к КОЛОНКАМ строк, а не к totals) —
+// пикер предлагал поля, которые правило никогда не сможет найти.
 function ruleFieldCatalog() {
   const catalog = new Map();
   const types = new Set([...DOC_TYPES, ...Object.keys(state.customDocTypes)]);
   for (const type of types) {
-    const schema = state.fieldOverrides[type] || state.customDocTypes[type]?.fields || DOC_FIELDS[type] || [];
-    const fields = Array.isArray(schema) ? schema : schema.columns || [];
+    const docFieldsEntry = DOC_FIELDS[type];
+    const isTable = docFieldsEntry && !Array.isArray(docFieldsEntry) && docFieldsEntry.mode === 'table';
+    let fields;
+    if (isTable) {
+      fields = docFieldsEntry.totals || [];
+    } else {
+      const schema = state.fieldOverrides[type] || state.customDocTypes[type]?.fields || docFieldsEntry || [];
+      fields = Array.isArray(schema) ? schema : [];
+    }
     for (const field of fields) {
       if (!catalog.has(field)) catalog.set(field, []);
       catalog.get(field).push(type);
