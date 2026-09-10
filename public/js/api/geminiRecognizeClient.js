@@ -2,9 +2,10 @@
 // ключ Google не хранится и не вводится в браузере, см. api/recognize.js и lib/recognize.js.
 // Если presetDocType передан (пользователь выбрал тип вручную), бекенд пропускает
 // классификацию и сразу извлекает поля под этот тип — см. lib/recognize.js.
-// options.skipOcr — не запрашивать text заново (используется для follow-up
-// запроса при авто-детекте табличного типа в app.js: text уже есть с первого
-// запроса, повторно запрашивать его — чистая избыточность).
+// options.includeText — false, если человек в "Настройках распознавания"
+// выключил "Извлекать полный текст документа" (Ethan, 9 сен 2026). По
+// умолчанию не передаётся вовсе (сервер трактует отсутствие как true) —
+// ничего не меняется для тех, кто не трогал эту настройку.
 // options.onRetry(info) — вызывается перед каждым повтором после 429, чтобы
 // вызывающий код мог показать пользователю, что и почему сейчас ждёт (см. app.js).
 // options.signal — AbortSignal: прерывает и сам fetch, и ожидание перед повтором
@@ -71,7 +72,7 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
   const base64 = pageImageToBase64(pageImage);
   const body = { image: base64, mimeType: 'image/jpeg' };
   if (presetDocType) body.docType = presetDocType;
-  if (options && options.skipOcr) body.skipOcr = true;
+  if (options && options.includeText === false) body.includeText = false;
   if (options && options.clientSlug) body.clientSlug = options.clientSlug;
   const onRetry = options && options.onRetry;
   const signal = options && options.signal;

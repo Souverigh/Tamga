@@ -18,6 +18,7 @@ import { downloadCsv } from './export/csvExport.js';
 import { downloadJson } from './export/jsonExport.js';
 import { downloadZip } from './export/zipExport.js';
 import { initFileList, getSelectedFiles, getSelectedDocTypes, getExtraDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
+import { initFeedback } from './ui/feedback.js';
 import {
   startProgress, finishProgress, setOverallProgress,
   createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError,
@@ -34,6 +35,7 @@ import { initBranding, refreshClientUsage, getClientSlug, getClientToken, getCli
 // White-label фасад для клиентских пилотов (?client=slug в URL) — см. branding.js.
 // Не блокирует остальную инициализацию: fail-open при сбое сети.
 initBranding();
+initFeedback(); // не зависит от branding/клиента — кнопка видна всегда, см. feedback.js
 
 // Сколько страниц распознавать одновременно в режиме Gemini. Раньше запросы шли
 // строго по одному (файл-за-файлом, страница-за-страницей) — весь пакет из,
@@ -120,6 +122,7 @@ const recognizeBtn = document.getElementById('recognizeBtn');
 const langSelect = document.getElementById('langSelect');
 const modeSelect = document.getElementById('modeSelect');
 const postProcessCheckbox = document.getElementById('postProcessCheckbox');
+const includeTextCheckbox = document.getElementById('includeTextCheckbox');
 const restoreBanner = document.getElementById('restoreBanner');
 const restoreBtn = document.getElementById('restoreBtn');
 const dismissRestoreBtn = document.getElementById('dismissRestoreBtn');
@@ -205,6 +208,7 @@ function lockControls() {
   langSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   modeSelect.querySelectorAll('input').forEach(el => el.disabled = true);
   postProcessCheckbox.disabled = true;
+  includeTextCheckbox.disabled = true;
 }
 
 function unlockControls() {
@@ -213,6 +217,7 @@ function unlockControls() {
   langSelect.querySelectorAll('input').forEach(el => el.disabled = false);
   modeSelect.querySelectorAll('input').forEach(el => el.disabled = false);
   postProcessCheckbox.disabled = false;
+  includeTextCheckbox.disabled = false;
 }
 
 // file — обычный File (PDF или картинка) ИЛИ объект-группа из fileList.js
@@ -252,15 +257,16 @@ function minConfidence(a, b) {
 // confidence — самооценка модели (0-100) или null, если оценки нет (см. lib/confidence.js).
 //
 // Авто-извлечение таблиц без ручного выбора типа: если тип не был известен заранее
-// (пользователь оставил «Определить автоматически»), первый запрос не мог попросить
-// у Gemini построчные items — до классификации сервер ещё не знает, какие колонки
-// нужны (см. lib/recognize.js). Если результат классификации оказался табличным типом
-// (накладная, справочник номенклатуры и т.д.) — делаем второй запрос уже с известным
-// типом. Это тот же путь, что при ручном выборе типа в списке файлов, просто выбор
-// происходит не пользователем, а по результату первого запроса. Каждый запрос — это
-// отдельный вызов serverless-функции со своим лимитом в 60 сек, так что риск 504
-// не удваивается на одном запросе. Второй запрос делаем только для табличных типов —
-// на обычных документах (паспорт, справка и т.д.) поведение не меняется.
+// (пользователь оставил «Определить автоматически») и результат классификации
+// оказался табличным типом (накладная, справочник номенклатуры и т.д.) — сервер
+// сам делает внутренний дозапрос за строками таблицы уже с известным типом, ВНУТРИ
+// одного HTTP-запроса (см. lib/recognize.js:recognizeDocument). Раньше (до 9 сен
+// 2026, "закрытие дыры с skipOcr") это было отдельным вторым HTTP-запросом ПРЯМО
+// ОТСЮДА, с параметром skipOcr:true — из-за того, что этот параметр был виден и
+// управляем снаружи, тот же приём мог применить кто угодно к самому API напрямую
+// и получить страницу бесплатно, минуя лимит. Теперь клиент делает один запрос на
+// страницу всегда, независимо от того, табличный тип или нет — сам механизм ему
+// не виден и не подконтролен.
 async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus) {
   if (mode === 'gemini') {
     const onRetry = ({ attempt, maxAttempts, delayMs, status }) => {
@@ -272,34 +278,12 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
     const clientSlug = getClientSlug(); // white-label пилот (?client=slug) — см. branding.js
     const clientToken = getClientToken(); // токен гейта паролем, если у клиента он задан — см. branding.js
     await geminiRateLimiter.acquire(signal);
-    const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug, clientToken });
-    const needsTableFollowUp = !presetType && isTableType(result.docType) && (!result.items || result.items.length === 0);
-    if (needsTableFollowUp) {
-      onStatus('Извлекаем таблицу…');
-      try {
-        // skipOcr: true — text уже есть от первого запроса (result.text), повторно
-        // просить у Gemini полную OCR-расшифровку в этом запросе незачем: это
-        // чистая избыточность, раздувающая объём ответа без пользы (см. лог рефакторинга).
-        await geminiRateLimiter.acquire(signal); // это ОТДЕЛЬНЫЙ запрос — тоже считается в лимит
-        // Колонки берутся из ВТОРОГО запроса (tableResult), не из первого — у
-        // первого их не может быть: та классификация ещё не знала тип, поэтому
-        // сервер не мог решить, нужен ли override (см. lib/recognize.js:tableColumns).
-        const tableResult = await recognizeWithGemini(pageImage, result.docType, { skipOcr: true, onRetry, signal, clientSlug, clientToken });
-        // Два запроса на одну страницу (классификация+текст, потом строки таблицы) —
-        // берём худшую (минимальную) из двух оценок, т.к. обе относятся к одному и
-        // тому же документу: низкая уверенность в любой из частей (что это за тип,
-        // или что строки таблицы верны) одинаково значима для решения «перепроверить».
-        return { rawText: result.text, docType: result.docType, fields: result.fields, items: tableResult.items, columns: tableResult.columns, columnKeys: tableResult.columnKeys, confidence: minConfidence(result.confidence, tableResult.confidence) };
-      } catch (e) {
-        if (e && e.name === 'AbortError') throw e;
-        // Второй запрос не удался (например, 504) — не роняем страницу целиком: текст
-        // и определённый тип у нас уже есть, таблица просто останется пустой для
-        // ручного заполнения, как раньше при ручном выборе табличного типа. confidence —
-        // только от первого запроса (единственная оценка, которая у нас есть).
-        console.error('Авто-извлечение таблицы не удалось, оставляем текст и тип без строк:', e);
-        return { rawText: result.text, docType: result.docType, fields: result.fields, items: null, columns: null, columnKeys: null, confidence: result.confidence };
-      }
-    }
+    // includeTextCheckbox — "Настройки распознавания" (Ethan, 9 сен 2026: "что
+    // если человеку не нужен полный текст"), читаем ЗДЕСЬ (не параметром функции)
+    // — тот же приём, что и postProcessCheckbox выше в этом файле. false — только
+    // если человек сам явно снял галочку (по умолчанию включена, см. index.html).
+    const includeText = includeTextCheckbox.checked;
+    const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug, clientToken, includeText });
     return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys, confidence: result.confidence };
   }
   const rawText = await recognizeWithTesseract(pageImage, lang, m => {
