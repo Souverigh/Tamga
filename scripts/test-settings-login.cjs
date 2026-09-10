@@ -12,8 +12,8 @@ async function openSettings(token, status, networkError = false) {
     URLSearchParams, DOC_TYPES: [],
     createIdleSession: () => ({ get: () => token, clear: () => { cleared = true; } }),
     window: { location: { search: '?client=acme', replace: url => { redirected = url; } } },
-    document: { getElementById: id => {
-      if (!elements.has(id)) elements.set(id, { style: {}, value: '', addEventListener() {}, focus() {} });
+    document: { documentElement: { style: {} }, getElementById: id => {
+      if (!elements.has(id)) elements.set(id, { style: {}, value: '', addEventListener(event, handler) { this[event] = handler; }, focus() {} });
       return elements.get(id);
     } },
     fetch: async (url, options) => {
@@ -24,8 +24,17 @@ async function openSettings(token, status, networkError = false) {
   });
   const source = fs.readFileSync('public/settings/settings.js', 'utf8').replace(/^import .*;\r?\n/gm, '');
   await vm.runInContext(source, context);
-  return { elements, requests, redirected, cleared };
+  return { elements, requests, get redirected() { return redirected; }, get cleared() { return cleared; } };
 }
+
+test('settings logout clears the session and closes the settings page', async () => {
+  const b = await openSettings('existing-token', 200);
+  assert.equal(b.elements.get('logoutBtn').style.display, 'inline-flex');
+  b.elements.get('logoutBtn').click();
+  assert.equal(b.cleared, true);
+  assert.equal(b.redirected, '/?client=acme');
+  assert.equal(b.elements.get('settingsMain').style.display, 'none');
+});
 
 test('settings reuse client login without requesting a password', async () => {
   const b = await openSettings('existing-token', 200);

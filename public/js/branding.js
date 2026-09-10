@@ -48,6 +48,16 @@ function resolveClientSlug() {
 }
 
 function renderClientPlan(slug, config) {
+  const logout = document.getElementById('logoutBtn');
+  if (logout) {
+    logout.style.display = slug && getClientToken() ? 'inline-flex' : 'none';
+    logout.onclick = () => {
+      if (!slug) return;
+      createIdleSession(TOKEN_KEY_PREFIX + slug).clear();
+      document.documentElement.style.visibility = 'hidden';
+      window.location.replace(`/?client=${encodeURIComponent(slug)}`);
+    };
+  }
   const settings = document.getElementById('settingsLink');
   const free = document.getElementById('freeLimitNote');
   const usage = document.getElementById('planUsageNote');

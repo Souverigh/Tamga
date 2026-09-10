@@ -21,6 +21,13 @@ document.getElementById('backToApp').href = slug ? `/?client=${encodeURIComponen
 const TOKEN_KEY_PREFIX = 'tamga_client_token:';
 const session = slug ? createIdleSession(TOKEN_KEY_PREFIX + slug) : null;
 function getToken() { return session ? session.get() : null; }
+const logoutBtn = document.getElementById('logoutBtn');
+logoutBtn.style.display = getToken() ? 'inline-flex' : 'none';
+logoutBtn.addEventListener('click', () => {
+  if (!session) return;
+  document.documentElement.style.visibility = 'hidden';
+  returnToClient();
+});
 
 const noSlugSection = document.getElementById('noSlug');
 const loadError = document.getElementById('loadError');

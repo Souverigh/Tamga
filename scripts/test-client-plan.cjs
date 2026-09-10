@@ -3,25 +3,45 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-function facade(search, config = {}) {
+function facade(search, config = {}, token = 'token') {
   const elements = new Map();
+  const cleared = [];
+  let redirected;
   const storage = new Map([['tamga_client_slug', 'admin']]);
   const context = vm.createContext({
-    URLSearchParams, window: { location: { search } },
+    URLSearchParams, window: { location: { search, replace: url => { redirected = url; } } },
     localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
-    createIdleSession: () => ({ get: () => 'token' }), setExtraDocTypes() {},
+    createIdleSession: key => ({ get: () => token, clear: () => { cleared.push(key); } }), setExtraDocTypes() {},
     document: {
       getElementById: id => {
         if (!elements.has(id)) elements.set(id, { style: { display: 'none' }, textContent: '' });
         return elements.get(id);
       },
-      documentElement: { classList: { remove() {} } },
+      documentElement: { style: {}, classList: { remove() {} } },
     },
     fetch: async () => ({ ok: true, json: async () => config }), console,
   });
   vm.runInContext(fs.readFileSync('public/js/branding.js', 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, ''), context);
-  return { context, elements };
+  return { context, elements, cleared, get redirected() { return redirected; } };
 }
+
+test('logout clears only the current client session and returns to its login', async () => {
+  const b = facade('?client=acme', { isClient: true });
+  await b.context.initBranding();
+  assert.equal(b.elements.get('logoutBtn').style.display, 'inline-flex');
+  b.elements.get('logoutBtn').onclick();
+  assert.deepEqual(b.cleared, ['tamga_client_token:acme']);
+  assert.equal(b.redirected, '/?client=acme');
+  assert.equal(b.context.document.documentElement.style.visibility, 'hidden');
+});
+
+test('logout is hidden without a client or without a session', async () => {
+  for (const search of ['', '?client=acme']) {
+    const b = facade(search, { isClient: true }, null);
+    await b.context.initBranding();
+    assert.equal(b.elements.get('logoutBtn').style.display, 'none');
+  }
+});
 
 test('root page ignores previously saved admin slug', async () => {
   const b = facade('');
