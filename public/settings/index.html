@@ -105,6 +105,7 @@
 
       <div id="businessRuleEditor" class="admin-editor-box" style="display:none;">
         <div class="admin-field-group">
+          <fieldset id="ruleDocTypes" class="admin-field-picker" style="margin-bottom:16px;"></fieldset>
           <label class="admin-label">Тип правила</label>
           <select id="ruleType" class="admin-input">
             <option value="percentage_match">Процентное соотношение</option>
@@ -144,7 +145,7 @@
             <p>Товар 1 000 + доставка 200 = итого 1 200. Если указано итого 1 500, появится предупреждение. Допуск 1 разрешает расхождение до 1% от итогового поля; допуск 0 требует точного совпадения.</p>
           </details>
           <div class="admin-field-group">
-            <label class="admin-label">Складываемые поля <span class="admin-hint">через запятую</span></label>
+            <label class="admin-label">Складываемые поля</label>
             <input type="text" id="ruleSumFields" class="admin-input" placeholder="Строка 1, Строка 2, Строка 3">
           </div>
           <div class="admin-field-group">

@@ -11,7 +11,7 @@
 //
 // См. api/client-settings.js — тот же backend, что здесь дёргается.
 
-import { DOC_TYPES } from '../js/config/docSchema.js';
+import { DOC_TYPES, DOC_FIELDS } from '../js/config/docSchema.js';
 import { createIdleSession } from '../js/idleSession.js';
 
 const params = new URLSearchParams(window.location.search);
@@ -99,6 +99,97 @@ let state = { fieldOverrides: {}, customDocTypes: {}, businessRules: [] };
 let editingOverrideType = null;
 let editingCustomTypeName = null;
 let editingBusinessRuleIndex = null;
+let ruleFieldPickersReady = false;
+let selectedRuleDocTypes = null;
+
+function renderRuleDocTypes() {
+  if (!ruleFieldPickersReady) return;
+  const picker = document.getElementById('ruleDocTypes');
+  picker.replaceChildren();
+  const legend = document.createElement('legend');
+  legend.textContent = 'Применять к документам';
+  picker.appendChild(legend);
+  const available = new Set([...DOC_TYPES, ...Object.keys(state.customDocTypes)]);
+  const addOption = (name, all = false) => {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = all ? selectedRuleDocTypes === null : selectedRuleDocTypes?.includes(name) || false;
+    const text = document.createElement('span');
+    text.textContent = name + (!all && !available.has(name) ? ' (тип удалён — проверьте правило)' : '');
+    label.append(input, text);
+    picker.appendChild(label);
+    input.addEventListener('change', () => {
+      if (all) selectedRuleDocTypes = input.checked ? null : [];
+      else {
+        selectedRuleDocTypes = selectedRuleDocTypes || [];
+        selectedRuleDocTypes = input.checked ? [...selectedRuleDocTypes, name] : selectedRuleDocTypes.filter(type => type !== name);
+      }
+      renderRuleDocTypes();
+    });
+  };
+  addOption('Все документы', true);
+  new Set([...available, ...(selectedRuleDocTypes || [])]).forEach(type => addOption(type));
+}
+
+// The catalog is derived from the same state as the document editors.
+function ruleFieldCatalog() {
+  const catalog = new Map();
+  const types = new Set([...DOC_TYPES, ...Object.keys(state.customDocTypes)]);
+  for (const type of types) {
+    const schema = state.fieldOverrides[type] || state.customDocTypes[type]?.fields || DOC_FIELDS[type] || [];
+    const fields = Array.isArray(schema) ? schema : schema.columns || [];
+    for (const field of fields) {
+      if (!catalog.has(field)) catalog.set(field, []);
+      catalog.get(field).push(type);
+    }
+  }
+  return catalog;
+}
+
+function refreshRuleFieldPickers() {
+  if (!ruleFieldPickersReady) return;
+  const catalog = ruleFieldCatalog();
+  for (const input of [ruleBaseField, ruleValueField, ruleSumFields, ruleTargetField, ruleEarlierField, ruleLaterField, ruleRequiredField, ruleRangeField]) {
+    const multiple = input === ruleSumFields;
+    const selected = multiple ? splitFields(input.value) : input.value ? [input.value] : [];
+    input.type = 'hidden';
+    let picker = document.getElementById(input.id + 'Picker');
+    if (!picker) {
+      picker = document.createElement('fieldset');
+      picker.id = input.id + 'Picker';
+      picker.className = 'admin-field-picker';
+      input.after(picker);
+    }
+    picker.replaceChildren();
+    const legend = document.createElement('legend');
+    legend.textContent = multiple ? 'Выберите одно или несколько полей' : 'Выберите одно поле';
+    picker.appendChild(legend);
+    const options = new Map(catalog);
+    // Preserve existing rules when a field was removed from its document.
+    selected.forEach(field => { if (!options.has(field)) options.set(field, []); });
+    for (const [field, types] of options) {
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = field;
+      checkbox.checked = selected.includes(field);
+      const text = document.createElement('span');
+      text.textContent = field;
+      const source = document.createElement('small');
+      source.textContent = types.length ? types.join(', ') : 'Поле удалено из списка документов — проверьте правило';
+      text.appendChild(source);
+      label.append(checkbox, text);
+      picker.appendChild(label);
+      checkbox.addEventListener('change', () => {
+        if (!multiple && checkbox.checked) {
+          picker.querySelectorAll('input').forEach(other => { if (other !== checkbox) other.checked = false; });
+        }
+        input.value = Array.from(picker.querySelectorAll('input:checked'), el => el.value).join(', ');
+      });
+    }
+  }
+}
 
 function splitFields(text) {
   return text.split(',').map(s => s.trim()).filter(Boolean);
@@ -107,6 +198,7 @@ function splitFields(text) {
 // --- Переопределение полей ---
 
 function renderFieldOverridesList() {
+  refreshRuleFieldPickers();
   fieldOverridesList.innerHTML = '';
   Object.keys(state.fieldOverrides).forEach(type => {
     const item = document.createElement('div');
@@ -183,6 +275,8 @@ confirmFieldOverrideBtn.addEventListener('click', () => {
 // --- Свои типы документов ---
 
 function renderCustomTypesList() {
+  refreshRuleFieldPickers();
+  renderRuleDocTypes();
   customTypesList.innerHTML = '';
   Object.keys(state.customDocTypes).forEach(name => {
     const entry = state.customDocTypes[name];
@@ -287,6 +381,10 @@ function renderBusinessRulesList() {
     const title = document.createElement('div');
     title.className = 'admin-override-item-title';
     title.textContent = ruleSummaryText(rule);
+    const scope = document.createElement('div');
+    scope.className = 'admin-note';
+    scope.textContent = 'Документы: ' + (rule.docTypes ? rule.docTypes.join(', ') : 'Все документы');
+    main.appendChild(scope);
     main.appendChild(title);
     item.appendChild(main);
 
@@ -325,6 +423,7 @@ ruleType.addEventListener('change', updateRuleGroupVisibility);
 function openBusinessRuleEditor(existingIndex) {
   editingBusinessRuleIndex = existingIndex != null ? existingIndex : null;
   const existing = existingIndex != null ? state.businessRules[existingIndex] : null;
+  selectedRuleDocTypes = existing?.docTypes ? [...existing.docTypes] : null;
 
   ruleType.value = existing ? existing.type : 'percentage_match';
   ruleType.disabled = !!existing; // при редактировании тип не меняем — проще создать заново, чем переносить поля между формами
@@ -344,6 +443,9 @@ function openBusinessRuleEditor(existingIndex) {
   ruleTolerancePercent.value = existing && existing.tolerancePercent != null ? existing.tolerancePercent : '';
 
   updateRuleGroupVisibility();
+  ruleFieldPickersReady = true;
+  renderRuleDocTypes();
+  refreshRuleFieldPickers();
   businessRuleEditor.style.display = 'block';
   businessRuleEditor.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -351,6 +453,10 @@ function openBusinessRuleEditor(existingIndex) {
 addBusinessRuleBtn.addEventListener('click', () => openBusinessRuleEditor(null));
 cancelBusinessRuleBtn.addEventListener('click', () => { businessRuleEditor.style.display = 'none'; });
 confirmBusinessRuleBtn.addEventListener('click', () => {
+  if (selectedRuleDocTypes !== null && !selectedRuleDocTypes.length) {
+    alert('Выберите хотя бы один тип документа или «Все документы».');
+    return;
+  }
   const type = ruleType.value;
   const level = ruleLevel.value;
   const tolerancePercent = ruleTolerancePercent.value.trim() ? Number(ruleTolerancePercent.value) : 1;
@@ -396,6 +502,7 @@ confirmBusinessRuleBtn.addEventListener('click', () => {
     rule = { type, field, min: hasMin ? Number(ruleRangeMin.value) : null, max: hasMax ? Number(ruleRangeMax.value) : null, level };
   }
 
+  if (selectedRuleDocTypes !== null) rule.docTypes = [...selectedRuleDocTypes];
   if (editingBusinessRuleIndex != null) state.businessRules[editingBusinessRuleIndex] = rule;
   else state.businessRules.push(rule);
   businessRuleEditor.style.display = 'none';

@@ -2,6 +2,11 @@
    из основного /css/styles.css, здесь только специфичная для админки разметка. */
 
 .admin-wrap{ max-width:860px; }
+.admin-field-picker{ margin:0; padding:8px 12px; border:1px solid var(--line); border-radius:6px; max-height:240px; overflow-y:auto; min-width:0; }
+.admin-field-picker legend{ font-size:0.8rem; color:var(--ink-soft); padding:0 4px; }
+.admin-field-picker label{ display:flex; align-items:flex-start; gap:10px; padding:8px 0; cursor:pointer; font-size:0.88rem; overflow-wrap:anywhere; }
+.admin-field-picker input{ flex-shrink:0; margin-top:4px; accent-color:var(--accent); }
+.admin-field-picker small{ display:block; color:var(--ink-soft); font-size:0.75rem; margin-top:3px; }
 
 .admin-rule-help{
   margin:0 0 16px; padding:12px 14px; border:1px solid var(--line);

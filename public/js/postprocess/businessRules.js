@@ -214,7 +214,7 @@ const RULE_CHECKERS = {
 // только со встроенными двумя правилами дат.
 // Возвращает [{ level, message }, ...] — пустой массив, если проверять
 // нечего или замечаний не нашлось.
-export function checkBusinessRules(fields, clientRules = []) {
+export function checkBusinessRules(fields, clientRules = [], docType = null) {
   const warnings = [];
   const issue = parseDate(findValue(fields, 'Дата выдачи'));
   const expiry = parseDate(findValue(fields, 'Дата окончания'));
@@ -236,6 +236,7 @@ export function checkBusinessRules(fields, clientRules = []) {
 
   if (Array.isArray(clientRules)) {
     clientRules.forEach(rule => {
+      if (rule && rule.docTypes !== undefined && (!Array.isArray(rule.docTypes) || !rule.docTypes.includes(docType))) return;
       const checker = rule && RULE_CHECKERS[rule.type];
       if (!checker) return; // неизвестный тип — молча пропускаем (уже отфильтрован на чтении/записи, но не гадаем)
       const result = checker(fields, rule);

@@ -687,6 +687,8 @@ confirmBusinessRuleBtn.addEventListener('click', () => {
   }
 
   if (editingBusinessRuleIndex != null) {
+    const scope = state.businessRules[editingBusinessRuleIndex].docTypes;
+    if (scope) rule.docTypes = [...scope];
     state.businessRules[editingBusinessRuleIndex] = rule;
   } else {
     state.businessRules.push(rule);

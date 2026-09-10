@@ -272,7 +272,7 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
   function renderWarnings(currentFields) {
     const branding = getClientBranding();
     const clientRules = (branding && branding.businessRules) || [];
-    const warnings = [...duplicateWarnings, ...checkBusinessRules(currentFields, clientRules)];
+    const warnings = [...duplicateWarnings, ...checkBusinessRules(currentFields, clientRules, typeSelect.value)];
     group._tamgaWarnings = warnings;
     warningsContainer.innerHTML = '';
     const box = buildWarningsBox(warnings);
