@@ -16,6 +16,7 @@ import { createIdleSession } from '../js/idleSession.js';
 
 const params = new URLSearchParams(window.location.search);
 const slug = (params.get('client') || '').trim();
+document.getElementById('backToApp').href = slug ? `/?client=${encodeURIComponent(slug)}` : '/';
 
 const TOKEN_KEY_PREFIX = 'tamga_client_token:';
 const session = slug ? createIdleSession(TOKEN_KEY_PREFIX + slug) : null;
