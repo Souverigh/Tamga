@@ -376,7 +376,16 @@ function finalizeFileResult(entry, mode) {
     if (!fileDocType || !isKnownDocType(fileDocType)) fileDocType = 'Другое';
 
     // Извлечение полей (независимый модуль) — только если Gemini их ещё не вернул в этом же запросе.
-    fields = isTableType(fileDocType) ? [] : (fileFields || extractFieldsHeuristic(joinedText, fileDocType));
+    // fileFields имеет приоритет ВСЕГДА, включая табличные типы (Ethan, 9 сен
+    // 2026, "НДС стоит, но не распознаётся") — раньше здесь стояло безусловное
+    // "isTableType(fileDocType) ? [] : ...", написанное ДО фичи totals, когда
+    // табличные типы действительно никогда не получали fields от Gemini. Теперь
+    // Счёт-фактура/Накладная/Акт МОГУТ вернуть fields (блок итогов НДС, см.
+    // lib/docSchema.js:totalsForType) — эта строка тихо обнуляла их, даже когда
+    // сервер уже прислал верные данные. extractFieldsHeuristic (офлайн-эвристика)
+    // всё ещё не умеет табличные типы — для них при отсутствии fileFields
+    // (офлайн-режим/тип без totals) остаётся [], как и раньше.
+    fields = fileFields || (isTableType(fileDocType) ? [] : extractFieldsHeuristic(joinedText, fileDocType));
     // Товарные строки: офлайн-эвристика их не производит (см. heuristicExtractor.js) —
     // без Gemini таблица придёт пустой, пользователь заполнит вручную в интерфейсе.
     items = fileItems || [];
