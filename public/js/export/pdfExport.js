@@ -114,14 +114,20 @@ function buildOffscreenContainer(groups, { maskSensitive = false, branding = nul
       card.appendChild(confEl);
     }
 
-    if (items && items.length > 0) {
+    const hasItemsRows = items && items.length > 0;
+    if (hasItemsRows) {
       card.appendChild(buildLineItemsTable(docType, items, columns, columnKeys));
-    } else if (fields.length === 0) {
+    }
+    // fields — карточные поля для обычных типов, а для табличных типов с
+    // totals (Ethan, 9 сен 2026, "НДС стоит, но не распознаётся") — блок
+    // итогов документа. Отдельная от items ветка (НЕ else if!) — раньше
+    // непустая таблица строк полностью скрывала бы итоги ниже неё.
+    if (!hasItemsRows && fields.length === 0) {
       const emptyEl = document.createElement('div');
       emptyEl.textContent = 'Поля не заполнены';
       emptyEl.style.cssText = 'font-size:11px; color:#5B5F52;';
       card.appendChild(emptyEl);
-    } else {
+    } else if (fields.length > 0) {
       const table = document.createElement('table');
       table.style.cssText = 'width:100%; border-collapse:collapse; font-size:11px;';
       // Уверенность на КОНКРЕТНОЕ поле (Ethan, 7 сен 2026, "уверенность по

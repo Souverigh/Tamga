@@ -49,23 +49,28 @@ export const DOC_FIELDS = {
   // columns/columnKeys (например, старый сохранённый результат) — рассинхрон
   // с сервером означал бы, что для части документов рендерится/экспортируется
   // на 2 колонки меньше, чем реально извлечено.
+  // totals — ДОЛЖНО совпадать с lib/docSchema.js (серверная копия), см. её
+  // комментарий (9 сен 2026, блок итогов НДС отдельно от построчного).
   'Накладная / УПД': {
     mode: 'table',
     columns: ['Наименование', 'Артикул', 'Цена', 'Количество', 'Сумма', 'Ставка НДС', 'Сумма НДС'],
     keys: ['name', 'id', 'price', 'qty', 'sum', 'vatRate', 'vatSum'],
-    description: 'an invoice/goods delivery note with a table of line items'
+    description: 'an invoice/goods delivery note with a table of line items',
+    totals: ['Сумма без НДС', 'Ставка НДС', 'Сумма НДС', 'Итого с НДС']
   },
   'Счёт-фактура / Инвойс': {
     mode: 'table',
     columns: ['Наименование', 'Артикул', 'Цена', 'Количество', 'Сумма', 'Ставка НДС', 'Сумма НДС'],
     keys: ['name', 'id', 'price', 'qty', 'sum', 'vatRate', 'vatSum'],
-    description: 'an invoice issued for payment, with a table of line items, structurally similar to a goods delivery note but issued before/for payment rather than confirming delivery'
+    description: 'an invoice issued for payment, with a table of line items, structurally similar to a goods delivery note but issued before/for payment rather than confirming delivery',
+    totals: ['Сумма без НДС', 'Ставка НДС', 'Сумма НДС', 'Итого с НДС']
   },
   'Акт выполненных работ': {
     mode: 'table',
     columns: ['Наименование работ/услуг', 'Ед. изм.', 'Количество', 'Цена', 'Сумма', 'Ставка НДС', 'Сумма НДС'],
     keys: ['name', 'unit', 'qty', 'price', 'sum', 'vatRate', 'vatSum'],
-    description: 'a certificate of completed work or services, with a table of line items for labor/services rendered rather than physical goods'
+    description: 'a certificate of completed work or services, with a table of line items for labor/services rendered rather than physical goods',
+    totals: ['Сумма без НДС', 'Ставка НДС', 'Сумма НДС', 'Итого с НДС']
   },
   'Справочник номенклатуры': {
     mode: 'table',
@@ -94,4 +99,11 @@ export function columnsForType(docType) {
 export function keysForType(docType) {
   const entry = DOC_FIELDS[docType];
   return isTableType(docType) ? entry.keys : null;
+}
+
+// Документ-уровневые итоговые поля (см. комментарий у totals выше) — null,
+// если у табличного типа их нет.
+export function totalsForType(docType) {
+  const entry = DOC_FIELDS[docType];
+  return (isTableType(docType) && Array.isArray(entry.totals) && entry.totals.length) ? entry.totals : null;
 }

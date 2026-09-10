@@ -2,7 +2,7 @@
 // (текст + поля), сворачивание, чтение текущего (уже отредактированного
 // пользователем) состояния для экспорта. Не знает, как текст был распознан.
 
-import { DOC_TYPES, isTableType, columnsForType, keysForType } from '../config/docSchema.js';
+import { DOC_TYPES, isTableType, columnsForType, keysForType, totalsForType } from '../config/docSchema.js';
 import { getExtraDocTypes } from './fileList.js';
 import { extractFieldsHeuristic } from '../extraction/heuristicExtractor.js';
 import { checkBusinessRules } from '../postprocess/businessRules.js';
@@ -171,6 +171,32 @@ function renderLineItemsTable(container, docType, items, columnsOverride, keysOv
   container.appendChild(addRowBtn);
 }
 
+// Блок документ-уровневых итогов (Ethan, 9 сен 2026: "НДС стоит, но не
+// распознаётся" — на многих реальных счетах-фактурах/накладных/актах НДС
+// указан ТОЛЬКО одним блоком в итогах, а не по каждой строке товаров) —
+// отдельная карточка label/value ПОД таблицей строк, только у табличных
+// типов, для которых определён totals (см. docSchema.js). Переиспользует
+// renderFieldsTable для самих строк — визуально это обычная карточка полей,
+// просто внутри другого контейнера. currentFields — то, что реально пришло
+// с сервера/от предыдущего рендера; сверяем по label, чтобы порядок и полнота
+// набора итоговых полей были стабильны, даже если модель вернула их не в том
+// порядке или пропустила часть (тогда просто пустое значение для этого лейбла).
+function renderTotalsBlock(container, docType, currentFields) {
+  container.innerHTML = '';
+  const totals = totalsForType(docType);
+  if (!totals) { container.style.display = 'none'; return; }
+  container.style.display = '';
+  const heading = document.createElement('div');
+  heading.className = 'totals-heading';
+  heading.textContent = 'Итоги документа';
+  container.appendChild(heading);
+  const byLabel = new Map((currentFields || []).map(f => [f.label, f]));
+  const rows = totals.map(label => byLabel.get(label) || { label, value: '', confidence: null });
+  const rowsWrap = document.createElement('div');
+  renderFieldsTable(rowsWrap, rows);
+  container.appendChild(rowsWrap);
+}
+
 // Ключи читаются напрямую из input.dataset.key, а НЕ пересчитываются заново
 // через keysForType(docType) — при клиентском override ключи техническте
 // (col0, col1, ...) и не совпадают со статичной схемой типа; пересчёт заново
@@ -288,15 +314,22 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
   // отличаются от статичной схемы docSchema.js и больше нигде не сохранены.
   group._tamgaColumns = tableMode ? (columns || null) : null;
   group._tamgaColumnKeys = tableMode ? (columnKeys || null) : null;
+  const totalsTable = document.createElement('div');
+  totalsTable.className = 'fields-table totals-table';
   if (tableMode) {
     renderLineItemsTable(fieldsTable, docType, items || [], columns, columnKeys);
+    renderTotalsBlock(totalsTable, docType, fields);
   } else {
     renderFieldsTable(fieldsTable, fields);
+    totalsTable.style.display = 'none';
   }
   collapsible.appendChild(fieldsTable);
-  // Табличные типы приходят с fields=[] (см. lib/recognize.js) — checkBusinessRules
-  // на пустом массиве просто ничего не найдёт и молча вернёт [], отдельная
-  // ветка на tableMode не нужна.
+  collapsible.appendChild(totalsTable);
+  // Табличные типы без totals приходят с fields=[] (см. lib/recognize.js) —
+  // checkBusinessRules на пустом массиве просто ничего не найдёт и молча
+  // вернёт [], отдельная ветка не нужна. У типов С totals (Ethan, 9 сен 2026)
+  // fields теперь содержит блок итогов документа — бизнес-правила по датам/
+  // суммам применяются к нему так же, как к обычной карточке полей.
   renderWarnings(fields);
 
   // Смена типа документа вручную в результатах пересчитывает поля локально —
@@ -314,12 +347,17 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
     group._tamgaColumnKeys = null;
     if (newTableMode) {
       renderLineItemsTable(fieldsTable, newType, []);
+      // Ручная смена типа не знает старых значений итогов нового типа (нет
+      // Gemini-вызова здесь) — просто пустые строки под правильные лейблы,
+      // пользователь заполнит вручную, как и со строками таблицы выше.
+      renderTotalsBlock(totalsTable, newType, []);
       renderWarnings([]);
     } else {
       const areas = collapsible.querySelectorAll('.page-result textarea');
       const currentText = Array.from(areas).map(a => a.value).join('\n');
       const newFields = extractFieldsHeuristic(currentText, newType);
       renderFieldsTable(fieldsTable, newFields);
+      totalsTable.style.display = 'none';
       renderWarnings(newFields);
     }
   });
@@ -397,7 +435,12 @@ export function getFileGroups() {
     const areas = group.querySelectorAll('.page-result textarea');
     const text = Array.from(areas).map((a, i) => areas.length > 1 ? `[Страница ${i + 1}]\n${a.value}` : a.value).join('\n\n');
     const tableMode = group.dataset.mode === 'table';
-    const fields = tableMode ? [] : Array.from(group.querySelectorAll('.fields-row')).map(row => ({
+    // .fields-row теперь встречается и у табличных типов (блок итогов НДС,
+    // см. renderTotalsBlock, Ethan 9 сен 2026) — раньше здесь стояло
+    // "tableMode ? [] : ...", когда fields для табличных типов не существовал
+    // в принципе. Для табличного типа БЕЗ totals querySelectorAll просто
+    // ничего не найдёт (totalsTable скрыт и пуст) — тот же результат [].
+    const fields = Array.from(group.querySelectorAll('.fields-row')).map(row => ({
       label: row.querySelector('.fields-label').textContent,
       value: row.querySelector('.fields-input').value,
       // Уверенность на поле (см. renderFieldsTable выше) — читается из dataset,
