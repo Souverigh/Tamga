@@ -116,6 +116,12 @@
         </div>
 
         <div id="ruleGroupPercentage">
+          <details class="admin-rule-help" open>
+            <summary><span aria-hidden="true">ⓘ</span> Как работает процентное соотношение</summary>
+            <p>Проверяет, что одно поле составляет заданный процент от другого.</p>
+            <p><strong>Пример настройки:</strong> поле-база — «Сумма», проверяемое поле — «Сумма НДС», ожидаемый процент — 12.</p>
+            <p>При сумме 10 000 ожидается НДС 1 200. С допуском 1 допустимы значения от 1 100 до 1 300; при 1 500 появится предупреждение. Допуск считается от поля-базы.</p>
+          </details>
           <div class="admin-field-group">
             <label class="admin-label">Поле-база</label>
             <input type="text" id="ruleBaseField" class="admin-input" placeholder="Сумма">
@@ -131,6 +137,12 @@
         </div>
 
         <div id="ruleGroupSum" style="display:none;">
+          <details class="admin-rule-help" open>
+            <summary><span aria-hidden="true">ⓘ</span> Как работает сумма полей</summary>
+            <p>Складывает значения указанных полей и сравнивает результат с итоговым полем.</p>
+            <p><strong>Пример настройки:</strong> складываемые поля — «Стоимость товара, Доставка», итоговое поле — «Итого».</p>
+            <p>Товар 1 000 + доставка 200 = итого 1 200. Если указано итого 1 500, появится предупреждение. Допуск 1 разрешает расхождение до 1% от итогового поля; допуск 0 требует точного совпадения.</p>
+          </details>
           <div class="admin-field-group">
             <label class="admin-label">Складываемые поля <span class="admin-hint">через запятую</span></label>
             <input type="text" id="ruleSumFields" class="admin-input" placeholder="Строка 1, Строка 2, Строка 3">
@@ -142,6 +154,12 @@
         </div>
 
         <div id="ruleGroupDateOrder" style="display:none;">
+          <details class="admin-rule-help" open>
+            <summary><span aria-hidden="true">ⓘ</span> Как работает порядок дат</summary>
+            <p>Проверяет, что первая дата не позже второй. Одинаковые даты допустимы.</p>
+            <p><strong>Пример настройки:</strong> более раннее поле — «Дата начала», более позднее — «Дата окончания».</p>
+            <p>Начало 01.09.2026, окончание 30.09.2026 — всё верно. Если окончание 20.08.2026, появится предупреждение.</p>
+          </details>
           <div class="admin-field-group">
             <label class="admin-label">Более раннее поле-дата</label>
             <input type="text" id="ruleEarlierField" class="admin-input" placeholder="Дата начала">
@@ -153,6 +171,12 @@
         </div>
 
         <div id="ruleGroupRequired" style="display:none;">
+          <details class="admin-rule-help" open>
+            <summary><span aria-hidden="true">ⓘ</span> Как работает обязательное поле</summary>
+            <p>Предупреждает, если указанное поле отсутствует или не заполнено.</p>
+            <p><strong>Пример настройки:</strong> обязательное поле — «ИНН».</p>
+            <p>ИНН заполнен — проверка пройдена. ИНН пустой или не найден — появится предупреждение. Это правило проверяет наличие значения, а не правильность номера.</p>
+          </details>
           <div class="admin-field-group">
             <label class="admin-label">Обязательное поле</label>
             <input type="text" id="ruleRequiredField" class="admin-input" placeholder="ИНН">
@@ -160,6 +184,12 @@
         </div>
 
         <div id="ruleGroupRange" style="display:none;">
+          <details class="admin-rule-help" open>
+            <summary><span aria-hidden="true">ⓘ</span> Как работает диапазон значения</summary>
+            <p>Проверяет, что число находится в заданных пределах, включая сами границы. Можно задать только минимум или только максимум.</p>
+            <p><strong>Пример настройки:</strong> поле — «Количество», минимум — 1, максимум — 100.</p>
+            <p>Значения 1, 50 и 100 допустимы. При 0 или 101 появится предупреждение.</p>
+          </details>
           <div class="admin-field-group">
             <label class="admin-label">Поле</label>
             <input type="text" id="ruleRangeField" class="admin-input" placeholder="Сумма">
