@@ -143,6 +143,9 @@ function renderLineItemsTable(container, docType, items, columnsOverride, keysOv
   container.innerHTML = '';
   const columns = columnsOverride || columnsForType(docType);
   const keys = keysOverride || keysForType(docType);
+  const columnWidths = keys.map((_, i) => i === 0 ? 'minmax(280px, 2fr)' : 'minmax(140px, 1fr)');
+  container.style.setProperty('--line-items-columns', [...columnWidths, '28px'].join(' '));
+  container.style.setProperty('--line-items-min-width', `${280 + Math.max(0, keys.length - 1) * 140 + 28 + keys.length * 8 + 20}px`);
 
   const header = document.createElement('div');
   header.className = 'line-items-row line-items-header';
