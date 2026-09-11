@@ -5,8 +5,7 @@
 import { classifyByKeywords } from './classification/keywordClassifier.js';
 import { extractFieldsHeuristic } from './extraction/heuristicExtractor.js';
 import { postProcessText } from './postprocess/textCleanup.js';
-import { loadPdfPages } from './ocr/pdfLoader.js';
-import { loadImageFile } from './ocr/imageLoader.js';
+import { iterateFilePages, releasePageImage } from './ocr/pageSource.js';
 import { recognizeWithTesseract, cancelTesseract } from './ocr/tesseractClient.js';
 import { recognizeWithGemini } from './api/geminiRecognizeClient.js';
 import { saveResultsToStorage, loadSavedResults, clearSavedResults } from './storage/resultsStorage.js';
@@ -28,7 +27,7 @@ import { showResults, hideResults, initResultsCollapseToggle, getFileGroups } fr
 import { initSettings, getSelectedMode, getSelectedLang } from './ui/settings.js';
 import { showToast, showConfirm } from './ui/notify.js';
 import { isTableType, DOC_TYPES } from './config/docSchema.js';
-import { runWithConcurrency } from './utils/concurrencyPool.js';
+import { runStreamWithConcurrency } from './utils/concurrencyPool.js';
 import { createRateLimiter } from './utils/rateLimiter.js';
 import { initBranding, refreshClientUsage, getClientSlug, getClientToken, getClientBranding } from './branding.js';
 
@@ -218,27 +217,6 @@ function unlockControls() {
   modeSelect.querySelectorAll('input').forEach(el => el.disabled = false);
   postProcessCheckbox.disabled = false;
   includeTextCheckbox.disabled = false;
-}
-
-// file — обычный File (PDF или картинка) ИЛИ объект-группа из fileList.js
-// ({ __group: true, files: File[] }) — несколько отдельных фото, которые
-// пользователь вручную объединил в один многостраничный документ (Ethan,
-// 8 сен 2026: "договор на 5 страниц, сфотографировал 5 раз"). Дальше идёт по
-// тому же пути, что уже работает для многостраничного PDF: recognizePage
-// вызывается на КАЖДУЮ страницу с одним и тем же presetType, а finalizeFileResult
-// объединяет поля со ВСЕХ страниц по названию поля (см. её собственный
-// комментарий) — тип документа по-прежнему берётся с первой подходящей
-// страницы, но конкретные значения полей могут прийти с любой страницы
-// группы (например, лицевая/обратная сторона техпаспорта автомобиля).
-async function loadPageImages(file) {
-  if (file && file.__group) {
-    // Группа — всегда картинки (fileList.js не даёт добавить PDF в группу) —
-    // loadImageFile на каждый файл по отдельности, затем в один плоский список
-    // страниц В ТОМ ПОРЯДКЕ, что установлен в оверлее перестановки.
-    const perFilePages = await Promise.all(file.files.map(f => loadImageFile(f)));
-    return perFilePages.flat();
-  }
-  return file.type === 'application/pdf' ? loadPdfPages(file) : loadImageFile(file);
 }
 
 // null-safe минимум — confidence может быть null (Tesseract, __unparsed-ответ,
@@ -431,69 +409,78 @@ recognizeBtn.addEventListener('click', async () => {
     abortController.abort(); // прерывает и уже летящие запросы к Gemini, и паузы между повторами
   });
 
-  // Фаза 1: открыть все файлы и подготовить строки прогресса — быстро, локально,
-  // без сети, поэтому делаем последовательно (нет смысла распараллеливать).
-  const fileEntries = [];
-  for (let f = 0; f < selectedFiles.length; f++) {
-    const file = selectedFiles[f];
-    const pagesWrap = createFileProgressGroup(f, file.name);
-    let pageImages;
-    try {
-      pageImages = await loadPageImages(file);
-    } catch (e) {
-      showFileOpenError(pagesWrap);
-      fileEntries.push(null);
-      continue;
-    }
-    addPageRows(pagesWrap, f, pageImages.length);
-    const presetType = selectedDocTypes[f] && selectedDocTypes[f] !== 'auto' ? selectedDocTypes[f] : null;
-    fileEntries.push({
-      file,
-      presetType,
-      pageImages,
-      pageTexts: new Array(pageImages.length).fill(''),
-      pageRecognized: new Array(pageImages.length).fill(null)
-    });
-  }
-
-  // Фаза 2: сами запросы распознавания — независимо по всем страницам всех файлов
-  // сразу (а не строго по одному файл-за-файлом/страница-за-страницей, как было
-  // раньше), но с ограничением на число одновременных запросов. Ограничение —
-  // не искусственное, а чтобы не упереться в лимит бесплатного тарифа Gemini
-  // (20 запросов/мин) при большом пакете файлов; для офлайн-режима (Tesseract)
-  // держим по одному, т.к. tesseractClient.js хранит один активный воркер —
-  // параллельные вызовы сломали бы отмену и были бы тяжелы для мобильных браузеров.
-  const tasks = [];
-  for (let f = 0; f < fileEntries.length; f++) {
-    if (!fileEntries[f]) continue;
-    for (let i = 0; i < fileEntries[f].pageImages.length; i++) tasks.push([f, i]);
-  }
-  const totalTasks = tasks.length;
-  let completedCount = 0;
+  const fileEntries = new Array(selectedFiles.length).fill(null);
+  let totalTasks = 0;
   let doneCount = 0;
   let errorCount = 0;
-  recognizeBtn.textContent = totalTasks ? 'Распознаём…' : 'Распознавание…';
-  setProgressSummary(0, 0, totalTasks);
-  // Порог подобран на глаз: до ~20 страниц интереснее видеть весь список целиком,
-  // после — список из десятков успешных файлов только мешает следить за тем, что
-  // ещё в процессе или упало (см. жалобу на неудобство при 50-100 документах).
-  setDefaultHideCompleted(totalTasks > 20);
-
-  // Пересчитываем лимиты ПЕРЕД стартом этого конкретного прогона (не один раз
-  // при загрузке страницы) — на момент загрузки модуля клиентский конфиг ещё
-  // не успел прийти (initBranding — fire-and-forget), а здесь пользователь уже
-  // выбрал файлы и нажал «Распознать», так что fetch почти наверняка успел.
+  let failedFiles = 0;
+  let preparing = true;
+  let hideCompletedInitialized = false;
+  recognizeBtn.textContent = 'Распознаём…';
+  const updateProgress = () => {
+    setProgressSummary(doneCount, errorCount, totalTasks, preparing);
+    // Weight by file so discovering another PDF cannot move the bar backwards.
+    const completedFiles = fileEntries.reduce((sum, entry) =>
+      sum + (entry && entry.pageTexts.length ? entry.completed / entry.pageTexts.length : 0), failedFiles);
+    setOverallProgress(Math.min(preparing ? 0.99 : 1, completedFiles / selectedFiles.length));
+    if (totalTasks > 20 && !hideCompletedInitialized) {
+      setDefaultHideCompleted(true);
+      hideCompletedInitialized = true;
+    }
+  };
+  updateProgress();
   const { concurrency: effectiveConcurrency, rpmBudget: effectiveRpmBudget } = computeEffectiveLimits();
-  if (effectiveRpmBudget !== GEMINI_RPM_BUDGET) {
-    geminiRateLimiter = createRateLimiter(effectiveRpmBudget, 60000);
+  geminiRateLimiter = createRateLimiter(effectiveRpmBudget, 60000);
+
+  async function* pageTasks() {
+    try {
+      for (let fileIndex = 0; fileIndex < selectedFiles.length && !cancelled; fileIndex++) {
+        const file = selectedFiles[fileIndex];
+        const pagesWrap = createFileProgressGroup(fileIndex, file.name);
+        const entry = {
+          file,
+          presetType: selectedDocTypes[fileIndex] && selectedDocTypes[fileIndex] !== 'auto' ? selectedDocTypes[fileIndex] : null,
+          pageTexts: [], pageRecognized: [], settled: [], completed: 0
+        };
+        fileEntries[fileIndex] = entry;
+        try {
+          for await (const page of iterateFilePages(file, {
+            signal: abortController.signal,
+            onPageCount: count => {
+              entry.pageTexts = new Array(count).fill('');
+              entry.pageRecognized = new Array(count).fill(null);
+              entry.settled = new Array(count).fill(false);
+              totalTasks += count;
+              addPageRows(pagesWrap, fileIndex, count);
+              updateProgress();
+            }
+          })) {
+            yield { ...page, fileIndex };
+          }
+        } catch (error) {
+          if (!cancelled) {
+            showFileOpenError(pagesWrap);
+            if (!entry.pageTexts.length) {
+              fileEntries[fileIndex] = null;
+              failedFiles++;
+            }
+          }
+        }
+      }
+    } finally {
+      preparing = false;
+      updateProgress();
+    }
   }
 
-  await runWithConcurrency(tasks, mode === 'gemini' ? effectiveConcurrency : 1, async ([fileIndex, pageIndex]) => {
+  await runStreamWithConcurrency(pageTasks(), mode === 'gemini' ? effectiveConcurrency : 1, async task => {
+    const { fileIndex, pageIndex, image, error } = task;
     const entry = fileEntries[fileIndex];
     setPageStatus(fileIndex, pageIndex, 'Распознаём…');
     try {
+      if (error) throw error;
       const { rawText, docType, fields, items, columns, columnKeys, confidence } = await recognizePage(
-        entry.pageImages[pageIndex], mode, lang, entry.presetType,
+        image, mode, lang, entry.presetType,
         abortController.signal,
         status => setPageStatus(fileIndex, pageIndex, status)
       );
@@ -505,11 +492,26 @@ recognizeBtn.addEventListener('click', async () => {
       const isAbort = e && e.name === 'AbortError';
       markPageError(fileIndex, pageIndex, isAbort ? 'Отменено' : (e && e.message ? e.message : String(e)));
       errorCount++;
+    } finally {
+      releasePageImage(image);
+      task.image = null;
+      entry.settled[pageIndex] = true;
+      entry.completed++;
+      updateProgress();
     }
-    completedCount++;
-    setProgressSummary(doneCount, errorCount, totalTasks);
-    setOverallProgress(totalTasks ? completedCount / totalTasks : 1);
-  }, () => cancelled);
+  }, () => cancelled, task => releasePageImage(task.image));
+
+  // Mark discovered pages that were never started (cancellation or source failure).
+  fileEntries.forEach((entry, fileIndex) => {
+    if (!entry) return;
+    entry.settled.forEach((settled, pageIndex) => {
+      if (!settled) {
+        markPageError(fileIndex, pageIndex, cancelled ? 'Отменено' : 'Не удалось подготовить страницу');
+        errorCount++;
+      }
+    });
+  });
+  setProgressSummary(doneCount, errorCount, totalTasks);
 
   // Фаза 3: сборка финального результата по каждому файлу — без сети, детерминированно
   // (см. комментарий в finalizeFileResult про порядок страниц, а не порядок завершения запросов).

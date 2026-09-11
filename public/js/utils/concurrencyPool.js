@@ -21,3 +21,31 @@ export async function runWithConcurrency(items, limit, worker, isCancelled) {
   const workerCount = Math.max(1, Math.min(limit, items.length));
   await Promise.all(Array.from({ length: workerCount }, runOne));
 }
+
+// Pull pages lazily: at most limit active tasks plus one prepared page.
+// Always drain workers before returning, including source/worker failures.
+export async function runStreamWithConcurrency(source, limit, worker, isCancelled = () => false, dispose = () => {}) {
+  const active = new Set();
+  const capacity = Math.max(1, Math.floor(limit) || 1);
+  let failed = false;
+  let failure;
+  try {
+    for await (const item of source) {
+      while (active.size >= capacity && !isCancelled() && !failed) {
+        await Promise.race(active);
+      }
+      if (isCancelled() || failed) {
+        dispose(item);
+        break;
+      }
+      const task = Promise.resolve().then(() => worker(item)).catch(error => {
+        failed = true;
+        failure = error;
+      }).finally(() => active.delete(task));
+      active.add(task);
+    }
+  } finally {
+    await Promise.all(active);
+  }
+  if (failed) throw failure;
+}

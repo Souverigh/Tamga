@@ -80,7 +80,7 @@ test('unlimited clients do not show a misleading numeric balance', async () => {
   assert.match(b.elements.get('planUsageNote').textContent, /безлимит/i);
 });
 
-test('free quota permits three pages and rejects the fourth', async () => {
+test('free quota permits twenty pages and rejects the twenty-first', async () => {
   let pages = 0;
   const context = vm.createContext({
     module: { exports: {} }, require, console,
@@ -94,8 +94,9 @@ test('free quota permits three pages and rejects the fourth', async () => {
   });
   vm.runInContext(fs.readFileSync('lib/anonymousUsage.js', 'utf8'), context);
   const consume = context.module.exports.consumeAnonymousUsage;
-  for (let i = 0; i < 3; i++) assert.equal((await consume('test-ip')).allowed, true);
+  for (let i = 0; i < 20; i++) assert.equal((await consume('test-ip')).allowed, true);
   assert.equal((await consume('test-ip')).allowed, false);
+  assert.equal(pages, 20, 'rejected page must not consume quota');
 });
 
 test('free recognition cannot bypass quota when accounting is unavailable', async () => {

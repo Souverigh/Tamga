@@ -49,12 +49,13 @@ require.cache[require.resolve(geminiClientPath)] = {
 
 // getClientConfigImpl — по умолчанию анонимный (null), сценарии переопределяют.
 let getClientConfigImpl = async () => null;
+let consumedPages = 0;
 const cflPath = path.join(ROOT, 'lib/customFieldsLookup.js');
 require.cache[require.resolve(cflPath)] = {
   id: cflPath, filename: cflPath, loaded: true,
   exports: {
     getClientConfig: (...args) => getClientConfigImpl(...args),
-    consumeUsage: async () => ({ allowed: true, pagesUsed: 1, pageLimit: 1000 })
+    consumeUsage: async () => { consumedPages++; return { allowed: true, pagesUsed: 1, pageLimit: 1000 }; }
   }
 };
 
@@ -66,6 +67,65 @@ const FAKE_BASE64 = Buffer.from('fake-image-bytes').toString('base64');
 // --- Сценарии -------------------------------------------------------------
 
 async function main() {
+  await scenario('Клиентский тип: подсказка, точные поля, одно списание за два этапа', async () => {
+    consumedPages = 0;
+    const calls = [];
+    getClientConfigImpl = async () => ({ customDocTypes: {
+      'Страховка': { hint: 'Insurance card', fields: ['Номер полиса'] }
+    }, businessRules: [] });
+    callGeminiImpl = async args => {
+      calls.push(args);
+      return { result: calls.length === 1 ? { documentType: 'Страховка' } : {
+        fields: [{ label: 'Номер полиса', value: '123', confidence: 99 }], confidence: 99
+      }, usage: null };
+    };
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg', clientSlug: 'test-client' });
+    assert.strictEqual(calls.length, 2);
+    assert.strictEqual(consumedPages, 1);
+    assert.ok(calls[0].instruction.includes('Insurance card'));
+    assert.ok(calls[0].instruction.includes('Номер полиса'));
+    assert.ok(calls[1].instruction.includes('Номер полиса'));
+    assert.strictEqual(r.documentType, 'Страховка');
+    assert.strictEqual(r.fields[0].value, '123');
+  });
+  for (const type of ['Справка', 'Счёт-фактура / Инвойс']) {
+    for (const includeText of [true, false]) {
+      await scenario(`Авто: только классификация, затем ${type}, text=${includeText}`, async () => {
+        const calls = [];
+        getClientConfigImpl = async () => null;
+        callGeminiImpl = async args => {
+          calls.push(args);
+          return { result: calls.length === 1 ? { documentType: type } : {
+            text: 'Полный текст', fields: [], items: [], confidence: 94
+          }, usage: null };
+        };
+        const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg', includeText });
+        assert.strictEqual(calls.length, 2);
+        assert.deepStrictEqual(Object.keys(calls[0].schemaProperties), ['documentType']);
+        assert.deepStrictEqual(calls[0].requiredFields, ['documentType']);
+        assert.ok(!calls[1].schemaProperties.documentType);
+        assert.strictEqual(!!calls[1].schemaProperties.text, includeText);
+        assert.strictEqual(calls[1].base64, FAKE_BASE64);
+        assert.strictEqual(r.text, includeText ? 'Полный текст' : '');
+        assert.strictEqual(r.documentType, type);
+        assert.strictEqual(r.confidence, 94);
+      });
+    }
+  }
+  await scenario('Ошибка второго этапа не превращается в пустой успешный результат', async () => {
+    let calls = 0;
+    callGeminiImpl = async () => {
+      if (++calls === 1) return { result: { documentType: 'Счёт-фактура / Инвойс' }, usage: null };
+      throw new Error('extraction failed');
+    };
+    await assert.rejects(recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg' }), /extraction failed/);
+  });
+  await scenario('Некорректная классификация останавливает извлечение', async () => {
+    let calls = 0;
+    callGeminiImpl = async () => { calls++; return { result: { documentType: 'несуществующий тип' }, usage: null }; };
+    await assert.rejects(recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg' }), /классификац/);
+    assert.strictEqual(calls, 1);
+  });
   await scenario('Карточный тип (известный docType): fields доходят до result', async () => {
     callGeminiImpl = async () => ({
       result: {

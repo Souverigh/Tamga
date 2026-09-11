@@ -36,9 +36,9 @@ export function setDefaultHideCompleted(shouldHide) {
   pagesList.classList.toggle('hide-done', shouldHide);
 }
 
-export function setProgressSummary(done, errors, total) {
+export function setProgressSummary(done, errors, total, preparing = false) {
   const remaining = Math.max(0, total - done - errors);
-  progressSummaryText.textContent = `Готово: ${done} · Ошибок: ${errors} · Осталось: ${remaining} из ${total}`;
+  progressSummaryText.textContent = `Готово: ${done} · Ошибок: ${errors} · Осталось: ${remaining} из ${total}${preparing ? ' · Подготавливаем страницы…' : ''}`;
 }
 
 export function finishProgress(cancelled) {

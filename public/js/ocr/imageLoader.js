@@ -13,9 +13,10 @@ export async function loadImageFile(file) {
   const actualFile = isHeic(file) ? await convertHeicToJpeg(file) : file;
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve([img]);
-    img.onerror = reject;
-    img.src = URL.createObjectURL(actualFile);
+    const url = URL.createObjectURL(actualFile);
+    img.onload = () => { URL.revokeObjectURL(url); resolve([img]); };
+    img.onerror = error => { URL.revokeObjectURL(url); reject(error); };
+    img.src = url;
   });
 }
 
