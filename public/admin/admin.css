@@ -113,3 +113,11 @@
   padding:4px 9px; font-size:0.8rem; cursor:pointer; font-family:inherit;
 }
 .admin-chip-suggestion:hover{ border-color:var(--accent); color:var(--accent-deep); }
+/* Accessible native checkbox styled as a switch on the client settings page. */
+.text-extraction-option { display:flex; align-items:center; gap:12px; position:relative; cursor:pointer; width:fit-content; font-weight:600; }
+.text-extraction-option input { position:absolute; width:1px; height:1px; opacity:0; }
+.text-extraction-track { flex:0 0 44px; height:26px; border-radius:20px; background:#777; position:relative; transition:background .15s; }
+.text-extraction-track::after { content:""; position:absolute; width:20px; height:20px; top:3px; left:3px; border-radius:50%; background:#fff; transition:transform .15s; }
+.text-extraction-option input:checked + .text-extraction-track { background:var(--accent, #2525de); }
+.text-extraction-option input:checked + .text-extraction-track::after { transform:translateX(18px); }
+.text-extraction-option input:focus-visible + .text-extraction-track { outline:2px solid var(--accent, #2525de); outline-offset:3px; }

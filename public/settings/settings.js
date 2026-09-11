@@ -36,6 +36,7 @@ const mainSection = document.getElementById('settingsMain');
 
 
 const fDisplayName = document.getElementById('fDisplayName');
+const fIncludeText = document.getElementById('fIncludeText');
 const fLogoUrl = document.getElementById('fLogoUrl');
 const fAccentColor = document.getElementById('fAccentColor');
 const colorSwatch = document.getElementById('colorSwatch');
@@ -581,6 +582,7 @@ confirmBusinessRuleBtn.addEventListener('click', () => {
 // --- Загрузка/сохранение ---
 
 function applyLoadedConfig(data) {
+  fIncludeText.checked = data.includeText !== false;
   state = {
     fieldOverrides: data.fieldOverrides ? JSON.parse(JSON.stringify(data.fieldOverrides)) : {},
     customDocTypes: data.customDocTypes ? JSON.parse(JSON.stringify(data.customDocTypes)) : {},
@@ -613,6 +615,7 @@ async function saveSettings() {
   saveStatus.textContent = 'Сохраняем…';
   try {
     const payload = {
+      include_text: fIncludeText.checked,
       field_overrides: Object.keys(state.fieldOverrides).length ? state.fieldOverrides : null,
       custom_doc_types: Object.keys(state.customDocTypes).length ? state.customDocTypes : null,
       business_rules: state.businessRules,

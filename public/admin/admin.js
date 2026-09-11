@@ -955,6 +955,7 @@ function openForm(client) {
     fLogoUrl.value = client.logo_url || '';
     fAccentColor.value = client.accent_color || '';
     fDateFormat.value = (client.formatting && client.formatting.dateFormat) || '';
+    state.includeText = client.formatting?.includeText;
     fDecimalSeparator.value = (client.formatting && client.formatting.decimalSeparator) || '';
     fMaxConcurrency.value = (client.formatting && client.formatting.maxConcurrency) || '';
     fWebhookUrl.value = (client.formatting && client.formatting.webhookUrl) || '';
@@ -984,6 +985,7 @@ cancelFormBtn.addEventListener('click', () => { formPanel.style.display = 'none'
 
 function buildPayload() {
   const formatting = {};
+  if (typeof state.includeText === 'boolean') formatting.includeText = state.includeText;
   if (fDateFormat.value) formatting.dateFormat = fDateFormat.value;
   if (fDecimalSeparator.value) formatting.decimalSeparator = fDecimalSeparator.value;
   // Приоритетная обработка (см. lib/customFieldsLookup.js) — тоже живёт внутри

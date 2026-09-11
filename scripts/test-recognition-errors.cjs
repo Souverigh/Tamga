@@ -3,6 +3,24 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+test('explicit full-text choice is sent for both enabled and disabled states', async () => {
+  const bodies = [];
+  const context = vm.createContext({
+    pageImageToBase64: () => 'image',
+    fetch: async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return { ok: true, status: 200, json: async () => ({ text: '', fields: [], items: [] }) };
+    }
+  });
+  const source = fs.readFileSync('public/js/api/geminiRecognizeClient.js', 'utf8')
+    .replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
+  vm.runInContext(source, context);
+  await context.recognizeWithGemini('image', null, { includeText: true });
+  await context.recognizeWithGemini('image', null, { includeText: false });
+  assert.equal(bodies[0].includeText, true);
+  assert.equal(bodies[1].includeText, false);
+});
+
 test('quota storage failure is not retried as Gemini overload', async () => {
   let requests = 0;
   let retries = 0;

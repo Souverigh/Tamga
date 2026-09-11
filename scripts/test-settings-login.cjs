@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-async function openSettings(token, status, networkError = false) {
+async function openSettings(token, status, networkError = false, config = {}) {
   const elements = new Map();
   const requests = [];
   let redirected;
@@ -19,13 +19,25 @@ async function openSettings(token, status, networkError = false) {
     fetch: async (url, options) => {
       requests.push({ url, options });
       if (networkError) throw new Error('offline');
-      return { ok: status === 200, status, json: async () => ({ displayName: 'Acme' }) };
+      return { ok: status === 200, status, json: async () => ({ displayName: 'Acme', ...config }) };
     },
   });
   const source = fs.readFileSync('public/settings/settings.js', 'utf8').replace(/^import .*;\r?\n/gm, '');
   await vm.runInContext(source, context);
   return { elements, requests, get redirected() { return redirected; }, get cleared() { return cleared; } };
 }
+
+test('full-text switch loads and saves the disabled client preference', async () => {
+  const b = await openSettings('token', 200, false, { includeText: false });
+  assert.equal(b.elements.get('fIncludeText')?.checked, false);
+  await b.elements.get('saveAllBtn').click();
+  assert.equal(JSON.parse(b.requests[1].options.body).include_text, false);
+});
+
+test('full-text extraction defaults to enabled for existing clients', async () => {
+  const b = await openSettings('token', 200);
+  assert.equal(b.elements.get('fIncludeText')?.checked, true);
+});
 
 test('settings logout clears the session and closes the settings page', async () => {
   const b = await openSettings('existing-token', 200);

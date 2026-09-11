@@ -84,6 +84,7 @@ module.exports = async (req, res) => {
         fieldOverrides: config.fieldOverrides || null,
         customDocTypes: config.customDocTypes || null,
         businessRules: config.businessRules || [],
+        includeText: config.formatting?.includeText !== false,
         displayName: config.displayName || null,
         logoUrl: config.logoUrl || null,
         accentColor: config.accentColor || null
@@ -132,6 +133,10 @@ module.exports = async (req, res) => {
     // не пишем, если хоть одно поле не прошло проверку (частичная запись при
     // ошибке была бы хуже, чем явный отказ целиком).
     const updates = {};
+    if ('include_text' in body && typeof body.include_text !== 'boolean') {
+      res.status(400).json({ error: 'include_text должен быть true или false' });
+      return;
+    }
 
     if ('field_overrides' in body) {
       const { error, value } = validateFieldOverrides(body.field_overrides);
@@ -165,11 +170,14 @@ module.exports = async (req, res) => {
 
     // formatting.businessRules — read-modify-write НАПРЯМУЮ из Supabase (не из
     // кэша getClientConfig), см. комментарий в начале файла.
-    if (newBusinessRules !== null) {
+    if (newBusinessRules !== null || 'include_text' in body) {
       const rawRow = await fetchRawRow(supabaseUrl, serviceKey, clientSlug);
       const currentFormatting = (rawRow && rawRow.formatting && typeof rawRow.formatting === 'object') ? { ...rawRow.formatting } : {};
-      if (newBusinessRules.length) currentFormatting.businessRules = newBusinessRules;
-      else delete currentFormatting.businessRules;
+      if (newBusinessRules !== null) {
+        if (newBusinessRules.length) currentFormatting.businessRules = newBusinessRules;
+        else delete currentFormatting.businessRules;
+      }
+      if ('include_text' in body) currentFormatting.includeText = body.include_text;
       updates.formatting = Object.keys(currentFormatting).length ? currentFormatting : null;
     }
 
@@ -197,6 +205,7 @@ module.exports = async (req, res) => {
       fieldOverrides: saved.field_overrides || null,
       customDocTypes: saved.custom_doc_types || null,
       businessRules: (saved.formatting && Array.isArray(saved.formatting.businessRules)) ? saved.formatting.businessRules : [],
+      includeText: saved.formatting?.includeText !== false,
       displayName: saved.display_name || null,
       logoUrl: saved.logo_url || null,
       accentColor: saved.accent_color || null

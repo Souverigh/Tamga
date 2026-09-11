@@ -67,6 +67,19 @@ const FAKE_BASE64 = Buffer.from('fake-image-bytes').toString('base64');
 // --- Сценарии -------------------------------------------------------------
 
 async function main() {
+  await scenario('Сохранённый выбор полного текста применяется, явный параметр имеет приоритет', async () => {
+    getClientConfigImpl = async () => ({ formatting: { includeText: false }, businessRules: [] });
+    const schemas = [];
+    callGeminiImpl = async args => {
+      schemas.push(args.schemaProperties);
+      return { result: { text: 'Текст', fields: [], confidence: 90 }, usage: null };
+    };
+    const input = { base64: FAKE_BASE64, mimeType: 'image/jpeg', docType: 'Справка', clientSlug: 'test-client' };
+    assert.strictEqual((await recognizeDocument(input)).text, '');
+    assert.strictEqual(schemas[0].text, undefined);
+    assert.strictEqual((await recognizeDocument({ ...input, includeText: true })).text, 'Текст');
+    assert.ok(schemas[1].text);
+  });
   await scenario('Клиентский тип: подсказка, точные поля, одно списание за два этапа', async () => {
     consumedPages = 0;
     const calls = [];

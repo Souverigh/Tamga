@@ -66,7 +66,8 @@ module.exports = async (req, res) => {
       maxConcurrency: config.maxConcurrency,
       // Настраиваемые бизнес-правила (Ethan, 7 сен 2026) — тоже безопасно
       // отдавать целиком, см. комментарий в customFieldsLookup.js:getClientConfig.
-      businessRules: config.businessRules
+      businessRules: config.businessRules,
+      includeText: config.formatting?.includeText !== false
     });
   } catch (err) {
     // Fail-open — как и вся остальная кастомизация: сбой не должен мешать

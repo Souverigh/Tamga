@@ -7,6 +7,8 @@ const langSelect = document.getElementById('langSelect');
 const langNote = document.getElementById('langNote');
 
 export function initSettings() {
+  const textCheckbox = document.getElementById('includeTextCheckbox');
+  textCheckbox?.addEventListener('change', () => { textCheckbox.dataset.userChanged = 'true'; });
   function syncLangVisibility() {
     const isGemini = document.querySelector('input[name="mode"]:checked').value === 'gemini';
     langSelect.style.display = isGemini ? 'none' : 'block';

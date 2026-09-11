@@ -72,7 +72,7 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
   const base64 = pageImageToBase64(pageImage);
   const body = { image: base64, mimeType: 'image/jpeg' };
   if (presetDocType) body.docType = presetDocType;
-  if (options && options.includeText === false) body.includeText = false;
+  if (typeof options?.includeText === 'boolean') body.includeText = options.includeText;
   if (options && options.clientSlug) body.clientSlug = options.clientSlug;
   const onRetry = options && options.onRetry;
   const signal = options && options.signal;

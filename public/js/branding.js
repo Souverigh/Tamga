@@ -271,6 +271,10 @@ export async function initBranding() {
       renderClientPlan(slug, config);
       applyFacade(config);
       applyCustomDocTypes(config);
+      const textCheckbox = document.getElementById('includeTextCheckbox');
+      if (textCheckbox && !textCheckbox.disabled && !textCheckbox.dataset?.userChanged) {
+        textCheckbox.checked = config.includeText !== false;
+      }
       // Только безопасные для браузера поля — то же самое, что уже отдал
       // /api/client-config (см. его комментарий: намеренно НЕ полный конфиг).
       cachedBranding = {

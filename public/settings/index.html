@@ -40,6 +40,14 @@
   <section id="settingsMain" style="display:none;">
 
     <div class="panel">
+      <h3 class="admin-section-title" style="margin-top:0;">Распознавание</h3>
+      <label class="text-extraction-option" for="fIncludeText">
+        <input type="checkbox" role="switch" id="fIncludeText" checked aria-describedby="includeTextHelp">
+        <span class="text-extraction-track" aria-hidden="true"></span>
+        <span>Извлекать полный текст документа</span>
+      </label>
+      <p class="admin-note" id="includeTextHelp">Выключите, если нужны только поля и таблицы. Полный текст для копирования и скачивания в .txt не будет извлекаться. Сохраните изменения, чтобы применить настройку для вашей компании.</p>
+
       <h3 class="admin-section-title" style="margin-top:0;">Брендинг</h3>
       <div class="admin-field-group">
         <label class="admin-label">Название компании</label>

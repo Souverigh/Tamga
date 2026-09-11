@@ -102,6 +102,9 @@ function validateAndNormalize(body) {
   }
 
   if (row.formatting !== undefined && row.formatting !== null) {
+    if (row.formatting.includeText !== undefined && typeof row.formatting.includeText !== 'boolean') {
+      return { error: 'formatting.includeText должен быть true или false' };
+    }
     const allowedDate = ['DD.MM.YYYY', 'YYYY-MM-DD'];
     const allowedSeparator = [',', '.'];
     if (typeof row.formatting !== 'object' || Array.isArray(row.formatting)) {
@@ -168,7 +171,8 @@ function validateAndNormalize(body) {
     // на те же грабли второй раз. businessRules был здесь пропущен и наступил
     // на те же грабли в третий раз (см. комментарий выше) — добавлен сейчас.
     if (!row.formatting.dateFormat && !row.formatting.decimalSeparator && !row.formatting.maxConcurrency
-        && !row.formatting.webhookUrl && !(row.formatting.businessRules && row.formatting.businessRules.length)) {
+        && !row.formatting.webhookUrl && !(row.formatting.businessRules && row.formatting.businessRules.length)
+        && row.formatting.includeText === undefined) {
       row.formatting = null;
     }
   }
