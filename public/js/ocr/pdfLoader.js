@@ -2,36 +2,40 @@
 // Не занимается распознаванием текста — только превращает файл в изображения,
 // с которыми дальше работают ocr/tesseractClient.js или api/geminiRecognizeClient.js.
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.mjs';
+import { validateFileSize, boundedViewport, withDeadline } from '../utils/fileSafety.js';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.worker.mjs';
 
 const MAX_PDF_PAGES = 20;
 
 export async function* iteratePdfPages(file, { signal, onPageCount = () => {} } = {}) {
   if (signal?.aborted) return;
-  const buf = await file.arrayBuffer();
+  validateFileSize(file);
+  const buf = await withDeadline(file.arrayBuffer());
   if (signal?.aborted) return;
-  const loadingTask = pdfjsLib.getDocument({ data: buf });
+  const loadingTask = pdfjsLib.getDocument({ data: buf, isEvalSupported: false, maxImageSize: 40000000, canvasMaxAreaInBytes: 32000000, cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/standard_fonts/', wasmUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/wasm/' });
   let renderTask;
   let destruction;
-  const destroy = () => destruction || (destruction = Promise.resolve(loadingTask.destroy()).catch(() => {}));
+  const destroy = () => destruction || (destruction = Promise.resolve().then(() => loadingTask.destroy()).catch(() => {}));
   const abort = () => { renderTask?.cancel(); void destroy(); };
   signal?.addEventListener('abort', abort, { once: true });
   try {
-    const pdf = await loadingTask.promise;
+    const pdf = await withDeadline(loadingTask.promise, abort);
     if (signal?.aborted) return;
     const maxPages = Math.min(pdf.numPages, MAX_PDF_PAGES);
     onPageCount(maxPages);
     for (let i = 1; i <= maxPages && !signal?.aborted; i++) {
       let page, canvas, error;
       try {
-        page = await pdf.getPage(i);
+        page = await withDeadline(pdf.getPage(i), abort);
         if (signal?.aborted) return;
-        const viewport = page.getViewport({ scale: 2 });
+        const viewport = page.getViewport(boundedViewport(page.getViewport({ scale: 1 })));
         canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        renderTask = page.render({ canvasContext: canvas.getContext('2d'), viewport });
-        await renderTask.promise;
+        renderTask = page.render({ canvas, canvasContext: canvas.getContext('2d'), viewport });
+        await withDeadline(renderTask.promise, abort);
       } catch (err) {
         error = err;
       } finally {

@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
       // а не внутри бизнес-логики recognizeDocument (которая не должна знать
       // про пароли/токены). Лишний запрос к Supabase дешёвый и происходит
       // только для clientSlug-запросов, не для обычных посетителей сайта.
-      const config = await getClientConfig({ clientSlug });
+      const config = await getClientConfig({ clientSlug, fresh: true });
       if (config) resolvedClientSlug = clientSlug;
       const gate = checkClientGate({ clientSlug, passwordHash: config ? config.passwordHash : null, token: req.headers['x-client-token'] });
       if (!gate.ok) {

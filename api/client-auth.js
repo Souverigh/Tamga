@@ -37,18 +37,18 @@ module.exports = async (req, res) => {
   const clientIp = extractClientIp(req);
   const rateLimit = await checkClientAuthRateLimit({ clientSlug, ip: clientIp });
   if (!rateLimit.allowed) {
-    res.status(429).json({ error: 'Слишком много попыток входа, попробуйте позже', retryAfterSeconds: rateLimit.retryAfterSeconds });
+    res.status(rateLimit.unavailable ? 503 : 429).json({ error: 'Слишком много попыток входа, попробуйте позже', retryAfterSeconds: rateLimit.retryAfterSeconds });
     return;
   }
 
   try {
-    const config = await getClientConfig({ clientSlug });
+    const config = await getClientConfig({ clientSlug, fresh: true });
     if (!config || !config.passwordHash || !verifyPassword(password, config.passwordHash)) {
       await recordClientAuthFailure({ clientSlug, ip: clientIp });
       res.status(401).json(genericError);
       return;
     }
-    const token = signToken(clientSlug);
+    const token = signToken(clientSlug, config.passwordHash);
     if (!token) {
       res.status(500).json({ error: 'Сервер не настроен для выдачи токенов (нет TAMGA_CLIENT_AUTH_SECRET)' });
       return;

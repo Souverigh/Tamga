@@ -62,7 +62,7 @@ require.cache[require.resolve(cflPath)] = {
 process.env.GEMINI_API_KEY = 'fake-key-for-pipeline-test';
 const { recognizeDocument } = require(path.join(ROOT, 'lib/recognize.js'));
 
-const FAKE_BASE64 = Buffer.from('fake-image-bytes').toString('base64');
+const FAKE_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jrWQAAAAASUVORK5CYII=';
 
 // --- Сценарии -------------------------------------------------------------
 
@@ -74,7 +74,7 @@ async function main() {
       schemas.push(args.schemaProperties);
       return { result: { text: 'Текст', fields: [], confidence: 90 }, usage: null };
     };
-    const input = { base64: FAKE_BASE64, mimeType: 'image/jpeg', docType: 'Справка', clientSlug: 'test-client' };
+    const input = { base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Справка', clientSlug: 'test-client' };
     assert.strictEqual((await recognizeDocument(input)).text, '');
     assert.strictEqual(schemas[0].text, undefined);
     assert.strictEqual((await recognizeDocument({ ...input, includeText: true })).text, 'Текст');
@@ -92,7 +92,7 @@ async function main() {
         fields: [{ label: 'Номер полиса', value: '123', confidence: 99 }], confidence: 99
       }, usage: null };
     };
-    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg', clientSlug: 'test-client' });
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', clientSlug: 'test-client' });
     assert.strictEqual(calls.length, 2);
     assert.strictEqual(consumedPages, 1);
     assert.ok(calls[0].instruction.includes('Insurance card'));
@@ -112,7 +112,7 @@ async function main() {
             text: 'Полный текст', fields: [], items: [], confidence: 94
           }, usage: null };
         };
-        const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg', includeText });
+        const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', includeText });
         assert.strictEqual(calls.length, 2);
         assert.deepStrictEqual(Object.keys(calls[0].schemaProperties), ['documentType']);
         assert.deepStrictEqual(calls[0].requiredFields, ['documentType']);
@@ -131,12 +131,12 @@ async function main() {
       if (++calls === 1) return { result: { documentType: 'Счёт-фактура / Инвойс' }, usage: null };
       throw new Error('extraction failed');
     };
-    await assert.rejects(recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg' }), /extraction failed/);
+    await assert.rejects(recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png' }), /extraction failed/);
   });
   await scenario('Некорректная классификация останавливает извлечение', async () => {
     let calls = 0;
     callGeminiImpl = async () => { calls++; return { result: { documentType: 'несуществующий тип' }, usage: null }; };
-    await assert.rejects(recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg' }), /классификац/);
+    await assert.rejects(recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png' }), /классификац/);
     assert.strictEqual(calls, 1);
   });
   await scenario('Карточный тип (известный docType): fields доходят до result', async () => {
@@ -149,7 +149,7 @@ async function main() {
     });
     getClientConfigImpl = async () => null;
 
-    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg', docType: 'Справка' });
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Справка' });
     assert.strictEqual(r.documentType, 'Справка');
     assert.deepStrictEqual(r.fields, [{ label: 'ФИО', value: 'Иванов Иван Иванович', confidence: 95 }]);
     assert.deepStrictEqual(r.items, []);
@@ -173,7 +173,7 @@ async function main() {
     });
     getClientConfigImpl = async () => null;
 
-    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg', docType: 'Счёт-фактура / Инвойс' });
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Счёт-фактура / Инвойс' });
     assert.strictEqual(r.items.length, 1, 'items не дошли');
     assert.strictEqual(r.fields.length, 4, 'totals (fields) не дошли — тот самый баг 9 сен');
     assert.strictEqual(r.fields.find(f => f.label === 'Итого с НДС').value, '5644,80');
@@ -211,7 +211,7 @@ async function main() {
     };
     getClientConfigImpl = async () => null;
 
-    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg' }); // docType не передан
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png' }); // docType не передан
     assert.strictEqual(callCount, 2, 'ожидалось ровно 2 вызова Gemini (классификация + дозапрос)');
     assert.strictEqual(r.documentType, 'Счёт-фактура / Инвойс');
     assert.strictEqual(r.items.length, 1, 'items после дозапроса не дошли');
@@ -247,7 +247,7 @@ async function main() {
       businessRules: [{ type: 'percentage_match', baseField: 'Сумма без НДС', valueField: 'Сумма НДС', expectedPercent: 15, tolerancePercent: 1, level: 'error' }]
     });
 
-    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg', clientSlug: 'test-client' });
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', clientSlug: 'test-client' });
     assert.strictEqual(r.warnings.length, 1, 'warnings должны считаться от totals, полученных ПОСЛЕ дозапроса, а не от пустого fields первого вызова');
     assert.ok(r.warnings[0].message.includes('не похоже на 15%'));
   });
@@ -259,7 +259,7 @@ async function main() {
     });
     getClientConfigImpl = async () => null;
 
-    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg', docType: 'Справка' });
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Справка' });
     assert.strictEqual(r.documentType, 'Справка');
     assert.deepStrictEqual(r.fields, []);
     assert.deepStrictEqual(r.items, []);
@@ -274,7 +274,7 @@ async function main() {
     });
     getClientConfigImpl = async () => { throw new Error('getClientConfig НЕ должен вызываться для анонимного посетителя'); };
 
-    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/jpeg', docType: 'Справка' });
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Справка' });
     assert.deepStrictEqual(r.warnings, []);
   });
 

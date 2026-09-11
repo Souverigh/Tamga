@@ -53,7 +53,7 @@ module.exports = async (req, res) => {
   const ip = extractClientIp(req);
   const rateLimit = await checkFeedbackRateLimit({ ip });
   if (!rateLimit.allowed) {
-    res.status(429).json({ error: 'Слишком много обращений с вашего адреса, попробуйте позже' });
+    res.status(rateLimit.unavailable ? 503 : 429).json({ error: 'Слишком много обращений с вашего адреса, попробуйте позже' });
     return;
   }
 

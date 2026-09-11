@@ -19,6 +19,7 @@
 
 const assert = require('assert');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const ROOT = path.join(__dirname, '..');
 
 let failures = 0;
@@ -36,7 +37,7 @@ function check(label, fn) {
 async function checkDocSchemaConsistency() {
   console.log('\n=== docSchema.js: сервер ↔ клиент ===');
   const server = require(path.join(ROOT, 'lib/docSchema.js'));
-  const client = await import(path.join(ROOT, 'public/js/config/docSchema.js'));
+  const client = await import(pathToFileURL(path.join(ROOT, 'public/js/config/docSchema.js')).href);
 
   check('DOC_TYPES — одинаковый список и порядок', () => {
     assert.deepStrictEqual(client.DOC_TYPES, server.DOC_TYPES);
@@ -136,7 +137,7 @@ const BUSINESS_RULES_FIXTURES = [
 async function checkBusinessRulesConsistency() {
   console.log('\n=== businessRules.js: сервер ↔ клиент ===');
   const server = require(path.join(ROOT, 'lib/postprocess/businessRules.js'));
-  const client = await import(path.join(ROOT, 'public/js/postprocess/businessRules.js'));
+  const client = await import(pathToFileURL(path.join(ROOT, 'public/js/postprocess/businessRules.js')).href);
 
   BUSINESS_RULES_FIXTURES.forEach(({ label, fields, rules, docType }) => {
     check(label, () => {

@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 function load(path, globals = {}) {
-  const context = vm.createContext({ ...globals });
+  const context = vm.createContext({ setTimeout, clearTimeout, ...globals });
+  if (path.endsWith('pdfLoader.js')) vm.runInContext(fs.readFileSync('public/js/utils/fileSafety.js', 'utf8').replace(/export /g, ''), context);
   vm.runInContext(fs.readFileSync(path, 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, ''), context);
   return context;
 }
@@ -90,7 +91,7 @@ test('PDF streams the first page before rendering the second and destroys its re
       destroy: async () => { destroyed = true; }
     }) }
   });
-  const source = iteratePdfPages({ arrayBuffer: async () => new ArrayBuffer(0) }, { onPageCount: n => counts.push(n) });
+  const source = iteratePdfPages({ size: 1, arrayBuffer: async () => new ArrayBuffer(1) }, { onPageCount: n => counts.push(n) });
   const first = await source.next();
   assert.equal(first.value.pageIndex, 0);
   assert.deepEqual(rendered, [1]);
@@ -111,7 +112,7 @@ test('a broken PDF page does not discard its neighbours', async () => {
     }) }
   });
   const pages = [];
-  for await (const page of iteratePdfPages({ arrayBuffer: async () => new ArrayBuffer(0) })) pages.push(page);
+  for await (const page of iteratePdfPages({ size: 1, arrayBuffer: async () => new ArrayBuffer(1) })) pages.push(page);
   assert.equal(pages.length, 3);
   assert.ok(pages[0].image);
   assert.match(pages[1].error.message, /bad page/);
@@ -133,7 +134,7 @@ test('aborting PDF rendering cancels it and clears the canvas', async () => {
       }) }), destroy: async () => { destroyed = true; }
     }) }
   });
-  const source = iteratePdfPages({ arrayBuffer: async () => new ArrayBuffer(0) }, { signal: controller.signal });
+  const source = iteratePdfPages({ size: 1, arrayBuffer: async () => new ArrayBuffer(1) }, { signal: controller.signal });
   const pending = source.next();
   await tick();
   controller.abort();

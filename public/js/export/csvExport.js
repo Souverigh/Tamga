@@ -10,7 +10,8 @@ import { isTableType, columnsForType, keysForType } from '../config/docSchema.js
 import { maskFields, maskItems } from './sensitiveFields.js';
 
 function csvEscape(value) {
-  const s = value == null ? '' : String(value);
+  let s = value == null ? '' : String(value);
+  if (/^[\s\u0000-\u001f]*[=+@-]/.test(s) || /^[\t\r\n]/.test(s)) s = "'" + s;
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 

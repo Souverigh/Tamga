@@ -6,7 +6,8 @@
 
 import { DOC_TYPES } from '../config/docSchema.js';
 import { getClientSlug } from '../branding.js';
-import { isHeic, convertHeicToJpeg, getResolvedHeicConversion } from '../utils/heicSupport.js';
+import { validateFileSize, prepareSmallPreview, getSmallPreview, MAX_BATCH_BYTES } from '../utils/fileSafety.js';
+import { isHeic, getResolvedHeicConversion } from '../utils/heicSupport.js';
 
 const MAX_FILES = 50;
 // Для анонимного бесплатного сайта (без ?client=slug) — пачка меньше, чем для
@@ -49,8 +50,23 @@ function formatSize(bytes) {
   return (bytes / 1024 / 1024).toFixed(1) + ' МБ';
 }
 
+let fileAddQueue = Promise.resolve();
 function addFiles(fileListObj) {
-  const incoming = Array.from(fileListObj);
+  const files = Array.from(fileListObj);
+  fileAddQueue = fileAddQueue.then(() => addFilesChecked(files)).catch(error => alert(error.message));
+  return fileAddQueue;
+}
+async function addFilesChecked(fileListObj) {
+  const incoming = [];
+  for (const file of Array.from(fileListObj)) {
+    try {
+      validateFileSize(file);
+      const total = selectedFiles.flatMap(f => f.__group ? f.files : [f]).concat(incoming, file).reduce((n, f) => n + f.size, 0);
+      if (total > MAX_BATCH_BYTES) throw new Error('Пакет превышает 100 МиБ');
+      if (!isHeic(file) && !/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') await prepareSmallPreview(file);
+      incoming.push(file);
+    } catch (error) { alert(file.name + ': ' + error.message); }
+  }
   let combined = selectedFiles.concat(incoming);
   let combinedTypes = selectedDocTypes.concat(incoming.map(() => 'auto'));
   let truncated = false;
@@ -126,7 +142,8 @@ function openGroupOrderOverlay(files) {
         thumbLink.rel = 'noopener';
         thumbLink.title = 'Открыть в полный размер';
         const img = document.createElement('img');
-        img.src = urlByFile.get(f);
+        if (getSmallPreview(f)) img.src = getSmallPreview(f);
+        else img.alt = 'HEIC';
         img.alt = '';
         thumbLink.appendChild(img);
         item.appendChild(thumbLink);
@@ -271,7 +288,8 @@ function buildFileRow(file, idx) {
       thumb.textContent = 'PDF';
     } else {
       const img = document.createElement('img');
-      img.src = previewUrls[idx];
+      if (getSmallPreview(file)) img.src = getSmallPreview(file);
+      else img.alt = 'HEIC';
       img.alt = '';
       thumb.appendChild(img);
     }
@@ -368,7 +386,7 @@ function buildFileRow(file, idx) {
 // thumbConversionStarted — чтобы не запускать конвертацию превью повторно
 // при каждой перерисовке (render() вызывается часто) — WeakSet по ссылке на
 // File, а не на индекс (индекс сдвигается при добавлении/удалении файлов).
-const thumbConversionStarted = new WeakSet();
+
 
 function render(truncated) {
   previewUrls.forEach(u => { if (u) URL.revokeObjectURL(u); }); // освобождаем память от предыдущего рендера
@@ -413,24 +431,6 @@ function render(truncated) {
 
   fileListItems.innerHTML = '';
   selectedFiles.forEach((file, idx) => fileListItems.appendChild(buildFileRow(file, idx)));
-
-  // Донконвертируем превью HEIC-файлов асинхронно, не блокируя саму
-  // отрисовку строк выше. Для файла внутри группы — только обложка (первая
-  // страница), остальные страницы группы здесь не превьюшатся вообще (как и
-  // раньше) — известное ограничение, не относится к самой обработке.
-  selectedFiles.forEach(file => {
-    const target = (file && file.__group) ? (file.files && file.files[0]) : file;
-    if (target && isHeic(target) && !thumbConversionStarted.has(target)) {
-      thumbConversionStarted.add(target);
-      convertHeicToJpeg(target).then(() => {
-        // Файл мог быть убран из списка, пока шла конвертация — тогда просто
-        // не перерисовываем; если он всё ещё там (на любой позиции — индекс
-        // мог сдвинуться), render() ниже пересчитает превью заново и найдёт
-        // его исходя из АКТУАЛЬНОГО состояния selectedFiles на тот момент.
-        if (selectedFiles.includes(file)) render(false);
-      }).catch(err => console.error('Не удалось сконвертировать HEIC для превью:', target.name, err));
-    }
-  });
 
   onChange();
 }

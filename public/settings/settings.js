@@ -724,7 +724,7 @@ changePasswordBtn.addEventListener('click', async () => {
     currentPasswordInput.value = '';
     newPasswordInput.value = '';
     passwordChangeStatus.textContent = 'Пароль изменён ✓';
-    setTimeout(() => { passwordChangeStatus.textContent = ''; }, 3000);
+    returnToClient();
   } catch (err) {
     passwordChangeError.textContent = 'Не удалось связаться с сервером, попробуйте ещё раз';
     passwordChangeError.style.display = 'block';

@@ -137,6 +137,7 @@ function validateAndNormalize(body) {
       if (!/^https:\/\/.+/.test(url)) {
         return { error: 'formatting.webhookUrl должен начинаться с https://' };
       }
+      try { require('../../lib/safeWebhook').validateWebhookUrl(url); } catch (_) { return { error: 'Вебхук требует публичный HTTPS-адрес без пароля, порт 443' }; }
       row.formatting.webhookUrl = url;
       // Секрет для подписи (X-Tamga-Signature) — если URL задан, а секрет нет,
       // генерируем сами: пусть подпись есть по умолчанию, а не только если

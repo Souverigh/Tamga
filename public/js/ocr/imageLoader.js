@@ -2,6 +2,7 @@
 // или Canvas) в base64. Не знает про PDF; про то, какой движок распознавания
 // будет использован дальше — тоже не знает.
 
+import { validateImageFile } from '../utils/fileSafety.js';
 import { isHeic, convertHeicToJpeg } from '../utils/heicSupport.js';
 
 export async function loadImageFile(file) {
@@ -11,11 +12,13 @@ export async function loadImageFile(file) {
   // 2026). Конвертируем в JPEG заранее — дальше всё остальное работает как
   // с обычной картинкой, без изменений.
   const actualFile = isHeic(file) ? await convertHeicToJpeg(file) : file;
+  await validateImageFile(actualFile);
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(actualFile);
-    img.onload = () => { URL.revokeObjectURL(url); resolve([img]); };
-    img.onerror = error => { URL.revokeObjectURL(url); reject(error); };
+    const timer = setTimeout(() => { img.src = ''; URL.revokeObjectURL(url); reject(new Error('Превышено время загрузки изображения')); }, 30000);
+    img.onload = () => { clearTimeout(timer); URL.revokeObjectURL(url); resolve([img]); };
+    img.onerror = error => { clearTimeout(timer); URL.revokeObjectURL(url); reject(error); };
     img.src = url;
   });
 }
