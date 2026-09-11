@@ -39,32 +39,24 @@
   <!-- Основной экран — скрыт до входа -->
   <section id="settingsMain" style="display:none;">
 
-    <div class="panel">
+    <div class="settings-tabs" role="tablist" aria-label="Разделы настроек">
+      <button type="button" role="tab" id="tab-recognition" aria-controls="panel-recognition" aria-selected="true" tabindex="0">Распознавание</button>
+      <button type="button" role="tab" id="tab-fields" aria-controls="panel-fields" aria-selected="false" tabindex="-1">Поля и типы</button>
+      <button type="button" role="tab" id="tab-rules" aria-controls="panel-rules" aria-selected="false" tabindex="-1">Правила</button>
+      <button type="button" role="tab" id="tab-appearance" aria-controls="panel-appearance" aria-selected="false" tabindex="-1">Оформление</button>
+      <button type="button" role="tab" id="tab-password" aria-controls="panel-password" aria-selected="false" tabindex="-1">Пароль</button>
+    </div>
+    <section class="panel settings-tab-panel" role="tabpanel" id="panel-recognition" aria-labelledby="tab-recognition" tabindex="0">
       <h3 class="admin-section-title" style="margin-top:0;">Распознавание</h3>
       <label class="text-extraction-option" for="fIncludeText">
         <input type="checkbox" role="switch" id="fIncludeText" checked aria-describedby="includeTextHelp">
         <span class="text-extraction-track" aria-hidden="true"></span>
         <span>Извлекать полный текст документа</span>
       </label>
-      <p class="admin-note" id="includeTextHelp">Выключите, если нужны только поля и таблицы. Полный текст для копирования и скачивания в .txt не будет извлекаться. Сохраните изменения, чтобы применить настройку для вашей компании.</p>
+      <p class="admin-note" id="includeTextHelp">Выключите, если нужны только поля и таблицы. Полный текст для копирования и скачивания в .txt не будет извлекаться. Настройка применяется для вашей компании.</p>
 
-      <h3 class="admin-section-title" style="margin-top:0;">Брендинг</h3>
-      <div class="admin-field-group">
-        <label class="admin-label">Название компании</label>
-        <input type="text" id="fDisplayName" class="admin-input" placeholder="напр. Acme Consulting">
-      </div>
-      <div class="admin-field-group">
-        <label class="admin-label">Логотип <span class="admin-hint">ссылка на изображение, должна начинаться с https://</span></label>
-        <input type="text" id="fLogoUrl" class="admin-input" placeholder="https://...">
-      </div>
-      <div class="admin-field-group">
-        <label class="admin-label">Основной цвет</label>
-        <div class="admin-color-row">
-          <span class="admin-swatch" id="colorSwatch"></span>
-          <input type="text" id="fAccentColor" class="admin-input" placeholder="#2A4FE0" style="max-width:160px;">
-        </div>
-      </div>
-
+    </section>
+    <section class="panel settings-tab-panel" role="tabpanel" id="panel-fields" aria-labelledby="tab-fields" tabindex="0" hidden>
       <h3 class="admin-section-title">Переопределение полей <span class="admin-hint">— свой список полей для стандартного типа документа</span></h3>
       <div id="fieldOverridesList" class="admin-override-list"></div>
       <button class="btn-secondary" id="addFieldOverrideBtn" type="button">+ Добавить переопределение</button>
@@ -79,7 +71,6 @@
           <input type="text" id="overrideFieldsInput" class="admin-input" placeholder="ФИО, Дата рождения, Серия и номер">
         </div>
         <div class="admin-form-actions">
-          <button class="btn-primary" id="confirmFieldOverrideBtn" type="button">Сохранить</button>
           <button class="btn-secondary" id="cancelFieldOverrideBtn" type="button">Отмена</button>
         </div>
       </div>
@@ -102,11 +93,12 @@
           <input type="text" id="newTypeHint" class="admin-input" placeholder="напр. американская карта медстраховки, на английском">
         </div>
         <div class="admin-form-actions">
-          <button class="btn-primary" id="confirmCustomTypeBtn" type="button">Сохранить</button>
           <button class="btn-secondary" id="cancelCustomTypeBtn" type="button">Отмена</button>
         </div>
       </div>
 
+    </section>
+    <section class="panel settings-tab-panel" role="tabpanel" id="panel-rules" aria-labelledby="tab-rules" tabindex="0" hidden>
       <h3 class="admin-section-title">Бизнес-правила <span class="admin-hint">— проверка процентного соотношения между двумя полями, например «НДС ≈ 12% от суммы»</span></h3>
       <div id="businessRulesList" class="admin-override-list"></div>
       <button class="btn-secondary" id="addBusinessRuleBtn" type="button">+ Добавить правило</button>
@@ -125,7 +117,7 @@
         </div>
 
         <div id="ruleGroupPercentage">
-          <details class="admin-rule-help" open>
+          <details class="admin-rule-help">
             <summary><span aria-hidden="true">ⓘ</span> Как работает процентное соотношение</summary>
             <p>Проверяет, что одно поле составляет заданный процент от другого.</p>
             <p><strong>Пример настройки:</strong> поле-база — «Сумма», проверяемое поле — «Сумма НДС», ожидаемый процент — 12.</p>
@@ -148,7 +140,7 @@
         </div>
 
         <div id="ruleGroupSum" style="display:none;">
-          <details class="admin-rule-help" open>
+          <details class="admin-rule-help">
             <summary><span aria-hidden="true">ⓘ</span> Как работает сумма полей</summary>
             <p>Складывает значения указанных полей и сравнивает результат с итоговым полем.</p>
             <p><strong>Пример настройки:</strong> складываемые поля — «Стоимость товара, Доставка», итоговое поле — «Итого».</p>
@@ -165,7 +157,7 @@
         </div>
 
         <div id="ruleGroupDateOrder" style="display:none;">
-          <details class="admin-rule-help" open>
+          <details class="admin-rule-help">
             <summary><span aria-hidden="true">ⓘ</span> Как работает порядок дат</summary>
             <p>Проверяет, что первая дата не позже второй. Одинаковые даты допустимы.</p>
             <p><strong>Пример настройки:</strong> более раннее поле — «Дата начала», более позднее — «Дата окончания».</p>
@@ -182,7 +174,7 @@
         </div>
 
         <div id="ruleGroupRequired" style="display:none;">
-          <details class="admin-rule-help" open>
+          <details class="admin-rule-help">
             <summary><span aria-hidden="true">ⓘ</span> Как работает обязательное поле</summary>
             <p>Предупреждает, если указанное поле отсутствует или не заполнено.</p>
             <p><strong>Пример настройки:</strong> обязательное поле — «ИНН».</p>
@@ -195,7 +187,7 @@
         </div>
 
         <div id="ruleGroupRange" style="display:none;">
-          <details class="admin-rule-help" open>
+          <details class="admin-rule-help">
             <summary><span aria-hidden="true">ⓘ</span> Как работает диапазон значения</summary>
             <p>Проверяет, что число находится в заданных пределах, включая сами границы. Можно задать только минимум или только максимум.</p>
             <p><strong>Пример настройки:</strong> поле — «Количество», минимум — 1, максимум — 100.</p>
@@ -230,17 +222,31 @@
           </select>
         </div>
         <div class="admin-form-actions">
-          <button class="btn-primary" id="confirmBusinessRuleBtn" type="button">Сохранить</button>
           <button class="btn-secondary" id="cancelBusinessRuleBtn" type="button">Отмена</button>
         </div>
       </div>
 
-      <div class="admin-form-actions" style="margin-top:26px;">
-        <button class="btn-primary" id="saveAllBtn" type="button">Сохранить изменения</button>
-        <span id="saveStatus" class="admin-note"></span>
+    </section>
+    <section class="panel settings-tab-panel" role="tabpanel" id="panel-appearance" aria-labelledby="tab-appearance" tabindex="0" hidden>
+      <h3 class="admin-section-title" style="margin-top:0;">Брендинг</h3>
+      <div class="admin-field-group">
+        <label class="admin-label">Название компании</label>
+        <input type="text" id="fDisplayName" class="admin-input" placeholder="напр. Acme Consulting">
       </div>
-      <div id="saveError" class="admin-error" style="display:none;"></div>
+      <div class="admin-field-group">
+        <label class="admin-label">Логотип <span class="admin-hint">ссылка на изображение, должна начинаться с https://</span></label>
+        <input type="text" id="fLogoUrl" class="admin-input" placeholder="https://...">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Основной цвет</label>
+        <div class="admin-color-row">
+          <span class="admin-swatch" id="colorSwatch"></span>
+          <input type="text" id="fAccentColor" class="admin-input" placeholder="#2A4FE0" style="max-width:160px;">
+        </div>
+      </div>
 
+    </section>
+    <section class="panel settings-tab-panel" role="tabpanel" id="panel-password" aria-labelledby="tab-password" tabindex="0" hidden>
       <h3 class="admin-section-title">Смена пароля</h3>
       <div class="admin-field-group">
         <label class="admin-label">Текущий пароль</label>
@@ -255,6 +261,14 @@
         <span id="passwordChangeStatus" class="admin-note"></span>
       </div>
       <div id="passwordChangeError" class="admin-error" style="display:none;"></div>
+    </section>
+    <div id="settingsSaveBar" class="settings-save-bar">
+      <div class="admin-form-actions">
+        <button class="btn-primary" id="saveAllBtn" type="button">Сохранить изменения</button>
+        <span id="saveStatus" class="admin-note"></span>
+      </div>
+      <div id="saveError" class="admin-error" style="display:none;"></div>
+
     </div>
 
   </section>

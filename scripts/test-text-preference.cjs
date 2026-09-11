@@ -6,11 +6,12 @@ const vm = require('node:vm');
 function settingsApi() {
   let row = { formatting: { webhookUrl: 'https://example.test/hook', businessRules: [{ type: 'required_field', field: 'X' }] } };
   let writes = 0;
+  const staleFormatting = JSON.parse(JSON.stringify(row.formatting));
   const context = vm.createContext({
     module: { exports: {} }, console,
     process: { env: { SUPABASE_URL: 'https://db.test', SUPABASE_SERVICE_ROLE_KEY: 'fake' } },
     require: name => {
-      if (name.includes('customFieldsLookup')) return { getClientConfig: async () => ({ passwordHash: 'hash', formatting: row.formatting }), clearConfigCache() {} };
+      if (name.includes('customFieldsLookup')) return { getClientConfig: async ({ fresh }) => ({ passwordHash: 'hash', formatting: fresh ? row.formatting : staleFormatting }), clearConfigCache() {} };
       if (name.includes('clientAuth')) return { requireClientSettingsAuth: () => ({ ok: true }) };
       return require('../' + name.replace(/^\.\.\//, ''));
     },
@@ -23,7 +24,7 @@ function settingsApi() {
   return {
     get row() { return row; }, get writes() { return writes; },
     async request(method, body) {
-      const res = { status(code) { this.code = code; return this; }, json(data) { this.data = data; } };
+      const res = { headers: {}, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.code = code; return this; }, json(data) { this.data = data; } };
       await context.module.exports({ method, body, query: { slug: 'acme' }, headers: {} }, res);
       return res;
     }
@@ -39,7 +40,9 @@ test('text preference round-trips without deleting other formatting settings', a
   assert.equal(api.row.formatting.includeText, false);
   assert.equal(api.row.formatting.businessRules.length, 1);
   assert.equal(api.row.formatting.webhookUrl, 'https://example.test/hook');
-  assert.equal((await api.request('GET')).data.includeText, false);
+  const reopened = await api.request('GET');
+  assert.equal(reopened.data.includeText, false, 'reopening settings must bypass stale process caches');
+  assert.match(reopened.headers['Cache-Control'], /no-store/);
   assert.equal((await api.request('PATCH', { include_text: true })).data.includeText, true);
 });
 

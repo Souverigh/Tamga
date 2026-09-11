@@ -46,7 +46,6 @@ const addFieldOverrideBtn = document.getElementById('addFieldOverrideBtn');
 const fieldOverrideEditor = document.getElementById('fieldOverrideEditor');
 const overrideTypeSelect = document.getElementById('overrideTypeSelect');
 const overrideFieldsInput = document.getElementById('overrideFieldsInput');
-const confirmFieldOverrideBtn = document.getElementById('confirmFieldOverrideBtn');
 const cancelFieldOverrideBtn = document.getElementById('cancelFieldOverrideBtn');
 
 const customTypesList = document.getElementById('customTypesList');
@@ -55,7 +54,6 @@ const customTypeEditor = document.getElementById('customTypeEditor');
 const newTypeName = document.getElementById('newTypeName');
 const newTypeFields = document.getElementById('newTypeFields');
 const newTypeHint = document.getElementById('newTypeHint');
-const confirmCustomTypeBtn = document.getElementById('confirmCustomTypeBtn');
 const cancelCustomTypeBtn = document.getElementById('cancelCustomTypeBtn');
 
 const businessRulesList = document.getElementById('businessRulesList');
@@ -81,7 +79,6 @@ const ruleRangeMin = document.getElementById('ruleRangeMin');
 const ruleRangeMax = document.getElementById('ruleRangeMax');
 const ruleTolerancePercent = document.getElementById('ruleTolerancePercent');
 const ruleLevel = document.getElementById('ruleLevel');
-const confirmBusinessRuleBtn = document.getElementById('confirmBusinessRuleBtn');
 const cancelBusinessRuleBtn = document.getElementById('cancelBusinessRuleBtn');
 
 const currentPasswordInput = document.getElementById('currentPasswordInput');
@@ -333,14 +330,13 @@ addFieldOverrideBtn.addEventListener('click', () => {
   openFieldOverrideEditor(null);
 });
 cancelFieldOverrideBtn.addEventListener('click', () => { fieldOverrideEditor.style.display = 'none'; });
-confirmFieldOverrideBtn.addEventListener('click', () => {
+function collectFieldOverride(draft) {
   const type = overrideTypeSelect.value;
   const fields = splitFields(overrideFieldsInput.value);
   if (!type || !fields.length) { alert('Выберите тип и укажите хотя бы одно поле.'); return; }
-  state.fieldOverrides[type] = fields;
-  fieldOverrideEditor.style.display = 'none';
-  renderFieldOverridesList();
-});
+  draft.fieldOverrides[type] = fields;
+  return true;
+}
 
 // --- Свои типы документов ---
 
@@ -406,18 +402,17 @@ function openCustomTypeEditor(existingName) {
 
 addCustomTypeBtn.addEventListener('click', () => openCustomTypeEditor(null));
 cancelCustomTypeBtn.addEventListener('click', () => { customTypeEditor.style.display = 'none'; });
-confirmCustomTypeBtn.addEventListener('click', () => {
+function collectCustomType(draft) {
   const name = newTypeName.value.trim();
   const fields = splitFields(newTypeFields.value);
   if (!name || !fields.length) { alert('Укажите название типа и хотя бы одно поле.'); return; }
   if (DOC_TYPES.includes(name)) { alert('Это название совпадает со стандартным типом документа — используйте «Переопределение полей» вместо создания нового типа.'); return; }
-  if (!editingCustomTypeName && state.customDocTypes[name]) { alert('Тип с таким названием уже есть.'); return; }
-  if (editingCustomTypeName && editingCustomTypeName !== name) delete state.customDocTypes[editingCustomTypeName];
-  state.customDocTypes[name] = { fields };
-  if (newTypeHint.value.trim()) state.customDocTypes[name].hint = newTypeHint.value.trim();
-  customTypeEditor.style.display = 'none';
-  renderCustomTypesList();
-});
+  if (editingCustomTypeName !== name && draft.customDocTypes[name]) { alert('Тип с таким названием уже есть.'); return; }
+  if (editingCustomTypeName && editingCustomTypeName !== name) delete draft.customDocTypes[editingCustomTypeName];
+  draft.customDocTypes[name] = { fields };
+  if (newTypeHint.value.trim()) draft.customDocTypes[name].hint = newTypeHint.value.trim();
+  return true;
+}
 
 // --- Бизнес-правила (5 готовых типов, Ethan 8 сен 2026) ---
 
@@ -522,7 +517,7 @@ function openBusinessRuleEditor(existingIndex) {
 
 addBusinessRuleBtn.addEventListener('click', () => openBusinessRuleEditor(null));
 cancelBusinessRuleBtn.addEventListener('click', () => { businessRuleEditor.style.display = 'none'; });
-confirmBusinessRuleBtn.addEventListener('click', () => {
+function collectBusinessRule(draft) {
   if (selectedRuleDocTypes !== null && !selectedRuleDocTypes.length) {
     alert('Выберите хотя бы один тип документа или «Все документы».');
     return;
@@ -572,12 +567,56 @@ confirmBusinessRuleBtn.addEventListener('click', () => {
     rule = { type, field, min: hasMin ? Number(ruleRangeMin.value) : null, max: hasMax ? Number(ruleRangeMax.value) : null, level };
   }
 
+  if (!rule) { alert('Выберите тип правила.'); return; }
   if (selectedRuleDocTypes !== null) rule.docTypes = [...selectedRuleDocTypes];
-  if (editingBusinessRuleIndex != null) state.businessRules[editingBusinessRuleIndex] = rule;
-  else state.businessRules.push(rule);
-  businessRuleEditor.style.display = 'none';
-  renderBusinessRulesList();
+  if (editingBusinessRuleIndex != null) draft.businessRules[editingBusinessRuleIndex] = rule;
+  else draft.businessRules.push(rule);
+  return true;
+}
+
+// Tabs keep their DOM mounted, so switching sections preserves unsaved inputs.
+const settingsTabIds = ['recognition', 'fields', 'rules', 'appearance', 'password'];
+function activateSettingsTab(id, focus = false) {
+  settingsTabIds.forEach(key => {
+    const button = document.getElementById(`tab-${key}`);
+    const selected = key === id;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    document.getElementById(`panel-${key}`).hidden = !selected;
+    if (selected && focus) button.focus();
+  });
+  document.getElementById('settingsSaveBar').hidden = id === 'password';
+}
+settingsTabIds.forEach((id, index) => {
+  const button = document.getElementById(`tab-${id}`);
+  button.addEventListener('click', () => activateSettingsTab(id));
+  button.addEventListener('keydown', event => {
+    let next;
+    if (event.key === 'ArrowRight') next = (index + 1) % settingsTabIds.length;
+    if (event.key === 'ArrowLeft') next = (index + settingsTabIds.length - 1) % settingsTabIds.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = settingsTabIds.length - 1;
+    if (next === undefined) return;
+    event.preventDefault();
+    activateSettingsTab(settingsTabIds[next], true);
+  });
 });
+activateSettingsTab('recognition');
+
+function collectSettingsDraft() {
+  const draft = JSON.parse(JSON.stringify(state));
+  for (const [editor, collect, tab] of [
+    [fieldOverrideEditor, collectFieldOverride, 'fields'],
+    [customTypeEditor, collectCustomType, 'fields'],
+    [businessRuleEditor, collectBusinessRule, 'rules']
+  ]) {
+    if (editor.style.display === 'block' && !collect(draft)) {
+      activateSettingsTab(tab);
+      return null;
+    }
+  }
+  return draft;
+}
 
 // --- Загрузка/сохранение ---
 
@@ -603,6 +642,7 @@ fAccentColor.addEventListener('input', () => {
 
 async function fetchSettings(token) {
   const res = await fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, {
+    cache: 'no-store',
     headers: token ? { 'x-client-token': token } : {}
   });
   const body = await res.json().catch(() => ({}));
@@ -610,15 +650,19 @@ async function fetchSettings(token) {
 }
 
 async function saveSettings() {
+  if (saveAllBtn.disabled) return;
+  const draft = collectSettingsDraft();
+  if (!draft) return;
   saveError.style.display = 'none';
   saveAllBtn.disabled = true;
+  settingsTabIds.forEach(id => { document.getElementById(`panel-${id}`).inert = true; });
   saveStatus.textContent = 'Сохраняем…';
   try {
     const payload = {
       include_text: fIncludeText.checked,
-      field_overrides: Object.keys(state.fieldOverrides).length ? state.fieldOverrides : null,
-      custom_doc_types: Object.keys(state.customDocTypes).length ? state.customDocTypes : null,
-      business_rules: state.businessRules,
+      field_overrides: Object.keys(draft.fieldOverrides).length ? draft.fieldOverrides : null,
+      custom_doc_types: Object.keys(draft.customDocTypes).length ? draft.customDocTypes : null,
+      business_rules: draft.businessRules,
       display_name: fDisplayName.value.trim() || null,
       logo_url: fLogoUrl.value.trim() || null,
       accent_color: fAccentColor.value.trim() || null
@@ -636,6 +680,7 @@ async function saveSettings() {
       return;
     }
     applyLoadedConfig(body);
+    [fieldOverrideEditor, customTypeEditor, businessRuleEditor].forEach(editor => { editor.style.display = 'none'; });
     saveStatus.textContent = 'Сохранено ✓';
     setTimeout(() => { saveStatus.textContent = ''; }, 3000);
   } catch (err) {
@@ -644,6 +689,7 @@ async function saveSettings() {
     saveStatus.textContent = '';
   } finally {
     saveAllBtn.disabled = false;
+    settingsTabIds.forEach(id => { document.getElementById(`panel-${id}`).inert = false; });
   }
 }
 saveAllBtn.addEventListener('click', saveSettings);
@@ -702,6 +748,7 @@ async function loadAndShow(token) {
     noPasswordSection.style.display = 'none';
     mainSection.style.display = 'block';
     applyLoadedConfig(body);
+    [fieldOverrideEditor, customTypeEditor, businessRuleEditor].forEach(editor => { editor.style.display = 'none'; });
     return;
   }
   mainSection.style.display = 'none';

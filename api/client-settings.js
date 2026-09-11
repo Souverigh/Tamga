@@ -47,6 +47,7 @@ async function fetchRawRow(supabaseUrl, serviceKey, clientSlug) {
 }
 
 module.exports = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET' && req.method !== 'PATCH') {
     res.status(405).json({ error: 'Метод не поддерживается, используйте GET или PATCH' });
     return;
@@ -66,9 +67,9 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // passwordHash берём через getClientConfig (кэш допустим здесь — это
-    // только проверка "пароль вообще задан?", не сама запись).
-    const config = await getClientConfig({ clientSlug });
+    // Settings must reflect a save handled by any server instance.
+    // clearConfigCache only invalidates the current process's cache.
+    const config = await getClientConfig({ clientSlug, fresh: true });
     const auth = requireClientSettingsAuth({
       clientSlug,
       passwordHash: config ? config.passwordHash : null,
