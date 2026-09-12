@@ -2,6 +2,7 @@ const { recognizeDocument, RecognizeError } = require('../lib/recognize');
 const { getClientConfig } = require('../lib/customFieldsLookup');
 const { checkClientGate } = require('../lib/clientAuth');
 const { extractClientIp } = require('../lib/anonymousUsage');
+const { readRequestBody } = require('../lib/multipart');
 
 // Эндпоинт для веб-интерфейса Тамги (public/index.html).
 // Ключа не требует — вызывается тем же сайтом. Ключ Gemini живёт только
@@ -25,7 +26,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType, docType, includeText, clientSlug } = req.body || {};
+    const { image, mimeType, docType, includeText, clientSlug } = await readRequestBody(req);
     let resolvedClientSlug = null;
 
     if (clientSlug) {
@@ -63,6 +64,8 @@ module.exports = async (req, res) => {
   } catch (err) {
     if (err instanceof RecognizeError) {
       res.status(err.status).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
+    } else if (err.status) {
+      res.status(err.status).json({ error: err.message });
     } else {
       console.error('recognize error:', err);
       res.status(500).json({ error: 'Внутренняя ошибка сервера' });

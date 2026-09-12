@@ -2,6 +2,33 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const { PassThrough } = require('node:stream');
+const { readRequestBody } = require('../lib/multipart');
+
+test('multipart request exposes the uploaded file and form fields', async () => {
+  const boundary = 'tamga-test-boundary';
+  const request = new PassThrough();
+  request.headers = { 'content-type': `multipart/form-data; boundary=${boundary}` };
+  const body = [
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="includeText"',
+    '',
+    'false',
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="image"; filename="page.jpg"',
+    'Content-Type: image/jpeg',
+    '',
+    'image-bytes',
+    `--${boundary}--`,
+    ''
+  ].join('\r\n');
+  const parsed = readRequestBody(request);
+  request.end(body);
+  const result = await parsed;
+  assert.equal(result.includeText, false);
+  assert.equal(result.mimeType, 'image/jpeg');
+  assert.equal(Buffer.from(result.image, 'base64').toString(), 'image-bytes');
+});
 
 test('explicit full-text choice is sent for both enabled and disabled states', async () => {
   const bodies = [];

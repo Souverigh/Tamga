@@ -13,5 +13,8 @@
     "test:pages": "node --test scripts/test-page-pipeline.cjs",
     "test": "npm run test:consistency && npm run test:pipeline && npm run test:pages && npm run test:security",
     "test:security": "node --test scripts/audit-security.cjs"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0"
   }
 }

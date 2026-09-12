@@ -1,5 +1,6 @@
 const { recognizeDocument, RecognizeError, ALLOWED_MIME_TYPES } = require('../../lib/recognize');
 const { checkApiKey } = require('../../lib/apiKeyAuth');
+const { readRequestBody } = require('../../lib/multipart');
 
 // Публичный API для внешних интеграций (1С, бухгалтерский софт и т.п.).
 //
@@ -100,12 +101,14 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType, docType, includeText, batchId } = req.body || {};
+    const { image, mimeType, docType, includeText, batchId } = await readRequestBody(req);
     const clientApiKey = req.headers['x-api-key'];
     const result = await recognizeDocument({ base64: image, mimeType, docType, includeText, clientApiKey, batchId });
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {
+      res.status(err.status).json({ error: err.message, allowedMimeTypes: ALLOWED_MIME_TYPES });
+    } else if (err.status) {
       res.status(err.status).json({ error: err.message, allowedMimeTypes: ALLOWED_MIME_TYPES });
     } else {
       console.error('v1/recognize error:', err);

@@ -70,20 +70,21 @@ function sleep(ms, signal) {
 
 export async function recognizeWithGemini(pageImage, presetDocType, options) {
   const base64 = pageImageToBase64(pageImage);
-  const body = { image: base64, mimeType: 'image/jpeg' };
-  if (presetDocType) body.docType = presetDocType;
-  if (typeof options?.includeText === 'boolean') body.includeText = options.includeText;
-  if (options && options.clientSlug) body.clientSlug = options.clientSlug;
+  const params = { docType: presetDocType || '', includeText: options?.includeText, clientSlug: options?.clientSlug || '' };
+  const cacheKey = await getCacheKey(base64, params);
+  const cached = readCachedResult(cacheKey);
+  if (cached) return cached;
   const onRetry = options && options.onRetry;
   const signal = options && options.signal;
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = {};
   if (options && options.clientToken) headers['x-client-token'] = options.clientToken;
 
   for (let attempt = 0; ; attempt++) {
+    const body = buildRequestBody(base64, params);
     const res = await fetch('/api/recognize', {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body,
       signal
     });
 
@@ -91,7 +92,7 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
     try { data = await res.json(); } catch (_) { data = null; }
 
     if (res.ok) {
-      return {
+      const result = {
         text: data.text || '',
         docType: data.documentType || 'Другое',
         fields: Array.isArray(data.fields) && data.fields.length ? data.fields : null,
@@ -105,6 +106,8 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
         // её не смог нормализовать (см. lib/fieldFormat.js:normalizeConfidence).
         confidence: typeof data.confidence === 'number' ? data.confidence : null
       };
+      writeCachedResult(cacheKey, result);
+      return result;
     }
 
     // 429/503 — временные состояния на стороне Gemini (см. RETRYABLE_STATUSES выше),
@@ -129,4 +132,42 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
     }
     throw new Error(data?.error || `Сервер распознавания вернул ошибку ${res.status}`);
   }
+}
+
+function buildRequestBody(base64, params) {
+  if (typeof FormData === 'undefined' || typeof Blob === 'undefined') {
+    const body = { image: base64, mimeType: 'image/jpeg' };
+    if (params.docType) body.docType = params.docType;
+    if (typeof params.includeText === 'boolean') body.includeText = params.includeText;
+    if (params.clientSlug) body.clientSlug = params.clientSlug;
+    return JSON.stringify(body);
+  }
+  const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+  const form = new FormData();
+  form.append('image', new Blob([bytes], { type: 'image/jpeg' }), 'page.jpg');
+  form.append('mimeType', 'image/jpeg');
+  if (params.docType) form.append('docType', params.docType);
+  if (typeof params.includeText === 'boolean') form.append('includeText', String(params.includeText));
+  if (params.clientSlug) form.append('clientSlug', params.clientSlug);
+  return form;
+}
+
+async function getCacheKey(base64, params) {
+  const input = `${base64}|${params.docType}|${params.includeText}|${params.clientSlug}`;
+  if (globalThis.crypto?.subtle) {
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+    return `tamga:recognition:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  }
+  return `tamga:recognition:${base64.slice(0, 64)}`;
+}
+
+function readCachedResult(key) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : null;
+  } catch (_) { return null; }
+}
+
+function writeCachedResult(key, result) {
+  try { localStorage.setItem(key, JSON.stringify(result)); } catch (_) { /* storage is optional */ }
 }

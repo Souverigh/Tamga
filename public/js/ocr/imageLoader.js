@@ -28,7 +28,7 @@ export async function loadImageFile(file) {
 // распознавание накладных с крупными фото упиралось в таймаут serverless-функции
 // (504, см. vercel.json maxDuration). Ограничиваем длинную сторону и переходим на
 // JPEG вместо PNG — размер запроса падает в разы, текст остаётся читаемым.
-const GEMINI_MAX_DIMENSION = 1800;
+const GEMINI_MAX_DIMENSION = 2500;
 
 export function pageImageToBase64(pageImage) {
   const naturalWidth = pageImage instanceof HTMLCanvasElement ? pageImage.width : (pageImage.naturalWidth || pageImage.width);
