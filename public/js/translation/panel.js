@@ -38,7 +38,7 @@ export async function initTranslation({getFileGroups}) {
   const editor=el('div',null,'translation-template-editor');editor.hidden=true;root.append(editor);
   const content=el('div',null,'translation-content');root.append(content);
   const exports=el('div',null,'translation-toolbar');root.append(exports);
-  const pairedLabel=el('label','Включить оригинал (распознанные данные) '),paired=el('input');paired.type='checkbox';paired.checked=true;pairedLabel.prepend(paired);
+  const pairedLabel=el('label','Оригинал рядом с переводом (двуязычный документ) '),paired=el('input');paired.type='checkbox';paired.checked=true;pairedLabel.prepend(paired);
   const txt=button('Скачать TXT'),docx=button('Скачать DOCX'),pdf=button('Печать / PDF');exports.append(pairedLabel,txt,docx,pdf);exports.hidden=true;
   let template=null,session=null,controller=null,sequence=0;
   const cache=new Map(); // cleared with source replacement; never persisted

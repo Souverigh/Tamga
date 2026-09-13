@@ -94,7 +94,30 @@ test('exports retain tables, extra text, Unicode and escape active markup',async
   const xml=buildDocumentXml(doc,doc,true);
   assert.ok(xml.includes('<w:tbl>'));assert.ok(xml.includes('Өңү &amp; 中文'));assert.ok(!xml.includes('<img '));
   const html=buildPrintHtml(doc,doc,true);assert.ok(!html.includes('<script>'));assert.ok(!html.includes('<img '));assert.ok(html.includes('<table>'));
-  assert.ok(buildTranslationTxt(doc,doc,true).includes('Китеп\t123'));
+  // paired=true now merges original+translation into one bilingual table
+  // (side by side) instead of two stacked documents — nothing dropped, just
+  // laid out as one document instead of two.
+  assert.ok(buildTranslationTxt(doc,doc,true).includes('Китеп → Китеп\t123 → 123'));
+});
+
+test('paired export merges original and translation into one bilingual document, row for row',async()=>{
+  const {buildDocument}=await import('../public/js/translation/model.mjs');
+  const {buildDocumentXml,buildTranslationTxt,pairedLayoutBlocks}=await import('../public/js/translation/export.mjs');
+  const original=buildDocument({fileName:'x',text:'Пункт один\n\nПункт два',fields:[{label:'ФИО',value:'Асан'}],columns:['Товар'],columnKeys:['name'],items:[{name:'Китеп'}]});
+  const translation={...original,fields:[{...original.fields[0],value:'Asan'}],columns:['Item'],items:[{name:'Book'}],
+    paragraphs:[{...original.paragraphs[0],text:'Point one\n\n'},{...original.paragraphs[1],text:'Point two'}]};
+  const blocks=pairedLayoutBlocks(original,translation);
+  // every original row appears exactly once — no dropped paragraphs, fields or items
+  assert.equal(blocks.find(b=>b.table&&b.table[0][0]==='Поле').table.length,2); // header + 1 field
+  const itemsBlock=blocks.find(b=>b.table&&b.table[0][0]&&b.table[0][0].__bi);
+  assert.equal(itemsBlock.table[1][0].a,'Китеп');assert.equal(itemsBlock.table[1][0].b,'Book');
+  const textBlock=blocks.find(b=>b.table&&b.table[0][0]==='Оригинал');
+  assert.equal(textBlock.table.length,3); // header + 2 paragraphs, none merged or dropped
+  assert.deepEqual(textBlock.table[1],['Пункт один\n\n','Point one\n\n']);
+  const xml=buildDocumentXml(original,translation,true);
+  for (const t of ['Асан','Asan','Китеп','Book','Пункт один','Point one']) assert.ok(xml.includes(t),`missing ${t}`);
+  const txt=buildTranslationTxt(original,translation,true);
+  assert.ok(txt.includes('Асан\tAsan'));assert.ok(txt.includes('Китеп → Book'));
 });
 
 function loadCommonJs(file,stubs,extras={}) {
