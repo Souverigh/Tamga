@@ -99,8 +99,16 @@ export async function initTranslation({getFileGroups}) {
   const toolbarOption=el('div',null,'translation-toolbar-option');
   const pairedLabel=el('label','Оригинал рядом с переводом (двуязычный документ) '),paired=el('input');paired.type='checkbox';paired.checked=true;pairedLabel.prepend(paired);
   toolbarOption.append(pairedLabel);
+  // Формат скачивания — раньше три равнозначные кнопки подряд, теперь один
+  // выбор + одна кнопка (Ethan, 13 сен 2026: "чтобы человек мог выбрать,
+  // через что скачивает"), как и остальные выборы на этой панели (Документ/
+  // Язык перевода). "Печать / PDF" оставлен третьим пунктом списка — печать
+  // технически не "скачивание файла", но раньше жила в этом же ряду кнопок.
   const toolbarButtons=el('div',null,'translation-toolbar-buttons');
-  const txt=button('Скачать TXT'),docx=button('Скачать DOCX'),pdf=button('Печать / PDF');toolbarButtons.append(txt,docx,pdf);
+  const formatSelect=el('select');formatSelect.setAttribute('aria-label','Формат скачивания');
+  [['txt','TXT'],['docx','DOCX'],['pdf','Печать / PDF']].forEach(([value,text])=>{const o=el('option',text);o.value=value;formatSelect.append(o);});
+  const downloadBtn=button('Скачать');downloadBtn.className='btn-primary';
+  toolbarButtons.append(formatSelect,downloadBtn);
   exports.append(toolbarOption,toolbarButtons);exports.hidden=true;
   let template=null,session=null,controller=null,sequence=0;
   const cache=new Map(); // cleared with source replacement; never persisted
@@ -291,6 +299,7 @@ export async function initTranslation({getFileGroups}) {
       Promise.resolve(action(session.original,translated,paired.checked)).catch(e=>setStatus('error',e.message));
     }catch(e){setStatus('error',e.message);}
   }
-  txt.onclick=()=>ready(exportTxt);docx.onclick=()=>ready(exportDocx);pdf.onclick=()=>ready(printTranslation);
+  const FORMAT_ACTIONS={txt:exportTxt,docx:exportDocx,pdf:printTranslation};
+  downloadBtn.onclick=()=>ready(FORMAT_ACTIONS[formatSelect.value]);
   refreshDocuments();
 }

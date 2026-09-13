@@ -101,7 +101,8 @@
 
 .translation-toolbar{display:flex;flex-direction:column;gap:10px;margin:12px 0}
 .translation-toolbar-option{display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--ink-soft)}
-.translation-toolbar-buttons{display:flex;gap:10px;flex-wrap:wrap}
+.translation-toolbar-buttons{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.translation-toolbar-buttons select{max-width:200px}
 .translation-panel select,.translation-panel input:not([type=checkbox]),.translation-panel textarea{
   font:inherit;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line-strong);
   border-radius:6px;background:#fff;color:var(--ink);max-width:100%;
@@ -126,7 +127,8 @@
      read as a HEIGHT once the row becomes a column here — reset it. */
   .translation-field{flex:none;min-width:0}
   .translation-setup-row .btn-primary,.translation-setup-row .btn-secondary{width:100%}
-  .translation-toolbar select{width:100%}
+  .translation-toolbar-buttons{flex-direction:column;align-items:stretch}
+  .translation-toolbar-buttons select{width:100%;max-width:none}
   .translation-template-toolbar{flex-direction:column;align-items:stretch}
   .translation-link-btn{margin-left:0}
   .translation-info .lang-note{position:static;max-width:none}
