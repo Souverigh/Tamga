@@ -34,7 +34,7 @@ import { initBranding, refreshClientUsage, getClientSlug, getClientToken, getCli
 
 // White-label фасад для клиентских пилотов (?client=slug в URL) — см. branding.js.
 // Не блокирует остальную инициализацию: fail-open при сбое сети.
-initBranding();
+const brandingReady = Promise.resolve(initBranding());
 initFeedback(); // не зависит от branding/клиента — кнопка видна всегда, см. feedback.js
 
 // Сколько страниц распознавать одновременно в режиме Gemini. Раньше запросы шли
@@ -159,7 +159,7 @@ initFileList({
 
 initSettings();
 initResultsCollapseToggle();
-initTranslation({ getFileGroups });
+brandingReady.then(() => initTranslation({ getFileGroups }));
 
 // --- Демо-документ одной кнопкой: синтетическая накладная (см. public/demo/),
 // чтобы человек мог сразу увидеть результат, не выбирая свой файл. ---

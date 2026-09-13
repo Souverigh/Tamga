@@ -1,13 +1,13 @@
-const { test } = require('node:test');
+﻿const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
 test('starter templates match schemas and retain full source and additional fields', async () => {
-  const { STARTER_TEMPLATES } = await import('../public/js/translation/templates.mjs');
+  const { STARTER_TEMPLATES } = await import('../lib/translationTemplates.mjs');
   const { validateTemplate, buildDocument, applyTemplate } = await import('../public/js/translation/model.mjs');
   const { DOC_FIELDS } = require('../lib/docSchema');
   assert.equal(STARTER_TEMPLATES.length, 5);
   for (const entry of STARTER_TEMPLATES) {
-    const saved = JSON.parse(require('node:fs').readFileSync(`public/translation-templates/${entry.id}.json`, 'utf8'));
+    const saved = JSON.parse(require('node:fs').readFileSync(`lib/translation-templates/${entry.id}.json`, 'utf8'));
     assert.deepEqual(saved, entry.template, 'downloadable template must match built-in catalog');
     const template = validateTemplate(entry.template);
     assert.match(template.name, /Черновик/);
@@ -104,12 +104,26 @@ test('API gates protected clients and fails closed without spending OCR pages',a
     '../lib/anonymousUsage':{extractClientIp:()=> 'test-ip'}
   };
   const invoke=async(stubs,body)=>{const api=loadCommonJs('api/translate.js',stubs);const res={setHeader(){},status(n){this.code=n;return this;},json(value){this.body=value;return this;}};await api({method:'POST',headers:{},body},res);return res;};
+  stubs['../lib/translationAccess']=loadCommonJs('lib/translationAccess.js',{'./customFieldsLookup':stubs['../lib/customFieldsLookup'],'./clientAuth':stubs['../lib/clientAuth']});
   const body={language:'en',segments:[{id:'a',text:'Текст'}],clientSlug:'acme'};
   assert.equal((await invoke(stubs,body)).code,401);assert.equal(charged,0);assert.equal(called,0);
   stubs['../lib/clientAuth'].requireClientSettingsAuth=()=>({ok:true});
+  stubs['../lib/translationAccess']=loadCommonJs('lib/translationAccess.js',{'./customFieldsLookup':stubs['../lib/customFieldsLookup'],'./clientAuth':stubs['../lib/clientAuth']});
   assert.equal((await invoke(stubs,body)).code,200);assert.equal(charged,1);assert.equal(called,1);
   stubs['../lib/translationQuota'].consumeTranslationQuota=async()=>{throw Object.assign(new Error('Unavailable'),{status:503});};
   assert.equal((await invoke(stubs,body)).code,503);assert.equal(called,1);
+});
+
+test('paid translation access rejects anonymous, unknown and passwordless clients', async()=>{
+  const {requirePaidTranslationClient}=require('../lib/translationAccess');
+  await assert.rejects(requirePaidTranslationClient({headers:{}},null),e=>e.status===403);
+  await assert.rejects(requirePaidTranslationClient({headers:{}},'bad slug'),e=>e.status===400);
+  const make=config=>loadCommonJs('lib/translationAccess.js',{'./customFieldsLookup':{getClientConfig:async()=>config},'./clientAuth':require('../lib/clientAuth')});
+  await assert.rejects(make(null).requirePaidTranslationClient({headers:{}},'unknown'),e=>e.status===403);
+  await assert.rejects(make({passwordHash:null}).requirePaidTranslationClient({headers:{}},'paid'),e=>e.status===403);
+  const fs=require('node:fs');
+  assert.equal(fs.existsSync('public/translation-templates'),false);
+  assert.equal(fs.existsSync('public/js/translation/templates.mjs'),false);
 });
 
 test('quota uses isolated atomic daily and monthly counters and rejects malformed replies',async()=>{
@@ -141,3 +155,4 @@ test('model keeps preserved values and table coordinates through translation',as
   assert.equal(result.items[0].name,'Translation: Китеп');assert.equal(original.items[0].name,'Китеп');
   assert.equal(result.paragraphs.length,original.paragraphs.length);
 });
+

@@ -1,13 +1,22 @@
 import { LANGUAGES, buildDocument, applyTemplate, validateTemplate, translationUnits, translatedDocument } from './model.mjs';
 import { exportTxt, exportDocx, printTranslation, downloadBlob } from './export.mjs';
 import { getClientSlug, getClientToken } from '../branding.js';
-import { STARTER_TEMPLATES } from './templates.mjs';
 
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text)n.textContent=text;if(cls)n.className=cls;return n;};
 const button=text=>{const b=el('button',text,'btn-secondary');b.type='button';return b;};
 const input=(label,value='')=>{const wrapper=el('label',label);const n=el('input');n.value=value;wrapper.append(n);return {wrapper,n};};
 
-export function initTranslation({getFileGroups}) {
+export async function initTranslation({getFileGroups}) {
+  const slug=getClientSlug(),token=getClientToken();
+  if(!slug||!token)return;
+  let STARTER_TEMPLATES;
+  try {
+    const response=await fetch(`/api/translation-templates?slug=${encodeURIComponent(slug)}`,{headers:{'x-client-token':token},cache:'no-store'});
+    if(!response.ok)return;
+    const data=await response.json();
+    if(!Array.isArray(data.templates))return;
+    STARTER_TEMPLATES=data.templates.map(entry=>({id:entry.id,template:validateTemplate(entry.template)}));
+  }catch(_){return;}
   const root=el('section',null,'translation-panel');root.hidden=true;
   document.getElementById('resultsPanel').append(root);
   root.append(el('h2','Перевод документа'));
@@ -44,7 +53,7 @@ export function initTranslation({getFileGroups}) {
     const source=applyTemplate(buildDocument(snapshot()),template,language.value).document;
     const pending=translationUnits(source).filter(u=>!cache.has(key(u)));
     const count=pending.reduce((sum,u)=>sum+u.text.length,0);
-    estimate.textContent=`Новых символов к переводу: ${count}. Сохраняемые реквизиты и готовые фрагменты не отправляются повторно. До 2000 символов в запросе; не более 5 запросов за 24 часа без входа, 50 после входа по умолчанию.`;
+    estimate.textContent=`Новых символов к переводу: ${count}. Сохраняемые реквизиты и готовые фрагменты не отправляются повторно. До 2000 символов в запросе; для платного клиента по умолчанию 50 запросов за 24 часа.`;
   }
   function sourceChanged() {
     updateEstimate();
