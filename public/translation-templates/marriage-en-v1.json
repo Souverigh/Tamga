@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "Черновик — Свидетельство о браке — EN v1",
+  "docType": "Свидетельство о браке",
+  "language": "en",
+  "matchText": [],
+  "fields": [
+    {
+      "source": "ФИО супруга",
+      "target": "Husband’s full name",
+      "preserve": true,
+      "required": true
+    },
+    {
+      "source": "ФИО супруги",
+      "target": "Wife’s full name",
+      "preserve": true,
+      "required": true
+    },
+    {
+      "source": "Дата заключения брака",
+      "target": "Date of marriage",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Серия и номер",
+      "target": "Certificate series and number",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Орган ЗАГС",
+      "target": "Civil registration authority",
+      "preserve": false,
+      "required": false
+    }
+  ]
+}

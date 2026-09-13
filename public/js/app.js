@@ -18,6 +18,7 @@ import { downloadJson } from './export/jsonExport.js';
 import { downloadZip } from './export/zipExport.js';
 import { initFileList, getSelectedFiles, getSelectedDocTypes, getExtraDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
 import { initFeedback } from './ui/feedback.js';
+import { initTranslation } from './translation/panel.js';
 import {
   startProgress, finishProgress, setOverallProgress,
   createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError,
@@ -158,6 +159,7 @@ initFileList({
 
 initSettings();
 initResultsCollapseToggle();
+initTranslation({ getFileGroups });
 
 // --- Демо-документ одной кнопкой: синтетическая накладная (см. public/demo/),
 // чтобы человек мог сразу увидеть результат, не выбирая свой файл. ---

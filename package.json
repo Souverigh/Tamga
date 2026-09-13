@@ -11,7 +11,8 @@
     "test:consistency": "node scripts/test-consistency.js",
     "test:pipeline": "node scripts/test-pipeline.js",
     "test:pages": "node --test scripts/test-page-pipeline.cjs",
-    "test": "npm run test:consistency && npm run test:pipeline && npm run test:pages && npm run test:security",
+    "test": "npm run test:consistency && npm run test:pipeline && npm run test:pages && npm run test:security && npm run test:translation",
+    "test:translation": "node --test scripts/test-translation.cjs",
     "test:security": "node --test scripts/audit-security.cjs"
   },
   "dependencies": {

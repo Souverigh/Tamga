@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "Черновик — Диплом / аттестат — EN v1",
+  "docType": "Диплом / аттестат",
+  "language": "en",
+  "matchText": [],
+  "fields": [
+    {
+      "source": "ФИО",
+      "target": "Full name",
+      "preserve": true,
+      "required": true
+    },
+    {
+      "source": "Учебное заведение",
+      "target": "Educational institution",
+      "preserve": false,
+      "required": true
+    },
+    {
+      "source": "Специальность / квалификация",
+      "target": "Specialisation / qualification",
+      "preserve": false,
+      "required": false
+    },
+    {
+      "source": "Дата выдачи",
+      "target": "Date of issue",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Регистрационный номер",
+      "target": "Registration number",
+      "preserve": true,
+      "required": false
+    }
+  ]
+}

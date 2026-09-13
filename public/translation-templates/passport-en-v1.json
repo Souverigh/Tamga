@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "name": "Черновик — Паспорт / удостоверение личности — EN v1",
+  "docType": "Паспорт / удостоверение личности",
+  "language": "en",
+  "matchText": [],
+  "fields": [
+    {
+      "source": "ФИО",
+      "target": "Full name",
+      "preserve": true,
+      "required": true
+    },
+    {
+      "source": "Дата рождения",
+      "target": "Date of birth",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Пол",
+      "target": "Sex",
+      "preserve": false,
+      "required": false
+    },
+    {
+      "source": "Гражданство",
+      "target": "Citizenship",
+      "preserve": false,
+      "required": false
+    },
+    {
+      "source": "Серия и номер",
+      "target": "Document series and number",
+      "preserve": true,
+      "required": true
+    },
+    {
+      "source": "ПИН (ИНН)",
+      "target": "Personal identification number (taxpayer identification number)",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Дата выдачи",
+      "target": "Date of issue",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Дата окончания",
+      "target": "Date of expiry",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Орган выдачи",
+      "target": "Issuing authority",
+      "preserve": false,
+      "required": false
+    }
+  ]
+}

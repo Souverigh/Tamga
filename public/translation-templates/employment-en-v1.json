@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "name": "Черновик — Справка с места работы — EN v1",
+  "docType": "Справка",
+  "language": "en",
+  "matchText": [
+    "работ"
+  ],
+  "fields": [
+    {
+      "source": "Кому выдана",
+      "target": "Issued to",
+      "preserve": true,
+      "required": true
+    },
+    {
+      "source": "Тип справки",
+      "target": "Type of certificate",
+      "preserve": false,
+      "required": false
+    },
+    {
+      "source": "Номер",
+      "target": "Certificate number",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Дата выдачи",
+      "target": "Date of issue",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Организация",
+      "target": "Organisation",
+      "preserve": false,
+      "required": true
+    },
+    {
+      "source": "Срок действия",
+      "target": "Validity period",
+      "preserve": false,
+      "required": false
+    }
+  ]
+}

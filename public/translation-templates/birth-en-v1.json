@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "name": "Черновик — Свидетельство о рождении — EN v1",
+  "docType": "Свидетельство о рождении",
+  "language": "en",
+  "matchText": [],
+  "fields": [
+    {
+      "source": "ФИО ребёнка",
+      "target": "Child’s full name",
+      "preserve": true,
+      "required": true
+    },
+    {
+      "source": "Дата рождения",
+      "target": "Date of birth",
+      "preserve": true,
+      "required": true
+    },
+    {
+      "source": "Место рождения",
+      "target": "Place of birth",
+      "preserve": false,
+      "required": false
+    },
+    {
+      "source": "ФИО матери",
+      "target": "Mother’s full name",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "ФИО отца",
+      "target": "Father’s full name",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Серия и номер",
+      "target": "Certificate series and number",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Дата выдачи",
+      "target": "Date of issue",
+      "preserve": true,
+      "required": false
+    },
+    {
+      "source": "Орган ЗАГС",
+      "target": "Civil registration authority",
+      "preserve": false,
+      "required": false
+    }
+  ]
+}
