@@ -112,9 +112,13 @@ function validateAndNormalize(body) {
     }
     if (row.formatting.dateFormat && !allowedDate.includes(row.formatting.dateFormat)) {
       return { error: `formatting.dateFormat должен быть одним из: ${allowedDate.join(', ')}` };
+    } else if (!row.formatting.dateFormat) {
+      delete row.formatting.dateFormat;
     }
     if (row.formatting.decimalSeparator && !allowedSeparator.includes(row.formatting.decimalSeparator)) {
       return { error: `formatting.decimalSeparator должен быть одним из: ${allowedSeparator.join(', ')}` };
+    } else if (!row.formatting.decimalSeparator) {
+      delete row.formatting.decimalSeparator;
     }
     // Приоритетная обработка (см. lib/customFieldsLookup.js:getClientConfig —
     // диапазон 1-60 зажимается там же ещё раз при чтении, здесь проверяем
@@ -164,16 +168,21 @@ function validateAndNormalize(body) {
       if (value.length) row.formatting.businessRules = value;
       else delete row.formatting.businessRules;
     }
-    // ВАЖНО: должно перечислять ВСЕ поддерживаемые ключи formatting — раньше
-    // здесь проверялись только dateFormat/decimalSeparator, из-за чего
-    // formatting с ЕДИНСТВЕННО заданным maxConcurrency (без даты/разделителя)
-    // тихо схлопывался в null и настройка приоритета никогда бы не сохранялась.
-    // webhookUrl добавлен в этот же список по той же причине — не наступать
-    // на те же грабли второй раз. businessRules был здесь пропущен и наступил
-    // на те же грабли в третий раз (см. комментарий выше) — добавлен сейчас.
-    if (!row.formatting.dateFormat && !row.formatting.decimalSeparator && !row.formatting.maxConcurrency
-        && !row.formatting.webhookUrl && !(row.formatting.businessRules && row.formatting.businessRules.length)
-        && row.formatting.includeText === undefined) {
+    // Раньше здесь был перечислимый список конкретных ключей formatting
+    // (dateFormat/decimalSeparator/maxConcurrency/webhookUrl/businessRules/
+    // includeText) — при добавлении КАЖДОГО нового ключа кто-то забывал
+    // дописать его сюда, и formatting с этим единственным ключом тихо
+    // схлопывался в null (Ethan/параллельная сессия, 8-12 сен 2026: это
+    // наступало как минимум четыре раза подряд — maxConcurrency, webhookUrl,
+    // businessRules, потом includeText, см. историю в TECH_DEBT.md и git log).
+    // Каждый пустой/невалидный ключ выше уже удалён из row.formatting через
+    // delete — значит на этом месте объект содержит РОВНО то, что реально
+    // задано, и общая проверка "пуст ли объект" корректна для ЛЮБОГО набора
+    // ключей, включая ещё не придуманные. Тот же приём уже используется в
+    // api/client-settings.js (см. currentFormatting/updates.formatting там) —
+    // здесь просто применяем его и на этом эндпоинте, вместо пятой заплатки
+    // на то же самое место.
+    if (!Object.keys(row.formatting).length) {
       row.formatting = null;
     }
   }
