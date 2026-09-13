@@ -898,7 +898,10 @@ function renderUsageSummary(summary, days) {
     div.textContent = text;
     return div;
   };
-  lines.appendChild(mkLine(`Документов обработано: ${summary.totalRequests} (ошибок: ${summary.totalErrors})`));
+  // "Запросов", а не "Документов" — с 13 сен 2026 сюда попадают и вызовы
+  // перевода (см. lib/translation.js:safeRecordTranslationUsage), это уже не
+  // всегда новый распознанный документ, см. разбивку "По типам" ниже.
+  lines.appendChild(mkLine(`Запросов обработано: ${summary.totalRequests} (ошибок: ${summary.totalErrors})`));
   if (summary.avgConfidence != null) {
     lines.appendChild(mkLine(`Средняя уверенность: ${Math.round(summary.avgConfidence)}%`));
   }

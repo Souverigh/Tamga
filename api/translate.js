@@ -10,7 +10,7 @@ module.exports = async (req,res) => {
     const request = validateTranslationRequest(req.body);
     const slug = await requirePaidTranslationClient(req,req.body.clientSlug);
     await consumeTranslationQuota({identity:`client:${slug}`,authenticated:true});
-    const result = await translateSegments(request);
+    const result = await translateSegments(request,slug);
     return res.status(200).json(result);
   } catch (error) {
     const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 600 ? error.status : 503;
