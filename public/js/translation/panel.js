@@ -19,21 +19,46 @@ export async function initTranslation({getFileGroups}) {
   }catch(_){return;}
   const root=el('section',null,'translation-panel');root.hidden=true;
   document.getElementById('resultsPanel').append(root);
-  root.append(el('h2','Перевод документа'));
-  root.append(el('p','Оригинал остаётся неизменным. Выбранные распознанные данные отправляются в Gemini для перевода, в том числе после локального OCR. Точный вид исходного скана не воспроизводится.'));
-  const toolbar=el('div',null,'translation-toolbar');root.append(toolbar);
+
+  // Шапка: заголовок + сворачиваемая справка вместо всегда видимого абзаца
+  // (Ethan, 13 сен 2026: сделать этот экран более user-friendly).
+  const header=el('div',null,'translation-header');
+  const titleGroup=el('div',null,'translation-header-title');
+  const icon=el('span',null,'translation-icon');
+  icon.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h9M9 5v3M11 8c0 4-3 7-6 8M9.5 12c1.5 1.5 3.5 2.5 5.5 3"/><path d="M14 21l4-9 4 9M15.5 18h5"/></svg>';
+  titleGroup.append(icon,el('h2','Перевод документа'));
+  const howItWorks=el('details',null,'translation-info');
+  howItWorks.append(el('summary','Как это работает'));
+  howItWorks.append(el('p','Оригинал остаётся неизменным. Выбранные распознанные данные отправляются в Gemini для перевода, в том числе после локального OCR. Точный вид исходного скана не воспроизводится.','lang-note'));
+  header.append(titleGroup,howItWorks);
+  root.append(header);
+
+  // Основной ряд: документ, язык, «Перевести» — то, что нужно почти всегда.
+  const field=(labelText,control)=>{const wrap=el('div',null,'translation-field');wrap.append(el('span',labelText,'translation-field-label'),control);return wrap;};
+  const setupRow=el('div',null,'translation-setup-row');
   const documents=el('select');documents.setAttribute('aria-label','Документ для перевода');
   const language=el('select');language.setAttribute('aria-label','Язык перевода');
   Object.entries(LANGUAGES).forEach(([value,label])=>{const o=el('option',label);o.value=value;language.append(o);});language.value='en';
-  const start=button('Перевести'),cancel=button('Остановить'),configure=button('Настроить шаблон'),load=button('Загрузить шаблон'),clear=button('Без шаблона');cancel.disabled=true;
-  toolbar.append(documents,language,start,cancel,configure,load,clear);
+  const start=button('Перевести');start.className='btn-primary';
+  const cancel=button('Остановить');cancel.disabled=true;cancel.hidden=true;
+  setupRow.append(field('Документ',documents),field('Язык перевода',language),start,cancel);
+  root.append(setupRow);
+
+  // Шаблон перевода — нужен не всем и не всегда, поэтому свёрнут по умолчанию.
+  const templateSection=el('details',null,'translation-template');
+  templateSection.append(el('summary','⚙ Шаблон перевода — необязательно'));
+  const templateToolbar=el('div',null,'translation-template-toolbar');
   const library=el('select');library.setAttribute('aria-label','Начальные шаблоны перевода');
   const placeholder=el('option','Выбрать черновой образец…');placeholder.value='';library.append(placeholder);
   STARTER_TEMPLATES.forEach(entry=>{const option=el('option',entry.template.name);option.value=entry.id;library.append(option);});
-  const downloadTemplate=button('Скачать текущий шаблон');downloadTemplate.disabled=true;
-  toolbar.append(library,downloadTemplate);
+  const configure=button('Настроить шаблон'),load=button('Загрузить шаблон'),clear=button('Без шаблона');
+  const downloadTemplate=button('Скачать текущий шаблон');downloadTemplate.disabled=true;downloadTemplate.className='translation-link-btn';
+  templateToolbar.append(library,configure,load,clear,downloadTemplate);
+  templateSection.append(templateToolbar);
+  root.append(templateSection);
+
   const message=el('p');message.setAttribute('role','status');root.append(message);
-  const estimate=el('p');root.append(estimate);
+  const estimate=el('p',null,'translation-estimate');root.append(estimate);
   const templateNotice=el('p');root.append(templateNotice);
   const editor=el('div',null,'translation-template-editor');editor.hidden=true;root.append(editor);
   const content=el('div',null,'translation-content');root.append(content);
@@ -47,7 +72,7 @@ export async function initTranslation({getFileGroups}) {
   function snapshot() {return getFileGroups()[Number(documents.value)];}
   function fingerprint() {return JSON.stringify({source:snapshot(),language:language.value,template,client:getClientSlug()});}
   function stale() {return !session || session.fingerprint!==fingerprint();}
-  function reset() {sequence++;controller?.abort();controller=null;session=null;content.replaceChildren();exports.hidden=true;start.disabled=false;cancel.disabled=true;message.textContent='';updateEstimate();}
+  function reset() {sequence++;controller?.abort();controller=null;session=null;content.replaceChildren();exports.hidden=true;start.disabled=false;cancel.disabled=true;cancel.hidden=true;message.textContent='';updateEstimate();}
   function updateEstimate() {
     if(!snapshot()){estimate.textContent='';return;}
     const source=applyTemplate(buildDocument(snapshot()),template,language.value).document;
@@ -150,7 +175,7 @@ export async function initTranslation({getFileGroups}) {
     const batches=[];let batch=[],size=0;
     for(const u of pending){if(batch.length && (size+u.text.length>2000 || batch.length>=50)){batches.push(batch);batch=[];size=0;}batch.push(u);size+=u.text.length;}if(batch.length)batches.push(batch);
     const total=pending.reduce((n,u)=>n+u.text.length,0);
-    controller=new AbortController();const signal=controller.signal;start.disabled=true;cancel.disabled=false;draw();
+    controller=new AbortController();const signal=controller.signal;start.disabled=true;cancel.disabled=false;cancel.hidden=false;draw();
     message.textContent=`К переводу: ${total} символов, запросов: ${batches.length}. Страницы OCR не списываются.`;
     try{
       for(let i=0;i<batches.length;i++){
@@ -167,7 +192,7 @@ export async function initTranslation({getFileGroups}) {
       }
       message.textContent='Перевод готов к проверке. Его можно исправить и скачать.';
     }catch(e){if(run===sequence)message.textContent=e.name==='AbortError'?'Остановлено. Готовые фрагменты сохранены в этой вкладке. Нажмите «Перевести» для продолжения.':e.message+' Готовые фрагменты сохранены; повтор продолжит оставшиеся.';}
-    finally{if(run===sequence){controller=null;start.disabled=false;cancel.disabled=true;updateExports();}}
+    finally{if(run===sequence){controller=null;start.disabled=false;cancel.disabled=true;cancel.hidden=true;updateExports();}}
   };
   function ready(action){if(stale()||exports.hidden){message.textContent='Сначала завершите перевод актуальной версии.';return;}try{Promise.resolve(action(session.original,translatedDocument(session.document,session.results,language.value),paired.checked)).catch(e=>message.textContent=e.message);}catch(e){message.textContent=e.message;}}
   txt.onclick=()=>ready(exportTxt);docx.onclick=()=>ready(exportDocx);pdf.onclick=()=>ready(printTranslation);

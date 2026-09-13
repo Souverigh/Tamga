@@ -1,1 +1,81 @@
-.translation-panel{margin-top:28px;padding-top:20px;border-top:1px solid #ccc}.translation-panel[hidden],.translation-panel [hidden]{display:none!important}.translation-panel p{line-height:1.5}.translation-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}.translation-panel select,.translation-panel input:not([type=checkbox]),.translation-panel textarea{font:inherit;box-sizing:border-box;padding:8px;border:1px solid #aaa;border-radius:6px;background:#fff;color:#222;max-width:100%}.translation-content{overflow-x:auto}.translation-content table{width:100%;table-layout:fixed;border-collapse:collapse}.translation-content th,.translation-content td{padding:10px;border:1px solid #ccc;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere}.translation-content textarea{width:100%;resize:vertical}.translation-template-editor{border:1px solid #ccc;padding:14px;border-radius:8px}.translation-template-editor>label{display:block;margin:8px 0}.translation-template-row{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid #ddd;padding:10px 0}.translation-template-row label{display:flex;align-items:center;gap:5px}.translation-template-editor>button{margin:12px 8px 0 0}@media(max-width:600px){.translation-toolbar select{width:100%}.translation-content th,.translation-content td{padding:6px;font-size:13px}.translation-template-row label{width:100%;flex-wrap:wrap}}
+/* Панель "Перевод документа" — вложена в #resultsPanel, который уже сам
+   карточка (class="panel", background:var(--surface)). Поэтому фон здесь —
+   var(--bg) (как у .group-order-item в styles.css), а не var(--surface):
+   иначе получилась бы белая рамка на белом без контраста. Токены те же,
+   что и в остальном сайте (styles.css), своих цветов не заводим.
+   Структура экрана "до перевода" (шапка + поля + сворачиваемый шаблон)
+   пересмотрена 13 сен 2026 для меньшего визуального шума: второстепенные
+   контролы шаблона убраны под <details>, а не видны все сразу. */
+.translation-panel{
+  margin-top:28px;background:var(--bg);border:1px solid var(--line);
+  border-radius:6px;padding:22px;
+}
+.translation-panel[hidden],.translation-panel [hidden]{display:none!important}
+.translation-panel p{line-height:1.5;margin:10px 0}
+.translation-panel h2{font-size:1.12rem}
+
+.translation-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.translation-header-title{display:flex;align-items:center;gap:10px}
+.translation-icon{
+  width:30px;height:30px;border-radius:8px;background:var(--accent-tint);
+  color:var(--accent-deep);display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.translation-info{position:relative}
+.translation-info>summary{cursor:pointer;font-size:0.8rem;color:var(--ink-soft);list-style:none}
+.translation-info>summary::-webkit-details-marker{display:none}
+.translation-info .lang-note{
+  width:260px;max-width:calc(100vw - 60px);position:absolute;right:0;top:100%;z-index:3;
+  margin-top:6px;background:var(--surface);box-shadow:0 4px 16px rgba(20,20,19,0.12);
+}
+
+.translation-setup-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+.translation-field{flex:1 1 200px;min-width:160px}
+.translation-field-label{display:block;font-size:0.78rem;color:var(--ink-soft);margin-bottom:6px;font-family:'IBM Plex Mono',monospace}
+.translation-setup-row select{width:100%}
+.translation-setup-row .btn-primary,.translation-setup-row .btn-secondary{flex:0 0 auto}
+
+.translation-template{border-top:1px solid var(--line);padding-top:14px;margin-bottom:8px}
+.translation-template>summary{
+  cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--ink-soft);
+  display:flex;align-items:center;gap:7px;list-style:none;
+}
+.translation-template>summary::-webkit-details-marker{display:none}
+.translation-template-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.translation-template-toolbar select{max-width:220px}
+.translation-link-btn{
+  margin-left:auto;background:transparent;border:none;color:var(--ink-soft);
+  text-decoration:underline;font-size:0.82rem;font-weight:500;padding:8px 0;min-height:auto;
+}
+.translation-link-btn:hover:not(:disabled){color:var(--ink)}
+.translation-link-btn:disabled{color:var(--ink-soft);opacity:0.5;cursor:not-allowed;text-decoration:none}
+
+.translation-estimate{font-size:0.83rem;color:var(--ink-soft)}
+
+.translation-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.translation-panel select,.translation-panel input:not([type=checkbox]),.translation-panel textarea{
+  font:inherit;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line-strong);
+  border-radius:6px;background:#fff;color:var(--ink);max-width:100%;
+}
+.translation-content{overflow-x:auto}
+.translation-content table{width:100%;table-layout:fixed;border-collapse:collapse}
+.translation-content th,.translation-content td{padding:10px;border:1px solid var(--line);vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere}
+.translation-content textarea{width:100%;resize:vertical}
+.translation-template-editor{border:1px solid var(--line);padding:14px;border-radius:8px}
+.translation-template-editor>label{display:block;margin:8px 0}
+.translation-template-row{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:10px 0}
+.translation-template-row label{display:flex;align-items:center;gap:5px}
+.translation-template-editor>button{margin:12px 8px 0 0}
+
+@media(max-width:600px){
+  .translation-setup-row{flex-direction:column;align-items:stretch}
+  /* flex-basis:200px from .translation-field's row layout would otherwise be
+     read as a HEIGHT once the row becomes a column here — reset it. */
+  .translation-field{flex:none;min-width:0}
+  .translation-setup-row .btn-primary,.translation-setup-row .btn-secondary{width:100%}
+  .translation-toolbar select{width:100%}
+  .translation-template-toolbar{flex-direction:column;align-items:stretch}
+  .translation-link-btn{margin-left:0}
+  .translation-info .lang-note{position:static;max-width:none}
+  .translation-content th,.translation-content td{padding:6px;font-size:13px}
+  .translation-template-row label{width:100%;flex-wrap:wrap}
+}
