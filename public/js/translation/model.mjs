@@ -15,11 +15,60 @@ export function splitText(text, max = 2000) {
 }
 
 const str = value => value == null ? '' : String(value);
+
+// Правило перевода (не наша выдумка, а нотариальная практика — см. обсуждение
+// с Ethan, 13 сен 2026): ФИО и топонимы в официальном переводе НЕ переводятся
+// по смыслу и НЕ остаются как есть, если целевой язык на другом алфавите —
+// они транслитерируются побуквенно по стандарту (для нас — таблица, близкая
+// к ГОСТ 7.79-2000/приказу МИД РФ, той же логике, что заложена в ICAO 9303 для
+// машиночитаемой зоны загранпаспорта). Только реальные идентификаторы (номера,
+// счета, IBAN/VIN, даты в цифрах) не меняются вообще — их менять действительно
+// нечего. Метки полей ("ФИО", "Номер") — обычный текст, переводятся как обычно.
+const NAME_OR_PLACE_LABEL = /ФИО|Фамилия|Имя|Отчество|Место/i;
+const PRESERVE_LABEL = /ПИН|ИНН|номер|счёт|IBAN|VIN|дата/i;
+
+// Кириллица → латиница, побуквенно, регистронезависимая таблица (применяется
+// с сохранением регистра исходной буквы). Русский/киргизский алфавит плюс три
+// специфичных киргизских буквы (ң/ү/ө) — упрощённая передача без диакритики,
+// т.к. официальные машиночитаемые форматы её не используют. Для казахских букв,
+// отсутствующих здесь, буква проходит без изменений (см. предупреждение при
+// экспорте — как и с киргизским UI, машинный результат нужен на проверку
+// носителем языка перед использованием в качестве официального документа).
+const TRANSLIT_TABLE = {
+  а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'i',к:'k',
+  л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'tc',
+  ч:'ch',ш:'sh',щ:'shch',ъ:'ie',ы:'y',ь:'',э:'e',ю:'iu',я:'ia',
+  ң:'ng',ү:'u',ө:'o',
+};
+// Целевые языки латинского письма — только для них транслитерация вообще
+// нужна. Кыргызский/казахский остаются кириллицей — менять нечего. Китайский
+// формального стандарта передачи иностранных имён внутри перевода не имеет
+// (фонетическая запись иероглифами — отдельная, не решённая здесь задача);
+// пока используем ту же латинскую транслитерацию как более безопасный минимум,
+// чем оставить кириллицу нечитаемой для получателя — см. TECH_DEBT.md.
+const LATIN_SCRIPT_LANGUAGES = new Set(['en','de','uz','tr','zh']);
+
+export function transliterate(value, language) {
+  if (!LATIN_SCRIPT_LANGUAGES.has(language)) return value;
+  return Array.from(str(value)).map(ch => {
+    const lower = ch.toLowerCase();
+    const mapped = TRANSLIT_TABLE[lower];
+    if (mapped === undefined) return ch;
+    if (ch !== lower) return mapped.charAt(0).toUpperCase() + mapped.slice(1);
+    return mapped;
+  }).join('');
+}
+
 export function buildDocument(source) {
   const paragraphs = (str(source.text).match(/[^\n]+(?:\n+|$)|\n+/g) || []).map((text,i)=>({id:`p${i}`,text}));
   return {
     name:str(source.fileName),docType:str(source.docType),paragraphs,
-    fields:(source.fields||[]).map((f,i)=>({id:`f${i}`,label:str(f.label),value:str(f.value),preserve:/ФИО|Фамилия|Имя|Отчество|ПИН|ИНН|номер|счёт|IBAN|VIN|дата/i.test(f.label)})),
+    fields:(source.fields||[]).map((f,i)=>{
+      const label=str(f.label);
+      return {id:`f${i}`,label,value:str(f.value),
+        preserve:PRESERVE_LABEL.test(label),
+        kind:NAME_OR_PLACE_LABEL.test(label)?'name':null};
+    }),
     columns:(source.columns||[]).map(str),keys:(source.columnKeys||[]).map(str),
     items:(source.items||[]).map(row=>Object.fromEntries((source.columnKeys||[]).map(k=>[k,str(row[k])])) )
   };
@@ -67,7 +116,7 @@ export function translationUnits(doc) {
     splitText(text).forEach((part,i)=>{if(part.trim()) units.push({id:`${id}_${i}`,text:part});});
   }
   doc.paragraphs.forEach(p=>add(p.id,p.text));
-  doc.fields.forEach(f=>{if(!f.targetLabel)add(`${f.id}l`,f.label);if(!f.preserve && !/^[\d\s.,:/+()%-]*$/.test(f.value))add(`${f.id}v`,f.value);});
+  doc.fields.forEach(f=>{if(!f.targetLabel)add(`${f.id}l`,f.label);if(!f.preserve && f.kind!=='name' && !/^[\d\s.,:/+()%-]*$/.test(f.value))add(`${f.id}v`,f.value);});
   doc.columns.forEach((c,i)=>add(`c${i}`,c));
   doc.items.forEach((row,r)=>doc.keys.forEach((k,c)=>{if(!/^[\d\s.,:/+()%-]*$/.test(row[k]))add(`r${r}c${c}`,row[k]);}));
   return units;
@@ -77,9 +126,10 @@ export function translatedText(id,source,results) {
   return splitText(source).map((text,i)=>text.trim()?(results.get(`${id}_${i}`)??text):text).join('');
 }
 
-export function translatedDocument(doc,results) {
+export function translatedDocument(doc,results,language) {
   return {...doc,paragraphs:doc.paragraphs.map(p=>({...p,text:translatedText(p.id,p.text,results)})),
-    fields:doc.fields.map(f=>({...f,label:f.targetLabel||translatedText(`${f.id}l`,f.label,results),value:f.preserve?f.value:translatedText(`${f.id}v`,f.value,results)})),
+    fields:doc.fields.map(f=>({...f,label:f.targetLabel||translatedText(`${f.id}l`,f.label,results),
+      value:f.preserve?f.value:(f.kind==='name'?transliterate(f.value,language):translatedText(`${f.id}v`,f.value,results))})),
     columns:doc.columns.map((c,i)=>translatedText(`c${i}`,c,results)),
     items:doc.items.map((row,r)=>Object.fromEntries(doc.keys.map((k,c)=>[k,translatedText(`r${r}c${c}`,row[k],results)]))) };
 }

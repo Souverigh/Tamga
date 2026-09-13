@@ -1,4 +1,4 @@
-import { LANGUAGES, buildDocument, applyTemplate, validateTemplate, translationUnits, translatedDocument } from './model.mjs';
+import { LANGUAGES, buildDocument, applyTemplate, validateTemplate, translationUnits, translatedDocument, transliterate } from './model.mjs';
 import { exportTxt, exportDocx, printTranslation, downloadBlob } from './export.mjs';
 import { getClientSlug, getClientToken } from '../branding.js';
 
@@ -112,7 +112,7 @@ export async function initTranslation({getFileGroups}) {
 
   function draw() {
     content.replaceChildren();if(!session)return;
-    content.append(el('p','Машинный перевод, не проверен переводчиком. Проверьте ФИО, печати, подписи и неразборчивые фрагменты по исходному файлу.'));
+    content.append(el('p','Машинный перевод, не проверен переводчиком. ФИО и топонимы — автоматическая транслитерация, а не перевод: сверьте написание с загранпаспортом. Печати, подписи и неразборчивые фрагменты проверьте по оригиналу.'));
     const table=el('table');const head=el('tr');head.append(el('th','Оригинал — распознанные данные'),el('th','Перевод / сохранённое значение'));table.append(head);
     const units=session.units;
     for(const unit of units){
@@ -121,8 +121,17 @@ export async function initTranslation({getFileGroups}) {
       area.oninput=()=>{session.results.set(unit.id,area.value);updateExports();};target.append(area);row.append(source,target);table.append(row);
     }
     content.append(table);
-    const protectedFields=session.document.fields.filter(f=>f.preserve||f.targetLabel);
-    if(protectedFields.length){const note=el('details');note.append(el('summary','Подписи шаблона и сохраняемые реквизиты'));protectedFields.forEach(f=>note.append(el('p',`${f.label} → ${f.targetLabel||f.label}: ${f.value}`)));content.append(note);}
+    const protectedFields=session.document.fields.filter(f=>f.preserve||f.kind==='name'||f.targetLabel);
+    if(protectedFields.length){
+      const note=el('details');note.append(el('summary','Подписи шаблона и сохраняемые реквизиты'));
+      protectedFields.forEach(f=>{
+        const label=`${f.label} → ${f.targetLabel||f.label}`;
+        if(f.preserve){note.append(el('p',`${label}: ${f.value} (сохранено как есть)`));}
+        else if(f.kind==='name'){const shown=transliterate(f.value,language.value);note.append(el('p',`${label}: ${f.value} → ${shown} (транслитерация, не перевод — сверьте с загранпаспортом)`));}
+        else{note.append(el('p',`${label}: ${f.value}`));}
+      });
+      content.append(note);
+    }
     updateExports();
   }
   function updateExports(){exports.hidden=stale()||session.units.some(u=>!session.results.get(u.id)?.trim())||!!controller;}
@@ -160,7 +169,7 @@ export async function initTranslation({getFileGroups}) {
     }catch(e){if(run===sequence)message.textContent=e.name==='AbortError'?'Остановлено. Готовые фрагменты сохранены в этой вкладке. Нажмите «Перевести» для продолжения.':e.message+' Готовые фрагменты сохранены; повтор продолжит оставшиеся.';}
     finally{if(run===sequence){controller=null;start.disabled=false;cancel.disabled=true;updateExports();}}
   };
-  function ready(action){if(stale()||exports.hidden){message.textContent='Сначала завершите перевод актуальной версии.';return;}try{Promise.resolve(action(session.original,translatedDocument(session.document,session.results),paired.checked)).catch(e=>message.textContent=e.message);}catch(e){message.textContent=e.message;}}
+  function ready(action){if(stale()||exports.hidden){message.textContent='Сначала завершите перевод актуальной версии.';return;}try{Promise.resolve(action(session.original,translatedDocument(session.document,session.results,language.value),paired.checked)).catch(e=>message.textContent=e.message);}catch(e){message.textContent=e.message;}}
   txt.onclick=()=>ready(exportTxt);docx.onclick=()=>ready(exportDocx);pdf.onclick=()=>ready(printTranslation);
   refreshDocuments();
 }

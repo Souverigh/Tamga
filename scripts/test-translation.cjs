@@ -158,11 +158,29 @@ test('model keeps preserved values and table coordinates through translation',as
   const {buildDocument,translationUnits,translatedDocument}=await import('../public/js/translation/model.mjs');
   const original=buildDocument({fileName:'x',text:'Пункт 1\n\nПункт 2',fields:[{label:'ФИО',value:'Асан'},{label:'Номер',value:'AB123'}],columns:['Товар','Цена'],columnKeys:['name','price'],items:[{name:'Китеп',price:'50'}]});
   const units=translationUnits(original);
+  // ФИО и номер — не в очереди на перевод (ни имя, ни идентификатор не уходят в Gemini).
   assert.ok(!units.some(u=>u.text==='Асан'||u.text==='AB123'||u.text==='50'));
   const values=new Map(units.map(u=>[u.id,'Translation: '+u.text]));
-  const result=translatedDocument(original,values);
-  assert.equal(result.fields[0].value,'Асан');assert.equal(result.fields[1].value,'AB123');assert.equal(result.items[0].price,'50');
+  const result=translatedDocument(original,values,'en');
+  // Номер — реальный идентификатор, не меняется никогда.
+  assert.equal(result.fields[1].value,'AB123');assert.equal(result.items[0].price,'50');
   assert.equal(result.items[0].name,'Translation: Китеп');assert.equal(original.items[0].name,'Китеп');
   assert.equal(result.paragraphs.length,original.paragraphs.length);
+});
+
+test('names and place names are transliterated per notarial-translation rules, not translated and not left as-is for a Latin-script target',async()=>{
+  const {buildDocument,translationUnits,translatedDocument,transliterate}=await import('../public/js/translation/model.mjs');
+  const original=buildDocument({fileName:'x',text:'',fields:[{label:'ФИО',value:'Иванов Иван'},{label:'Место рождения',value:'г. Бишкек'},{label:'Номер',value:'AB123'}]});
+  const units=translationUnits(original);
+  // Имя и топоним не уходят в Gemini — транслитерация детерминированная, не машинный перевод.
+  assert.ok(!units.some(u=>u.text==='Иванов Иван'||u.text==='г. Бишкек'));
+  const toEnglish=translatedDocument(original,new Map(),'en');
+  assert.equal(toEnglish.fields[0].value,'Ivanov Ivan');
+  assert.equal(toEnglish.fields[1].value,transliterate('г. Бишкек','en'));
+  assert.notEqual(toEnglish.fields[0].value,original.fields[0].value); // не оставлено как в оригинале
+  assert.equal(toEnglish.fields[2].value,'AB123'); // идентификатор не тронут
+  // Кириллический целевой язык (кыргызский/казахский) — транслитерировать нечего, значение не меняется.
+  const toKyrgyz=translatedDocument(original,new Map(),'ky');
+  assert.equal(toKyrgyz.fields[0].value,'Иванов Иван');
 });
 
