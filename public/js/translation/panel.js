@@ -105,11 +105,17 @@ export async function initTranslation({getFileGroups}) {
   let template=null,session=null,controller=null,sequence=0;
   const cache=new Map(); // cleared with source replacement; never persisted
   let previousNodes=[];
+  // Сетка результатов сворачиваема (Ethan, 13 сен 2026: "иначе будет слишком
+  // длинное окно") — по умолчанию свёрнута, состояние помним между
+  // перерисовками draw() (её вызывают много раз за один перевод), сбрасываем
+  // при reset(), чтобы каждый новый документ/язык снова начинался свёрнутым.
+  let gridExpanded=false;
+  const rowsWord=n=>{const m10=n%10,m100=n%100;if(m10===1&&m100!==11)return 'строка';if(m10>=2&&m10<=4&&(m100<12||m100>14))return 'строки';return 'строк';};
 
   function snapshot() {return getFileGroups()[Number(documents.value)];}
   function fingerprint() {return JSON.stringify({source:snapshot(),language:language.value,template,client:getClientSlug()});}
   function stale() {return !session || session.fingerprint!==fingerprint();}
-  function reset() {sequence++;controller?.abort();controller=null;session=null;content.replaceChildren();exports.hidden=true;start.disabled=false;cancel.disabled=true;cancel.hidden=true;setStatus('idle','');setProgress(null);updateEstimate();}
+  function reset() {sequence++;controller?.abort();controller=null;session=null;content.replaceChildren();exports.hidden=true;start.disabled=false;cancel.disabled=true;cancel.hidden=true;setStatus('idle','');setProgress(null);gridExpanded=false;updateEstimate();}
   function updateEstimate() {
     if(!snapshot()){estimate.textContent='';return;}
     const source=applyTemplate(buildDocument(snapshot()),template,language.value).document;
@@ -227,7 +233,14 @@ export async function initTranslation({getFileGroups}) {
     });
     session.units.forEach(u=>{if(!/^f\d+[lv]_\d+$/.test(u.id))appendRow(sourceBlock(null,u.text),unitTarget(u),session.results.has(u.id)?'done':'pending');});
 
-    content.append(grid);
+    const gridWrap=el('details',null,'translation-grid-details');
+    gridWrap.open=gridExpanded;
+    const gridSummary=el('summary',null,'translation-grid-summary');
+    const summaryText=()=>`${gridWrap.open?'Скрыть':'Показать'} таблицу результатов — ${rowIndex} ${rowsWord(rowIndex)}`;
+    gridSummary.textContent=summaryText();
+    gridWrap.addEventListener('toggle',()=>{gridExpanded=gridWrap.open;gridSummary.textContent=summaryText();});
+    gridWrap.append(gridSummary,grid);
+    content.append(gridWrap);
     updateExports();
   }
   function updateExports(){exports.hidden=stale()||session.units.some(u=>!session.results.get(u.id)?.trim())||!!controller;}

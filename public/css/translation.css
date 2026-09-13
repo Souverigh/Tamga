@@ -78,7 +78,18 @@
 
 /* Сетка результатов перевода — заменяет прежнюю <table> и скрытый <details>
    с сохраняемыми/транслитерируемыми полями: теперь каждое поле — строка со
-   своей плашкой статуса, ничего не спрятано. */
+   своей плашкой статуса, ничего не спрятано. Сама сетка при этом снова
+   в <details> (13 сен 2026: список полей может быть длинным и раздувать
+   окно) — свёрнута по умолчанию, см. gridExpanded в panel.js. */
+.translation-grid-details{margin-bottom:6px}
+.translation-grid-details[open] .translation-grid{margin-top:10px}
+.translation-grid-summary{
+  cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--ink-soft);
+  list-style:none;display:flex;align-items:center;gap:7px;
+}
+.translation-grid-summary::-webkit-details-marker{display:none}
+.translation-grid-summary::before{content:'▸';font-size:0.7rem;color:var(--ink-soft);transition:transform .15s ease}
+.translation-grid-details[open] .translation-grid-summary::before{transform:rotate(90deg)}
 .translation-grid{border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:6px}
 .translation-grid-row{display:grid;grid-template-columns:1fr 1.3fr 118px;align-items:center;border-top:1px solid var(--line)}
 .translation-grid-row:first-child{border-top:none}
