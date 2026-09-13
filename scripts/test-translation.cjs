@@ -1,6 +1,16 @@
 ﻿const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
+test('formatted exports separate details and full text without blank OCR lines', async()=>{
+  const {buildDocumentXml,buildPrintHtml}=await import('../public/js/translation/export.mjs');
+  const doc={name:'Passport',fields:[{label:'Name',value:'TEST'}],columns:[],keys:[],items:[],paragraphs:[{text:'Extra note\n\n\n'},{text:'Second note\n'}]};
+  const xml=buildDocumentXml(doc,doc,false),html=buildPrintHtml(doc,doc,false);
+  assert.ok(html.includes('Реквизиты'));assert.ok(html.includes('Полный текст'));
+  assert.ok(xml.includes('Реквизиты'));assert.ok(xml.includes('Полный текст'));
+  assert.ok(!xml.includes('<w:br/>'));
+  for(const text of ['Extra note','Second note','TEST']){assert.ok(html.includes(text));assert.ok(xml.includes(text));}
+});
+
 test('starter templates match schemas and retain full source and additional fields', async () => {
   const { STARTER_TEMPLATES } = await import('../lib/translationTemplates.mjs');
   const { validateTemplate, buildDocument, applyTemplate } = await import('../public/js/translation/model.mjs');
