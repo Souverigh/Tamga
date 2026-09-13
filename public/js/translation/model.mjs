@@ -48,9 +48,15 @@ const TRANSLIT_TABLE = {
 // чем оставить кириллицу нечитаемой для получателя — см. TECH_DEBT.md.
 const LATIN_SCRIPT_LANGUAGES = new Set(['en','de','uz','tr','zh']);
 
+// Административное сокращение перед топонимом (г./с./п./пос./аул/обл./р-н) —
+// не часть имени места и транслитерируется мимо смысла ("г." -> "g." читается
+// странно). Решение Ethan, 13 сен 2026: маркер убираем, "г. Бишкек" -> просто
+// "Bishkek". Действует только на ведущую позицию — внутри значения не трогаем.
+const PLACE_PREFIX = /^(?:г|с|п|пос|аул|обл|р-н)\.?\s+/i;
+
 export function transliterate(value, language) {
   if (!LATIN_SCRIPT_LANGUAGES.has(language)) return value;
-  return Array.from(str(value)).map(ch => {
+  return Array.from(str(value).replace(PLACE_PREFIX,'')).map(ch => {
     const lower = ch.toLowerCase();
     const mapped = TRANSLIT_TABLE[lower];
     if (mapped === undefined) return ch;

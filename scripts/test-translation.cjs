@@ -199,7 +199,11 @@ test('names and place names are transliterated per notarial-translation rules, n
   assert.ok(!units.some(u=>u.text==='Иванов Иван'||u.text==='г. Бишкек'));
   const toEnglish=translatedDocument(original,new Map(),'en');
   assert.equal(toEnglish.fields[0].value,'Ivanov Ivan');
-  assert.equal(toEnglish.fields[1].value,transliterate('г. Бишкек','en'));
+  // "г." — административное сокращение, не часть топонима: убирается, а не
+  // транслитерируется в "g." (решение Ethan, 13 сен 2026).
+  assert.equal(toEnglish.fields[1].value,'Bishkek');
+  assert.equal(transliterate('с. Кой-Таш','en'),'Koi-Tash');
+  assert.equal(transliterate('Бишкек','en'),'Bishkek'); // без маркера — не задевается
   assert.notEqual(toEnglish.fields[0].value,original.fields[0].value); // не оставлено как в оригинале
   assert.equal(toEnglish.fields[2].value,'AB123'); // идентификатор не тронут
   // Кириллический целевой язык (кыргызский/казахский) — транслитерировать нечего, значение не меняется.
