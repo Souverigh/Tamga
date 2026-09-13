@@ -7,6 +7,9 @@
    пересмотрена 13 сен 2026 для меньшего визуального шума: второстепенные
    контролы шаблона убраны под <details>, а не видны все сразу. */
 .translation-panel{
+  --translit:#7C3FA6;--translit-tint:#F2E9FB; /* новый статус "транслитерация" —
+    токены завели только здесь, а не в общем :root styles.css, т.к. нужны
+    только для этого экрана (13 сен 2026). */
   margin-top:28px;background:var(--bg);border:1px solid var(--line);
   border-radius:6px;padding:22px;
 }
@@ -51,15 +54,55 @@
 
 .translation-estimate{font-size:0.83rem;color:var(--ink-soft)}
 
-.translation-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
+/* Статус-строка (13 сен 2026): раньше — один <p>, теперь тот же смысл с
+   визуальным кодированием через setStatus()/setProgress() в panel.js. */
+.translation-status{margin:12px 0;font-size:0.85rem;display:flex;align-items:center;flex-wrap:wrap;gap:10px;color:var(--ink-soft)}
+.translation-status:empty{margin:0}
+.translation-status-pill{display:inline-flex;align-items:center;gap:7px;border-radius:6px;padding:7px 12px;font-size:0.85rem;font-weight:600}
+.translation-status-success .translation-status-pill{background:var(--good-tint);color:var(--good)}
+.translation-status-warning .translation-status-pill{background:var(--warn-tint);color:var(--warn)}
+.translation-status-error .translation-status-pill{background:var(--danger-tint);color:var(--danger)}
+.translation-status-meta{font-size:0.78rem;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace}
+.translation-progress{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin:0 0 14px}
+.translation-progress-fill{height:100%;width:0;background:var(--accent);border-radius:2px;transition:width .2s ease}
+
+.translation-warning-banner{display:flex;gap:8px;align-items:flex-start;background:var(--warn-tint);color:var(--warn);border-radius:6px;padding:10px 12px;font-size:0.83rem;line-height:1.4;margin:14px 0 16px}
+.translation-warning-banner svg{flex-shrink:0;margin-top:2px}
+
+/* Плашки статуса поля/фрагмента в сетке результатов. */
+.translation-badge{display:inline-block;font-size:0.68rem;font-weight:600;font-family:'IBM Plex Mono',monospace;padding:2px 7px;border-radius:4px;white-space:nowrap}
+.translation-badge-accent{background:var(--accent-tint);color:var(--accent-deep)}
+.translation-badge-translit{background:var(--translit-tint);color:var(--translit)}
+.translation-badge-neutral{background:var(--line);color:var(--ink-soft)}
+.translation-badge-good{background:var(--good-tint);color:var(--good)}
+
+/* Сетка результатов перевода — заменяет прежнюю <table> и скрытый <details>
+   с сохраняемыми/транслитерируемыми полями: теперь каждое поле — строка со
+   своей плашкой статуса, ничего не спрятано. */
+.translation-grid{border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:6px}
+.translation-grid-row{display:grid;grid-template-columns:1fr 1.3fr 118px;align-items:center;border-top:1px solid var(--line)}
+.translation-grid-row:first-child{border-top:none}
+.translation-grid-head{background:var(--accent-tint)}
+.translation-grid-head span{padding:9px 12px;font-size:0.74rem;font-weight:600;color:var(--accent-deep);font-family:'IBM Plex Mono',monospace}
+.translation-grid-row-alt{background:#FAFAF8}
+.translation-grid-cell{padding:10px 12px;min-width:0;overflow-wrap:anywhere}
+.translation-grid-source-label{font-size:0.72rem;color:var(--ink-soft);margin-bottom:2px}
+
+.translation-toolbar{display:flex;flex-direction:column;gap:10px;margin:12px 0}
+.translation-toolbar-option{display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--ink-soft)}
+.translation-toolbar-buttons{display:flex;gap:10px;flex-wrap:wrap}
 .translation-panel select,.translation-panel input:not([type=checkbox]),.translation-panel textarea{
   font:inherit;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line-strong);
   border-radius:6px;background:#fff;color:var(--ink);max-width:100%;
 }
+/* Внутри сетки результатов поля выглядят как текст, а не как обычные инпуты
+   формы: тот же приоритет CSS (.translation-panel + .translation-grid = 2
+   класса, как и в общем правиле выше), но идёт следом, поэтому и побеждает. */
+.translation-panel .translation-grid input{width:100%;padding:6px 8px;border:1px solid transparent;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.85rem;background:transparent;color:var(--ink)}
+.translation-panel .translation-grid input:disabled{color:var(--ink-soft)}
+.translation-panel .translation-grid textarea{width:100%;padding:6px 8px;border:1px solid var(--line-strong);border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.85rem;background:#fff;color:var(--ink);resize:vertical}
+.translation-panel .translation-grid textarea:disabled{background:transparent;border-color:transparent;color:var(--ink-soft)}
 .translation-content{overflow-x:auto}
-.translation-content table{width:100%;table-layout:fixed;border-collapse:collapse}
-.translation-content th,.translation-content td{padding:10px;border:1px solid var(--line);vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere}
-.translation-content textarea{width:100%;resize:vertical}
 .translation-template-editor{border:1px solid var(--line);padding:14px;border-radius:8px}
 .translation-template-editor>label{display:block;margin:8px 0}
 .translation-template-row{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:10px 0}
@@ -76,6 +119,9 @@
   .translation-template-toolbar{flex-direction:column;align-items:stretch}
   .translation-link-btn{margin-left:0}
   .translation-info .lang-note{position:static;max-width:none}
-  .translation-content th,.translation-content td{padding:6px;font-size:13px}
   .translation-template-row label{width:100%;flex-wrap:wrap}
+  .translation-grid-head{display:none}
+  .translation-grid-row{grid-template-columns:1fr;gap:2px;padding:8px 0}
+  .translation-grid-cell{padding:4px 12px}
+  .translation-grid-cell::before{content:attr(data-label);display:block;font-size:0.68rem;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:2px}
 }
