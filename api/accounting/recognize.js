@@ -1,4 +1,4 @@
-const { recognizeEsf, AccountingError } = require('../../lib/accounting/pipeline');
+const { recognizeAccountingDocument, AccountingError } = require('../../lib/accounting/pipeline');
 const { recordAccountingDocument } = require('../../lib/accounting/storage');
 const { checkAccountingApiKey } = require('../../lib/accounting/apiKeyAuth');
 const { readRequestBody } = require('../../lib/multipart');
@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
     const { image, mimeType } = await readRequestBody(req);
     const apiKey = process.env.GEMINI_API_KEY;
 
-    const recognition = await recognizeEsf({ base64: image, mimeType, apiKey });
+    const recognition = await recognizeAccountingDocument({ base64: image, mimeType, apiKey });
 
     // Запись в Supabase — fail-safe (см. storage.js): если не удалось, ответ
     // всё равно уходит клиенту, просто без document_id (нечего исправлять

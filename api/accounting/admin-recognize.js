@@ -1,4 +1,4 @@
-const { recognizeEsf, AccountingError } = require('../../lib/accounting/pipeline');
+const { recognizeAccountingDocument, AccountingError } = require('../../lib/accounting/pipeline');
 const { recordAccountingDocument } = require('../../lib/accounting/storage');
 const { checkAdminSecret } = require('../../lib/adminAuth');
 const { readRequestBody } = require('../../lib/multipart');
@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
     const { image, mimeType } = await readRequestBody(req);
     const apiKey = process.env.GEMINI_API_KEY;
 
-    const recognition = await recognizeEsf({ base64: image, mimeType, apiKey });
+    const recognition = await recognizeAccountingDocument({ base64: image, mimeType, apiKey });
 
     const documentId = await recordAccountingDocument({
       clientRef: 'admin-review',

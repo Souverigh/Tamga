@@ -7,5 +7,13 @@
   "accounting.invoice.total_mismatch": "«Сумма без НДС» + «Сумма НДС» ({expected}) не совпадает с «Итого» ({actual}). Разница: {difference}.",
   "accounting.invoice.line_vat_sum_mismatch": "Сумма НДС по строкам ({sum}) не совпадает с «Сумма НДС» документа ({total}). Разница: {difference}.",
   "accounting.invoice.low_confidence": "«{field}» распознано неуверенно (уверенность {confidence}%) — стоит проверить вручную.",
-  "accounting.invoice.insufficient_data": "Недостаточно данных для проверки «{rule}» — одно или несколько нужных полей не распознаны."
+  "accounting.invoice.insufficient_data": "Недостаточно данных для проверки «{rule}» — одно или несколько нужных полей не распознаны.",
+
+  "accounting.delivery_note.required_field_missing": "Не удалось уверенно распознать «{field}» — поле не заполнено или отсутствует в документе.",
+  "accounting.delivery_note.inn_format_invalid": "«{field}» ({value}) не похож на корректный ИНН — проверьте вручную.",
+  "accounting.delivery_note.line_amount_mismatch": "Строка «{description}»: количество × цена ({quantity} × {unit_price} = {expected}) не совпадает с указанной суммой ({actual}). Разница: {difference}.",
+  "accounting.delivery_note.lines_sum_mismatch": "Сумма строк ({sum}) не совпадает с «Сумма без НДС» документа ({subtotal}). Разница: {difference}.",
+  "accounting.delivery_note.total_mismatch": "«Сумма без НДС» + «Сумма НДС» ({expected}) не совпадает с «Итого» ({actual}). Разница: {difference}.",
+  "accounting.delivery_note.low_confidence": "«{field}» распознано неуверенно (уверенность {confidence}%) — стоит проверить вручную.",
+  "accounting.delivery_note.insufficient_data": "Недостаточно данных для проверки «{rule}» — одно или несколько нужных полей не распознаны."
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>АДРЕ — бухгалтерия (ЭСФ)</title>
+<title>АДРЕ — бухгалтерия</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="/css/styles.css">
 <link rel="stylesheet" href="/admin/admin.css">
@@ -15,7 +15,7 @@
   <header>
     <div class="brand"><span class="seal"><span>А</span></span>АДРЕ — бухгалтерия</div>
   </header>
-  <p class="tagline">Внутренний review-экран для модуля бухгалтерии (первый срез — Счет-фактура / ЭСФ). Не публичная страница сайта.</p>
+  <p class="tagline">Внутренний review-экран для модуля бухгалтерии (Счет-фактура / ЭСФ, Товарная накладная). Не публичная страница сайта.</p>
 
   <!-- Тот же секрет и сессия, что у /admin (public/admin/admin.js, SECRET_KEY='tamga_admin_secret') -->
   <section id="gate" class="panel">
@@ -28,7 +28,7 @@
   <section id="acctMain" style="display:none;">
 
     <div class="panel">
-      <div class="step-label" style="margin-bottom:12px;">Загрузить ЭСФ</div>
+      <div class="step-label" style="margin-bottom:12px;">Загрузить документ</div>
       <label class="btn-secondary acct-file-label" for="fileInput">Выбрать файл</label>
       <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,application/pdf" class="acct-file-input">
       <div id="fileName" class="admin-note" style="display:none;"></div>
@@ -49,7 +49,7 @@
         <!-- Правая колонка: поля + проверки -->
         <div class="panel acct-col-fields">
           <div class="acct-status-row">
-            <div class="step-label" style="margin:0;">Счет-фактура / ЭСФ</div>
+            <div class="step-label" style="margin:0;" id="docTypeLabel">Документ</div>
             <span id="overallBadge" class="acct-badge"></span>
           </div>
 

@@ -22,6 +22,7 @@ const acctLoading = document.getElementById('acctLoading');
 const resultPanel = document.getElementById('resultPanel');
 const previewBox = document.getElementById('previewBox');
 const overallBadge = document.getElementById('overallBadge');
+const docTypeLabel = document.getElementById('docTypeLabel');
 const headerTable = document.getElementById('headerTable');
 const itemsBody = document.getElementById('itemsBody');
 const rulesList = document.getElementById('rulesList');
@@ -75,11 +76,22 @@ function fileToBase64(file) {
   });
 }
 
+// Один общий словарь на все типы документов (backend отдаёт только поля,
+// реально принадлежащие определённому doc_type — см. splitRawResult в
+// pipeline.js, — так что пересечения ключей здесь не создают путаницы:
+// для конкретного результата в header присутствуют только его собственные
+// поля). Накладная (14 сен 2026) добавила delivery_note_number/_date,
+// supplier_name/_inn — остальные её поля (buyer_*/subtotal/vat_total/total/
+// currency) уже были общими с ЭСФ.
 const HEADER_FIELD_LABELS = {
   invoice_number: 'Номер счёта',
   invoice_date: 'Дата',
   seller_name: 'Продавец',
   seller_inn: 'ИНН продавца',
+  delivery_note_number: 'Номер накладной',
+  delivery_note_date: 'Дата',
+  supplier_name: 'Поставщик',
+  supplier_inn: 'ИНН поставщика',
   buyer_name: 'Покупатель',
   buyer_inn: 'ИНН покупателя',
   subtotal: 'Сумма без НДС',
@@ -87,6 +99,11 @@ const HEADER_FIELD_LABELS = {
   vat_total: 'Сумма НДС',
   total: 'Итого',
   currency: 'Валюта'
+};
+
+const DOC_TYPE_LABELS = {
+  esf: 'Счет-фактура / ЭСФ',
+  nakladnaya: 'Товарная накладная'
 };
 
 const LOW_CONFIDENCE_THRESHOLD = 70;
@@ -186,6 +203,7 @@ recognizeBtn.addEventListener('click', async () => {
 
     overallBadge.textContent = data.overall_status;
     overallBadge.className = `acct-badge acct-badge-${data.overall_status}`;
+    docTypeLabel.textContent = DOC_TYPE_LABELS[data.doc_type] || data.doc_type;
     renderHeaderTable(data.header);
     renderItemsTable(data.items);
     renderRules(data.validation);
