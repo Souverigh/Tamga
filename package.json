@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "busboy": "^1.6.0",
+    "exceljs": "^4.4.0",
     "exifr": "^7.1.3"
   }
 }

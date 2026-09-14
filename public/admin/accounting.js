@@ -23,11 +23,14 @@ const resultPanel = document.getElementById('resultPanel');
 const previewBox = document.getElementById('previewBox');
 const overallBadge = document.getElementById('overallBadge');
 const docTypeLabel = document.getElementById('docTypeLabel');
+const exportBtn = document.getElementById('exportBtn');
+const exportError = document.getElementById('exportError');
 const headerTable = document.getElementById('headerTable');
 const itemsBody = document.getElementById('itemsBody');
 const rulesList = document.getElementById('rulesList');
 
 let selectedFile = null;
+let lastResult = null; // { doc_type, header, items, overall_status, validation } — для кнопки экспорта
 
 async function authedFetch(path, options = {}) {
   const secret = session.get();
@@ -226,6 +229,7 @@ recognizeBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
 
+    lastResult = { ...data, file_name: selectedFile.name };
     overallBadge.textContent = data.overall_status;
     overallBadge.className = `acct-badge acct-badge-${data.overall_status}`;
     docTypeLabel.textContent = DOC_TYPE_LABELS[data.doc_type] || data.doc_type;
@@ -239,6 +243,39 @@ recognizeBtn.addEventListener('click', async () => {
   } finally {
     acctLoading.style.display = 'none';
     recognizeBtn.disabled = false;
+  }
+});
+
+exportBtn.addEventListener('click', async () => {
+  if (!lastResult) return;
+  exportError.style.display = 'none';
+  exportBtn.disabled = true;
+  exportBtn.textContent = 'Формируем файл...';
+
+  try {
+    const res = await authedFetch('/api/accounting/export', {
+      method: 'POST',
+      body: JSON.stringify(lastResult)
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Ошибка ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${(lastResult.file_name || 'export').replace(/\.[^.]+$/, '')}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    exportError.textContent = err.message || 'Не удалось скачать файл';
+    exportError.style.display = '';
+  } finally {
+    exportBtn.disabled = false;
+    exportBtn.textContent = 'Скачать Excel';
   }
 });
 
