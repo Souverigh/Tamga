@@ -4,6 +4,11 @@
    не стали. */
 :root{ --acct-ok:#2E7D46; --acct-ok-tint:#E8F3EB; }
 
+/* Защита от горизонтального переполнения страницы в принципе — конкретная
+   причина (немасштабируемая таблица) исправлена ниже отдельно, это —
+   подстраховка на случай других источников overflow в будущем. */
+.acct-wrap{ overflow-x:hidden; }
+
 .acct-columns{ display:flex; gap:20px; align-items:flex-start; }
 .acct-col-original{ flex:0 0 38%; position:sticky; top:20px; }
 .acct-col-fields{ flex:1; min-width:0; }
@@ -35,12 +40,20 @@
 .acct-header-table td.acct-low-confidence{ color:var(--warn); }
 
 .acct-rules-list{ display:flex; flex-direction:column; gap:6px; }
-.acct-rule{ font-size:0.85rem; border-radius:6px; padding:8px 12px; line-height:1.4; display:flex; gap:8px; align-items:flex-start; }
+.acct-rule{ font-size:0.85rem; border-radius:6px; padding:8px 12px; line-height:1.4; display:flex; gap:8px; align-items:flex-start;
+  overflow-wrap:anywhere; word-break:break-word; }
 .acct-rule-FAILED{ color:var(--danger); background:var(--danger-tint); }
 .acct-rule-WARNING{ color:var(--warn); background:var(--warn-tint); }
 .acct-rule-PASS{ color:var(--acct-ok); background:var(--acct-ok-tint); }
 .acct-rule-INSUFFICIENT_DATA{ color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); }
 .acct-rule-id{ font-family:'IBM Plex Mono', monospace; font-size:0.75rem; opacity:0.75; flex-shrink:0; }
+
+/* Таблица строк документа может быть шире экрана (много колонок) — скроллим
+   ГОРИЗОНТАЛЬНО ТОЛЬКО таблицу, а не всю страницу (без этого контейнера
+   .admin-table растягивала body, из-за чего остальной контент — например,
+   .acct-rules-list — обрезался справа, см. скриншот Ethan, 14 сен 2026). */
+.acct-table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.acct-table-scroll table{ min-width:520px; }
 
 @media (max-width: 760px){
   .acct-columns{ flex-direction:column; }

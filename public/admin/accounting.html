@@ -56,12 +56,14 @@
           <table class="admin-table acct-header-table" id="headerTable"></table>
 
           <div class="admin-section-title">Строки</div>
-          <table class="admin-table" id="itemsTable">
-            <thead>
-              <tr><th>Наименование</th><th>Кол-во</th><th>Цена</th><th>Сумма</th><th>Ставка НДС</th><th>Сумма НДС</th></tr>
-            </thead>
-            <tbody id="itemsBody"></tbody>
-          </table>
+          <div class="acct-table-scroll">
+            <table class="admin-table" id="itemsTable">
+              <thead>
+                <tr><th>Наименование</th><th>Кол-во</th><th>Цена</th><th>Сумма</th><th>Ставка НДС</th><th>Сумма НДС</th></tr>
+              </thead>
+              <tbody id="itemsBody"></tbody>
+            </table>
+          </div>
 
           <div class="admin-section-title">Проверки</div>
           <div id="rulesList" class="acct-rules-list"></div>

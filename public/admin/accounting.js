@@ -141,8 +141,11 @@ function renderItemsTable(items) {
 }
 
 // Только не-PASS/не-NOT_APPLICABLE проверки показываем текстом (message) —
-// PASS/NOT_APPLICABLE рендерим свёрнуто, одной строкой на rule_id, чтобы не
-// заваливать бухгалтера подтверждениями "всё ок" по каждой из 6+ проверок.
+// PASS/NOT_APPLICABLE рендерим свёрнуто, ОДИН РАЗ на rule_id (правило может
+// вернуть несколько результатов — по одному на поле/строку, — так что без
+// dedupe тут был бы 'INV-001, INV-001, INV-001, INV-CONF, INV-CONF, ...',
+// см. скриншот Ethan, 14 сен 2026), просто чтобы бухгалтер видел, что
+// остальное проверялось и вопросов не вызвало.
 function renderRules(results) {
   rulesList.innerHTML = '';
   const passed = results.filter(r => r.status === 'PASS' || r.status === 'NOT_APPLICABLE');
@@ -154,10 +157,11 @@ function renderRules(results) {
     div.innerHTML = `<span class="acct-rule-id">${r.rule_id}</span><span>${r.message || r.status}</span>`;
     rulesList.appendChild(div);
   }
-  if (passed.length) {
+  const uniquePassedIds = [...new Set(passed.map(r => r.rule_id))];
+  if (uniquePassedIds.length) {
     const div = document.createElement('div');
     div.className = 'acct-rule acct-rule-PASS';
-    div.textContent = `Пройдено без замечаний: ${passed.map(r => r.rule_id).join(', ')}`;
+    div.textContent = `Пройдено без замечаний (${uniquePassedIds.length}): ${uniquePassedIds.join(', ')}`;
     rulesList.appendChild(div);
   }
 }
