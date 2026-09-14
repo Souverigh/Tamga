@@ -169,12 +169,12 @@ function renderItemsTable(items) {
   for (const item of items) {
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td>${item.description?.value || '—'}</td>
-      <td>${item.quantity?.value || '—'}</td>
-      <td>${item.unit_price?.value || '—'}</td>
-      <td>${item.amount?.value || '—'}</td>
-      <td>${item.vat_rate?.value || '—'}</td>
-      <td>${item.vat_amount?.value || '—'}</td>
+      <td data-label="Наименование">${item.description?.value || '—'}</td>
+      <td data-label="Кол-во">${item.quantity?.value || '—'}</td>
+      <td data-label="Цена">${item.unit_price?.value || '—'}</td>
+      <td data-label="Сумма">${item.amount?.value || '—'}</td>
+      <td data-label="Ставка НДС">${item.vat_rate?.value || '—'}</td>
+      <td data-label="Сумма НДС">${item.vat_amount?.value || '—'}</td>
     `;
     itemsBody.appendChild(row);
   }

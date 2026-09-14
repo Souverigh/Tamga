@@ -58,4 +58,19 @@
 @media (max-width: 760px){
   .acct-columns{ flex-direction:column; }
   .acct-col-original{ position:static; flex:none; width:100%; }
+
+  /* Таблица «Строки» (6 колонок) физически не помещается на мобильный экран
+     даже после переноса в скроллящийся контейнер — горизонтальный скролл
+     обрезал текст визуально (Ethan, 14 сен 2026, "входила в мобильный
+     экран"). На мобильном превращаем строки таблицы в карточки:
+     заголовок скрываем, каждая ячейка — своя строка с подписью поля через
+     data-label (см. renderItemsTable в accounting.js) вместо колонки. */
+  .acct-table-scroll{ overflow-x:visible; }
+  #itemsTable{ min-width:0; width:100%; }
+  #itemsTable thead{ display:none; }
+  #itemsTable, #itemsTable tbody, #itemsTable tr, #itemsTable td{ display:block; width:100%; }
+  #itemsTable tr{ border:1px solid var(--line); border-radius:8px; padding:4px 12px; margin-bottom:10px; }
+  #itemsTable td{ display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+    padding:6px 0; border:none; text-align:right; }
+  #itemsTable td::before{ content:attr(data-label); color:var(--ink-soft); font-weight:600; text-align:left; flex-shrink:0; }
 }
