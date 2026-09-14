@@ -63,9 +63,12 @@ function buildFieldConfidenceBadge(confidence) {
   return badge;
 }
 
-// warnings — [{level:'error'|'info', message}] от checkBusinessRules
-// (см. postprocess/businessRules.js). null, если проверять было нечего —
-// вызывающий код (renderWarnings ниже) в этом случае просто очищает контейнер.
+// warnings — [{level:'error'|'info'|'suspicious', message}] от checkBusinessRules
+// (см. postprocess/businessRules.js) и признаков подделки (см.
+// lib/postprocess/forgerySignals.js — только суффикс 'suspicious', сервер
+// добавляет их сам, отдельного вызова из браузера для этого нет).
+// null, если проверять было нечего — вызывающий код (renderWarnings ниже)
+// в этом случае просто очищает контейнер.
 function buildWarningsBox(warnings) {
   if (!warnings || !warnings.length) return null;
   const box = document.createElement('div');
@@ -224,7 +227,7 @@ function readLineItemsTable(container) {
 // postprocess/duplicateDetection.js) и передано сюда именно для ЭТОГО файла —
 // сама renderResultGroup ничего не знает про остальные файлы пачки и не
 // умеет считать дубли самостоятельно.
-export function renderResultGroup({ fileName, pages, docType, fields, items, columns, columnKeys, confidence }, duplicateWarnings = []) {
+export function renderResultGroup({ fileName, pages, docType, fields, items, columns, columnKeys, confidence, warnings: serverWarnings = [] }, duplicateWarnings = []) {
   const group = document.createElement('div');
   group.className = 'file-result-group';
   // Хранится прямо на DOM-элементе группы — та же схема, что _tamgaColumns/
@@ -298,8 +301,11 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
   const warningsContainer = document.createElement('div');
   collapsible.appendChild(warningsContainer);
   // Дубли идут первыми (найдены один раз на всю пачку, не зависят от текущего
-  // типа документа этой карточки) — бизнес-правила пересчитываются на каждый
-  // вызов (см. typeSelect ниже), дубли просто добавляются к ним неизменными.
+  // типа документа этой карточки), затем признаки подделки (см.
+  // lib/postprocess/forgerySignals.js — тоже посчитаны один раз сервером,
+  // не зависят от typeSelect) — бизнес-правила пересчитываются на каждый
+  // вызов (см. typeSelect ниже), оба предыдущих массива просто добавляются
+  // к ним неизменными.
   // Настраиваемые правила клиента (Ethan, 7 сен 2026, formatting.businessRules,
   // см. lib/customFieldsLookup.js) читаются из getClientBranding() — тот же
   // кэш, что уже используют exportOptions()/фасад (см. branding.js), не
@@ -308,7 +314,7 @@ export function renderResultGroup({ fileName, pages, docType, fields, items, col
   function renderWarnings(currentFields) {
     const branding = getClientBranding();
     const clientRules = (branding && branding.businessRules) || [];
-    const warnings = [...duplicateWarnings, ...checkBusinessRules(currentFields, clientRules, typeSelect.value)];
+    const warnings = [...duplicateWarnings, ...serverWarnings, ...checkBusinessRules(currentFields, clientRules, typeSelect.value)];
     group._tamgaWarnings = warnings;
     warningsContainer.innerHTML = '';
     const box = buildWarningsBox(warnings);

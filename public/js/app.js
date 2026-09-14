@@ -264,7 +264,7 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
     // если человек сам явно снял галочку (по умолчанию включена, см. index.html).
     const includeText = includeTextCheckbox.checked;
     const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug, clientToken, includeText });
-    return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys, confidence: result.confidence };
+    return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys, confidence: result.confidence, warnings: result.warnings || [] };
   }
   const rawText = await recognizeWithTesseract(pageImage, lang, m => {
     const pct = Math.round(m.progress * 100);
@@ -274,7 +274,7 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
   // Офлайн-режим не даёт сопоставимой оценки уверенности (Tesseract возвращает
   // символьную OCR-точность, не «правильно ли извлечены поля») — не подменяем
   // одно другим, честно null: бейдж на фронтенде просто не покажется.
-  return { rawText, docType: null, fields: null, items: null, columns: null, columnKeys: null, confidence: null };
+  return { rawText, docType: null, fields: null, items: null, columns: null, columnKeys: null, confidence: null, warnings: [] };
 }
 
 // Собирает финальный результат по файлу из уже распознанных страниц (без сети —
@@ -324,6 +324,12 @@ function finalizeFileResult(entry, mode) {
   // только первая — иначе смазанная последняя страница многостраничного
   // документа осталась бы никак не отмеченной.
   let fileConfidence = null;
+  // Признаки подделки (см. lib/postprocess/forgerySignals.js) — по странице,
+  // не по полю, поэтому просто собираем со всех страниц файла, без merge-логики
+  // fileFieldsMap выше. Дедуп по тексту сообщения — многостраничный документ
+  // не должен показать одно и то же предупреждение по разу на каждую страницу.
+  const fileWarningsSeen = new Set();
+  const fileWarnings = [];
   for (const rec of entry.pageRecognized) {
     if (!rec) continue;
     if (!entry.presetType && fileDocType == null && rec.docType) fileDocType = rec.docType;
@@ -336,6 +342,9 @@ function finalizeFileResult(entry, mode) {
     }
     if (fileItems === null && rec.items) { fileItems = rec.items; fileColumns = rec.columns || null; fileColumnKeys = rec.columnKeys || null; }
     fileConfidence = minConfidence(fileConfidence, rec.confidence);
+    (rec.warnings || []).forEach(w => {
+      if (w && !fileWarningsSeen.has(w.message)) { fileWarningsSeen.add(w.message); fileWarnings.push(w); }
+    });
   }
   const fileFields = fileFieldsMap ? Array.from(fileFieldsMap.values()) : null;
 
@@ -374,7 +383,7 @@ function finalizeFileResult(entry, mode) {
     fileDocType = isKnownDocType(fileDocType) ? fileDocType : 'Другое';
   }
 
-  return { fileName: entry.file.name, pages: entry.pageTexts, docType: fileDocType, fields, items, columns: fileColumns, columnKeys: fileColumnKeys, confidence: fileConfidence };
+  return { fileName: entry.file.name, pages: entry.pageTexts, docType: fileDocType, fields, items, columns: fileColumns, columnKeys: fileColumnKeys, confidence: fileConfidence, warnings: fileWarnings };
 }
 
 recognizeBtn.addEventListener('click', async () => {

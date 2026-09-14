@@ -263,6 +263,7 @@
   .business-warning{ font-size:0.82rem; border-radius:6px; padding:6px 10px; line-height:1.35; }
   .business-warning-error{ color:var(--danger); background:var(--danger-tint); }
   .business-warning-info{ color:var(--warn); background:var(--warn-tint); }
+  .business-warning-suspicious{ color:var(--accent-deep); background:var(--accent-tint); }
   .file-result-group.collapsed .file-result-title .chevron{ transform:rotate(-90deg); }
   .file-result-group.collapsed .collapsible{ display:none; }
   .doc-type-badge{

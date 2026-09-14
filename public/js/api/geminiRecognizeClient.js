@@ -104,7 +104,12 @@ export async function recognizeWithGemini(pageImage, presetDocType, options) {
         columnKeys: Array.isArray(data.columnKeys) && data.columnKeys.length ? data.columnKeys : null,
         // Самооценка модели (0-100, см. lib/confidence.js) — null, если сервер
         // её не смог нормализовать (см. lib/fieldFormat.js:normalizeConfidence).
-        confidence: typeof data.confidence === 'number' ? data.confidence : null
+        confidence: typeof data.confidence === 'number' ? data.confidence : null,
+        // Признаки подделки/редактирования (см. lib/postprocess/forgerySignals.js) —
+        // только level:'suspicious', т.к. 'error'/'info' (обычные бизнес-правила)
+        // и так пересчитываются заново на клиенте из тех же fields (см.
+        // results.js:renderWarnings) — дублировать их здесь незачем.
+        warnings: Array.isArray(data.warnings) ? data.warnings.filter(w => w && w.level === 'suspicious') : []
       };
       writeCachedResult(cacheKey, result);
       return result;
