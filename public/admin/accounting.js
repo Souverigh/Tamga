@@ -106,6 +106,29 @@ const DOC_TYPE_LABELS = {
   nakladnaya: 'Товарная накладная'
 };
 
+// Человеко-читаемые названия правил для интерфейса — только для отображения.
+// Сам rule_id (INV-002, NAK-002...) остаётся техническим идентификатором:
+// он же хранится в Supabase (accounting_rules_registry, accounting_rule_results),
+// на него ссылаются тесты и миграции — трогать его ради читаемости UI не
+// стали (Ethan, 14 сен 2026: "только подпись в интерфейсе"). Показываем
+// рядом с названием как маленькую техническую пометку — см. renderRules.
+const RULE_LABELS = {
+  'INV-001': 'Обязательные поля',
+  'INV-INN': 'Формат ИНН',
+  'INV-002': 'Кол-во × цена = сумма строки',
+  'INV-003': 'Сумма строк = сумма без НДС',
+  'INV-004': 'База × ставка НДС = сумма НДС',
+  'INV-005': 'Сумма без НДС + НДС = итого',
+  'INV-006': 'Сумма НДС по строкам = НДС документа',
+  'INV-CONF': 'Уверенность распознавания',
+  'NAK-001': 'Обязательные поля',
+  'NAK-INN': 'Формат ИНН',
+  'NAK-002': 'Кол-во × цена = сумма строки',
+  'NAK-003': 'Сумма строк = сумма без НДС',
+  'NAK-004': 'Сумма без НДС + НДС = итого',
+  'NAK-CONF': 'Уверенность распознавания'
+};
+
 const LOW_CONFIDENCE_THRESHOLD = 70;
 
 // <img> не показывает PDF (это не картинка), а <embed>/<iframe> с PDF на
@@ -171,14 +194,16 @@ function renderRules(results) {
   for (const r of rest) {
     const div = document.createElement('div');
     div.className = `acct-rule acct-rule-${r.status}`;
-    div.innerHTML = `<span class="acct-rule-id">${r.rule_id}</span><span>${r.message || r.status}</span>`;
+    const label = RULE_LABELS[r.rule_id] || r.rule_id;
+    div.innerHTML = `<span class="acct-rule-id" title="${r.rule_id}">${label}</span><span>${r.message || r.status}</span>`;
     rulesList.appendChild(div);
   }
   const uniquePassedIds = [...new Set(passed.map(r => r.rule_id))];
   if (uniquePassedIds.length) {
     const div = document.createElement('div');
     div.className = 'acct-rule acct-rule-PASS';
-    div.textContent = `Пройдено без замечаний (${uniquePassedIds.length}): ${uniquePassedIds.join(', ')}`;
+    const labels = uniquePassedIds.map(id => RULE_LABELS[id] || id);
+    div.textContent = `Пройдено без замечаний (${uniquePassedIds.length}): ${labels.join(', ')}`;
     rulesList.appendChild(div);
   }
 }

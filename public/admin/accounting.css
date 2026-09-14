@@ -40,13 +40,13 @@
 .acct-header-table td.acct-low-confidence{ color:var(--warn); }
 
 .acct-rules-list{ display:flex; flex-direction:column; gap:6px; }
-.acct-rule{ font-size:0.85rem; border-radius:6px; padding:8px 12px; line-height:1.4; display:flex; gap:8px; align-items:flex-start;
+.acct-rule{ font-size:0.85rem; border-radius:6px; padding:8px 12px; line-height:1.4; display:flex; flex-direction:column; gap:2px;
   overflow-wrap:anywhere; word-break:break-word; }
 .acct-rule-FAILED{ color:var(--danger); background:var(--danger-tint); }
 .acct-rule-WARNING{ color:var(--warn); background:var(--warn-tint); }
 .acct-rule-PASS{ color:var(--acct-ok); background:var(--acct-ok-tint); }
 .acct-rule-INSUFFICIENT_DATA{ color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); }
-.acct-rule-id{ font-family:'IBM Plex Mono', monospace; font-size:0.75rem; opacity:0.75; flex-shrink:0; }
+.acct-rule-id{ font-weight:600; }
 
 /* Таблица строк документа может быть шире экрана (много колонок) — скроллим
    ГОРИЗОНТАЛЬНО ТОЛЬКО таблицу, а не всю страницу (без этого контейнера
