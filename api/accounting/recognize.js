@@ -2,6 +2,7 @@ const { recognizeEsf, AccountingError } = require('../../lib/accounting/pipeline
 const { recordAccountingDocument } = require('../../lib/accounting/storage');
 const { checkAccountingApiKey } = require('../../lib/accounting/apiKeyAuth');
 const { readRequestBody } = require('../../lib/multipart');
+const { render } = require('../../lib/accounting/i18n');
 
 // POST /api/accounting/recognize — публичный API модуля бухгалтерии.
 // Отдельный периметр от /api/recognize и /api/v1/recognize (см.
@@ -52,7 +53,10 @@ module.exports = async (req, res) => {
       header: recognition.header,
       items: recognition.items,
       normalized: recognition.normalized,
-      validation: recognition.results
+      // message — уже отрендеренный RU-текст (§0 хендовера), чтобы API-клиенту
+      // не нужно было тащить свой словарь message_key — тот тоже возвращается,
+      // на случай если клиент захочет рендерить сам (например, под KY/EN позже).
+      validation: recognition.results.map(r => ({ ...r, message: r.message_key ? render(r.message_key, r.params) : null }))
     });
   } catch (error) {
     if (error instanceof AccountingError) {

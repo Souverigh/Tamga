@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>АДРЕ — бухгалтерия (ЭСФ)</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="stylesheet" href="/admin/admin.css">
+<link rel="stylesheet" href="/admin/accounting.css">
+</head>
+<body>
+<div class="wrap admin-wrap acct-wrap">
+
+  <header>
+    <div class="brand"><span class="seal"><span>А</span></span>АДРЕ — бухгалтерия</div>
+  </header>
+  <p class="tagline">Внутренний review-экран для модуля бухгалтерии (первый срез — Счет-фактура / ЭСФ). Не публичная страница сайта.</p>
+
+  <!-- Тот же секрет и сессия, что у /admin (public/admin/admin.js, SECRET_KEY='tamga_admin_secret') -->
+  <section id="gate" class="panel">
+    <div class="step-label">Вход</div>
+    <input type="password" id="secretInput" class="admin-input" placeholder="Секрет админки" autocomplete="current-password">
+    <button class="btn-primary" id="gateBtn" type="button" style="margin-top:12px;">Войти</button>
+    <div id="gateError" class="admin-error" style="display:none;"></div>
+  </section>
+
+  <section id="acctMain" style="display:none;">
+
+    <div class="panel">
+      <div class="step-label" style="margin-bottom:12px;">Загрузить ЭСФ</div>
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,application/pdf" class="admin-input">
+      <button class="btn-primary" id="recognizeBtn" type="button" style="margin-top:12px;" disabled>Распознать</button>
+      <div id="acctError" class="admin-error" style="display:none;"></div>
+      <div id="acctLoading" class="admin-note" style="display:none;">Распознаём и проверяем...</div>
+    </div>
+
+    <section id="resultPanel" style="display:none;">
+      <div class="acct-columns">
+
+        <!-- Левая колонка: оригинал -->
+        <div class="panel acct-col-original">
+          <div class="step-label">Оригинал</div>
+          <img id="previewImg" class="acct-preview" alt="Загруженный документ">
+        </div>
+
+        <!-- Правая колонка: поля + проверки -->
+        <div class="panel acct-col-fields">
+          <div class="acct-status-row">
+            <div class="step-label" style="margin:0;">Счет-фактура / ЭСФ</div>
+            <span id="overallBadge" class="acct-badge"></span>
+          </div>
+
+          <table class="admin-table acct-header-table" id="headerTable"></table>
+
+          <div class="admin-section-title">Строки</div>
+          <table class="admin-table" id="itemsTable">
+            <thead>
+              <tr><th>Наименование</th><th>Кол-во</th><th>Цена</th><th>Сумма</th><th>Ставка НДС</th><th>Сумма НДС</th></tr>
+            </thead>
+            <tbody id="itemsBody"></tbody>
+          </table>
+
+          <div class="admin-section-title">Проверки</div>
+          <div id="rulesList" class="acct-rules-list"></div>
+        </div>
+
+      </div>
+    </section>
+
+  </section>
+
+</div>
+<script type="module" src="/admin/accounting.js"></script>
+</body>
+</html>
