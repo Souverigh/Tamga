@@ -29,7 +29,9 @@
 
     <div class="panel">
       <div class="step-label" style="margin-bottom:12px;">Загрузить ЭСФ</div>
-      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,application/pdf" class="admin-input">
+      <label class="btn-secondary acct-file-label" for="fileInput">Выбрать файл</label>
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,application/pdf" class="acct-file-input">
+      <div id="fileName" class="admin-note" style="display:none;"></div>
       <button class="btn-primary" id="recognizeBtn" type="button" style="margin-top:12px;" disabled>Распознать</button>
       <div id="acctError" class="admin-error" style="display:none;"></div>
       <div id="acctLoading" class="admin-note" style="display:none;">Распознаём и проверяем...</div>
@@ -41,7 +43,7 @@
         <!-- Левая колонка: оригинал -->
         <div class="panel acct-col-original">
           <div class="step-label">Оригинал</div>
-          <img id="previewImg" class="acct-preview" alt="Загруженный документ">
+          <div id="previewBox"></div>
         </div>
 
         <!-- Правая колонка: поля + проверки -->

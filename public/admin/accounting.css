@@ -10,6 +10,18 @@
 
 .acct-preview{ width:100%; border-radius:6px; border:1px solid var(--line); display:block; }
 
+/* Нативный <input type="file"> с обычной admin-input стилизацией рендерится
+   почти невидимым в мобильном Chrome (Ethan, 14 сен 2026, скриншот — пустое
+   место вместо кнопки выбора файла). Стандартный обходной паттерн: сам input
+   визуально скрыт, но доступен (не display:none — иначе теряется фокус для
+   клавиатуры/скринридера), видимая кнопка — обычный <label for="fileInput">. */
+.acct-file-input{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}
+.acct-file-label{ display:inline-block; cursor:pointer; }
+.acct-file-label:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
 .acct-status-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
 .acct-badge{ font-size:0.78rem; font-weight:600; padding:4px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:0.02em; }
 .acct-badge-PASS{ color:var(--acct-ok); background:var(--acct-ok-tint); }

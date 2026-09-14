@@ -15,11 +15,12 @@ const gateError = document.getElementById('gateError');
 const acctMain = document.getElementById('acctMain');
 
 const fileInput = document.getElementById('fileInput');
+const fileName = document.getElementById('fileName');
 const recognizeBtn = document.getElementById('recognizeBtn');
 const acctError = document.getElementById('acctError');
 const acctLoading = document.getElementById('acctLoading');
 const resultPanel = document.getElementById('resultPanel');
-const previewImg = document.getElementById('previewImg');
+const previewBox = document.getElementById('previewBox');
 const overallBadge = document.getElementById('overallBadge');
 const headerTable = document.getElementById('headerTable');
 const itemsBody = document.getElementById('itemsBody');
@@ -57,6 +58,12 @@ gateBtn.addEventListener('click', () => {
 fileInput.addEventListener('change', () => {
   selectedFile = fileInput.files[0] || null;
   recognizeBtn.disabled = !selectedFile;
+  if (selectedFile) {
+    fileName.textContent = selectedFile.name;
+    fileName.style.display = '';
+  } else {
+    fileName.style.display = 'none';
+  }
 });
 
 function fileToBase64(file) {
@@ -83,6 +90,24 @@ const HEADER_FIELD_LABELS = {
 };
 
 const LOW_CONFIDENCE_THRESHOLD = 70;
+
+// <img> не показывает PDF (это не картинка), а <embed>/<iframe> с PDF на
+// мобильном Chrome ненадёжны (часто пусто/плейсхолдер вместо содержимого) —
+// поэтому PDF открывается по ссылке в системном просмотрщике/новой вкладке
+// через blob:, а не встраивается инлайн. Картинки — как раньше, инлайн.
+let previewBlobUrl = null;
+
+function renderPreview(mimeType, base64) {
+  if (previewBlobUrl) { URL.revokeObjectURL(previewBlobUrl); previewBlobUrl = null; }
+
+  if (mimeType === 'application/pdf') {
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    previewBlobUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+    previewBox.innerHTML = `<a href="${previewBlobUrl}" target="_blank" rel="noopener" class="btn-secondary">Открыть PDF</a>`;
+    return;
+  }
+  previewBox.innerHTML = `<img src="data:${mimeType};base64,${base64}" class="acct-preview" alt="Загруженный документ">`;
+}
 
 function renderHeaderTable(header) {
   headerTable.innerHTML = '';
@@ -146,7 +171,7 @@ recognizeBtn.addEventListener('click', async () => {
 
   try {
     const base64 = await fileToBase64(selectedFile);
-    previewImg.src = `data:${selectedFile.type};base64,${base64}`;
+    renderPreview(selectedFile.type, base64);
 
     const res = await authedFetch('/api/accounting/admin-recognize', {
       method: 'POST',
