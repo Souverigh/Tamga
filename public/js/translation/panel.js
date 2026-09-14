@@ -230,7 +230,7 @@ export async function initTranslation({getFileGroups}) {
         appendRow(sourceBlock(f.label,f.value),staticInput(f.value),'preserved');
       } else if(f.kind==='name') {
         const override=el('input');override.setAttribute('aria-label',`Транслитерация: ${f.label}`);
-        override.value=session.nameOverrides.get(f.id) ?? transliterate(f.value,language.value);
+        override.value=session.nameOverrides.get(f.id) ?? session.verifiedNames.get(f.value) ?? transliterate(f.value,language.value);
         override.oninput=()=>session.nameOverrides.set(f.id,override.value);
         appendRow(sourceBlock(f.label,f.value),override,'translit');
       } else {
@@ -253,6 +253,43 @@ export async function initTranslation({getFileGroups}) {
   }
   function updateExports(){exports.hidden=stale()||session.units.some(u=>!session.results.get(u.id)?.trim())||!!controller;}
   function key(unit){return JSON.stringify(['v1',getClientSlug(),snapshot()?.docType,language.value,unit.id.replace(/\d/g,''),unit.text]);}
+  // Словарь проверенных транслитераций (общий между клиентами, см.
+  // lib/verifiedTransliterations.js) — подсказка ЛУЧШЕ обычной transliterate()
+  // для ФИО/топонимов, которые уже кто-то поправил вручную раньше. Грузится
+  // асинхронно и не блокирует рисование грида (draw() и так безопасно падает
+  // обратно на transliterate(), пока запрос не вернулся). forSession!==session
+  // — защита от гонки: пока грузилось, могли начать перевод другого
+  // документа/языка, тогда ответ просто игнорируется.
+  function fetchVerifiedNames(forSession) {
+    const originals=[...new Set(forSession.document.fields.filter(f=>f.kind==='name' && f.value?.trim()).map(f=>f.value))].slice(0,50);
+    if(!originals.length)return;
+    const token=getClientToken();
+    fetch('/api/transliterations',{method:'POST',headers:{'Content-Type':'application/json',...(token?{'x-client-token':token}:{})},
+      body:JSON.stringify({action:'lookup',clientSlug:getClientSlug(),originals})})
+      .then(r=>r.ok?r.json():null)
+      .then(data=>{
+        if(!data?.values || forSession!==session)return;
+        for(const [original,value] of Object.entries(data.values))forSession.verifiedNames.set(original,value);
+        draw();
+      }).catch(()=>{});
+  }
+  // Подтверждение — клиент вручную поправил (или сознательно оставил) поле
+  // транслитерации, значит это разумно надёжный вариант. Fire-and-forget
+  // (см. api/transliterations.js:confirm) — сбой записи не должен мешать
+  // уже готовому скачиванию, поэтому вызывается без await из ready().
+  function confirmNameOverrides() {
+    const entries=[];
+    session.document.fields.forEach(f=>{
+      if(f.kind==='name' && session.nameOverrides.has(f.id)) {
+        const verifiedValue=session.nameOverrides.get(f.id);
+        if(verifiedValue?.trim())entries.push({original:f.value,verifiedValue});
+      }
+    });
+    if(!entries.length)return;
+    const token=getClientToken();
+    fetch('/api/transliterations',{method:'POST',headers:{'Content-Type':'application/json',...(token?{'x-client-token':token}:{})},
+      body:JSON.stringify({action:'confirm',clientSlug:getClientSlug(),entries})}).catch(()=>{});
+  }
   start.onclick=async()=>{
     if(controller || !snapshot())return;
     const run=++sequence;
@@ -261,7 +298,8 @@ export async function initTranslation({getFileGroups}) {
     const units=translationUnits(applied.document);
     if(!units.length && !original.fields.length){setStatus('warning','Нет текста для перевода. Включите извлечение полного текста при распознавании.');return;}
     const old=!stale()?session:null;
-    session={fingerprint:fingerprint(),original,document:applied.document,units,results:old?.results||new Map(),nameOverrides:old?.nameOverrides||new Map()};
+    session={fingerprint:fingerprint(),original,document:applied.document,units,results:old?.results||new Map(),nameOverrides:old?.nameOverrides||new Map(),verifiedNames:old?.verifiedNames||new Map()};
+    fetchVerifiedNames(session);
     for(const u of units)if(!session.results.has(u.id) && cache.has(key(u)))session.results.set(u.id,cache.get(key(u)));
     const pending=units.filter(u=>!session.results.has(u.id));
     const batches=[];let batch=[],size=0;
@@ -295,6 +333,7 @@ export async function initTranslation({getFileGroups}) {
           const src=session.document.fields[i];
           return (src && session.nameOverrides.has(src.id))?{...f,value:session.nameOverrides.get(src.id)}:f;
         });
+        confirmNameOverrides();
       }
       Promise.resolve(action(session.original,translated,paired.checked)).catch(e=>setStatus('error',e.message));
     }catch(e){setStatus('error',e.message);}
