@@ -59,6 +59,28 @@ require.cache[require.resolve(cflPath)] = {
   }
 };
 
+// consumeAnonymousUsageImpl/checkAnonymousRecognizeRateLimitImpl — дефолт
+// "всё разрешено", сценарии переопределяют (15 сен 2026, троттлинг только
+// для бесплатного анонимного тарифа — см. lib/authRateLimit.js).
+let consumeAnonymousUsageImpl = async () => ({ allowed: true, pagesUsed: 1, dailyLimit: 20 });
+const auPath = path.join(ROOT, 'lib/anonymousUsage.js');
+require.cache[require.resolve(auPath)] = {
+  id: auPath, filename: auPath, loaded: true,
+  exports: {
+    consumeAnonymousUsage: (...args) => consumeAnonymousUsageImpl(...args),
+    hashIp: ip => `hashed:${ip}`
+  }
+};
+
+let checkAnonymousRecognizeRateLimitImpl = async () => ({ allowed: true, retryAfterSeconds: 0 });
+const arlPath = path.join(ROOT, 'lib/authRateLimit.js');
+require.cache[require.resolve(arlPath)] = {
+  id: arlPath, filename: arlPath, loaded: true,
+  exports: {
+    checkAnonymousRecognizeRateLimit: (...args) => checkAnonymousRecognizeRateLimitImpl(...args)
+  }
+};
+
 process.env.GEMINI_API_KEY = 'fake-key-for-pipeline-test';
 const { recognizeDocument } = require(path.join(ROOT, 'lib/recognize.js'));
 
@@ -306,6 +328,44 @@ async function main() {
     const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Справка' });
     assert.deepStrictEqual(r.warnings, []);
   });
+
+  // Троттлинг анонимного бесплатного тарифа (15 сен 2026, Ethan: "сделай
+  // только для бесплатной версии") — три сценария по lib/authRateLimit.js:
+  // checkAnonymousRecognizeRateLimit, все с clientIp (без него trottling-ветка
+  // вообще не выполняется, см. предыдущий сценарий).
+  await scenario('Анонимный + IP: троттлинг разрешил → распознавание идёт как раньше, дневной лимит списывается', async () => {
+    let dailyConsumed = 0;
+    consumeAnonymousUsageImpl = async () => { dailyConsumed++; return { allowed: true, pagesUsed: 1, dailyLimit: 20 }; };
+    checkAnonymousRecognizeRateLimitImpl = async () => ({ allowed: true, retryAfterSeconds: 0 });
+    callGeminiImpl = async () => ({ result: { fields: [], confidence: 90 }, usage: null });
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Справка', clientIp: '1.2.3.4' });
+    assert.strictEqual(dailyConsumed, 1);
+    assert.strictEqual(r.confidence, 90);
+  });
+  await scenario('Анонимный + IP: троттлинг заблокировал → 429 ДО обращения к Gemini и ДО дневного лимита', async () => {
+    let dailyConsumed = 0;
+    let geminiCalled = false;
+    consumeAnonymousUsageImpl = async () => { dailyConsumed++; return { allowed: true, pagesUsed: 1, dailyLimit: 20 }; };
+    checkAnonymousRecognizeRateLimitImpl = async () => ({ allowed: false, retryAfterSeconds: 42 });
+    callGeminiImpl = async () => { geminiCalled = true; return { result: { fields: [], confidence: 90 }, usage: null }; };
+    await assert.rejects(
+      recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Справка', clientIp: '1.2.3.4' }),
+      err => { assert.strictEqual(err.status, 429); assert.ok(err.message.includes('42')); return true; }
+    );
+    assert.strictEqual(dailyConsumed, 0, 'заблокированный троттлингом запрос не должен тратить дневную страницу впустую');
+    assert.strictEqual(geminiCalled, false, 'заблокированный троттлингом запрос не должен доходить до Gemini');
+  });
+  await scenario('Анонимный + IP: троттлинг недоступен (fail closed) → 503, Gemini не вызывается', async () => {
+    let geminiCalled = false;
+    checkAnonymousRecognizeRateLimitImpl = async () => ({ allowed: false, unavailable: true, retryAfterSeconds: 30 });
+    callGeminiImpl = async () => { geminiCalled = true; return { result: { fields: [], confidence: 90 }, usage: null }; };
+    await assert.rejects(
+      recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Справка', clientIp: '1.2.3.4' }),
+      err => { assert.strictEqual(err.status, 503); assert.strictEqual(err.code, 'QUOTA_UNAVAILABLE'); return true; }
+    );
+    assert.strictEqual(geminiCalled, false);
+  });
+  checkAnonymousRecognizeRateLimitImpl = async () => ({ allowed: true, retryAfterSeconds: 0 }); // сброс для сценариев ниже, если появятся
 
   console.log('\n=== Регрессия пайплайна recognizeDocument ===');
   results.forEach(r => {
