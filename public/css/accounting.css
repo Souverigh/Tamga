@@ -1,0 +1,81 @@
+/* public/css/accounting.css — клиентская веб-панель модуля бухгалтерии
+   (public/js/accounting/panel.js), добавлено 15 сен 2026 (Ethan: "добавить
+   модуль бухгалтерии для платных клиентов"). НЕ линкует /admin/accounting.css
+   и /admin/admin.css напрямую в index.html — у admin.css есть `.tagline{...}`,
+   который переопределил бы стиль тега сайта (та же строка, где site's own
+   tagline уже стилизован в styles.css). Вместо этого сюда скопированы только
+   безопасные, префиксованные правила (acct-*, нужные admin-* утилиты для
+   таблиц/ошибок), без риска столкновения с существующими селекторами сайта.
+   Источник — public/admin/accounting.css + выборка из public/admin/admin.css,
+   держать в синхроне вручную, если общий вид review-экрана поменяется. */
+
+:root{ --acct-ok:#2E7D46; --acct-ok-tint:#E8F3EB; }
+
+/* --- admin-* утилиты (только используемые здесь, скопированы из admin.css) --- */
+.admin-note{ font-size:0.8rem; color:var(--ink-soft); margin-top:6px; line-height:1.45; }
+.admin-section-title{ font-family:'Space Grotesk', sans-serif; font-size:1rem; font-weight:600; margin:28px 0 14px; padding-top:18px; border-top:1px solid var(--line); }
+.admin-section-title:first-of-type{ border-top:none; padding-top:0; margin-top:22px; }
+.admin-error{ color:var(--danger); font-size:0.85rem; margin-top:10px; }
+.admin-table{ width:100%; border-collapse:collapse; font-size:0.88rem; }
+.admin-table th{ text-align:left; font-weight:500; color:var(--ink-soft); font-size:0.78rem; text-transform:none; padding:0 10px 8px; border-bottom:1.5px solid var(--line); }
+.admin-table td{ padding:12px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+.admin-table tr:last-child td{ border-bottom:none; }
+
+/* --- acct-* (копия public/admin/accounting.css) --- */
+.acct-wrap{ overflow-x:hidden; }
+.acct-columns{ display:flex; gap:20px; align-items:flex-start; }
+.acct-col-original{ flex:0 0 38%; position:sticky; top:20px; }
+.acct-col-fields{ flex:1; min-width:0; }
+.acct-preview{ width:100%; border-radius:6px; border:1px solid var(--line); display:block; }
+.acct-file-input{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}
+.acct-file-label{ display:inline-block; cursor:pointer; }
+.acct-file-label:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.acct-file-list{ display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+.acct-file-item{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:8px 12px; border:1px solid var(--line); border-radius:6px;
+  cursor:pointer; font-size:0.85rem; background:var(--surface);
+}
+.acct-file-item.acct-file-active{ border-color:var(--accent); }
+.acct-file-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.acct-file-status{ flex-shrink:0; font-size:0.75rem; font-weight:600; padding:2px 8px; border-radius:20px; }
+.acct-file-status-pending{ color:var(--ink-soft); background:var(--line); }
+.acct-file-status-recognizing{ color:var(--accent); background:var(--line); }
+.acct-file-status-done{ color:var(--acct-ok); background:var(--acct-ok-tint); }
+.acct-file-status-error{ color:var(--danger); background:var(--danger-tint); }
+.acct-status-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.acct-badge{ font-size:0.78rem; font-weight:600; padding:4px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:0.02em; }
+.acct-badge-PASS{ color:var(--acct-ok); background:var(--acct-ok-tint); }
+.acct-badge-FAILED{ color:var(--danger); background:var(--danger-tint); }
+.acct-badge-WARNING{ color:var(--warn); background:var(--warn-tint); }
+.acct-badge-INSUFFICIENT_DATA{ color:var(--ink-soft); background:var(--line); }
+.acct-badge-NOT_APPLICABLE{ color:var(--ink-soft); background:var(--line); }
+.acct-header-table td{ font-size:0.9rem; }
+.acct-header-table td.acct-field-name{ color:var(--ink-soft); white-space:nowrap; padding-right:16px; }
+.acct-header-table td.acct-low-confidence{ color:var(--warn); }
+.acct-rules-list{ display:flex; flex-direction:column; gap:6px; }
+.acct-rule{ font-size:0.85rem; border-radius:6px; padding:8px 12px; line-height:1.4; display:flex; flex-direction:column; gap:2px;
+  overflow-wrap:anywhere; word-break:break-word; }
+.acct-rule-FAILED{ color:var(--danger); background:var(--danger-tint); }
+.acct-rule-WARNING{ color:var(--warn); background:var(--warn-tint); }
+.acct-rule-PASS{ color:var(--acct-ok); background:var(--acct-ok-tint); }
+.acct-rule-INSUFFICIENT_DATA{ color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); }
+.acct-rule-id{ font-weight:600; }
+.acct-table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.acct-table-scroll table{ min-width:520px; }
+
+@media (max-width: 760px){
+  .acct-columns{ flex-direction:column; }
+  .acct-col-original{ position:static; flex:none; width:100%; }
+  .acct-table-scroll{ overflow-x:visible; }
+  #acctItemsTable{ min-width:0; width:100%; }
+  #acctItemsTable thead{ display:none; }
+  #acctItemsTable, #acctItemsTable tbody, #acctItemsTable tr, #acctItemsTable td{ display:block; width:100%; }
+  #acctItemsTable tr{ border:1px solid var(--line); border-radius:8px; padding:4px 12px; margin-bottom:10px; }
+  #acctItemsTable td{ display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+    padding:6px 0; border:none; text-align:right; }
+  #acctItemsTable td::before{ content:attr(data-label); color:var(--ink-soft); font-weight:600; text-align:left; flex-shrink:0; }
+}

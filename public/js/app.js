@@ -19,6 +19,7 @@ import { downloadZip } from './export/zipExport.js';
 import { initFileList, getSelectedFiles, getSelectedDocTypes, getExtraDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
 import { initFeedback } from './ui/feedback.js';
 import { initTranslation } from './translation/panel.js';
+import { initAccounting } from './accounting/panel.js';
 import {
   startProgress, finishProgress, setOverallProgress,
   createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError,
@@ -160,6 +161,7 @@ initFileList({
 initSettings();
 initResultsCollapseToggle();
 brandingReady.then(() => initTranslation({ getFileGroups }));
+brandingReady.then(() => initAccounting());
 
 // --- Демо-документ одной кнопкой: синтетическая накладная (см. public/demo/),
 // чтобы человек мог сразу увидеть результат, не выбирая свой файл. ---
