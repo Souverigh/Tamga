@@ -7,9 +7,27 @@
 // (public/js/config/docSchema.js) — та же схема, что использует сайт для
 // ручного выбора типа, чтобы дропдаун/подсказки полей здесь не расходились
 // с тем, что реально знает бэкенд (lib/docSchema.js — серверная копия).
+//
+// Частично разбито на модули 15 сен 2026 (Ethan: разделить на переиспользуемые
+// сегменты; правило "код вне бухгалтерского модуля не трогаем" снято насовсем
+// в этом же разговоре) — вынесены самодостаточные/чисто-функциональные части:
+// chipEditor.js (виджет чипов), format.js (форматирование), clientsList.js
+// (рендер таблицы клиентов), fieldPicker.js (пикер полей для конструктора
+// бизнес-правил). НЕ вынесены: редакторы «Переопределение полей», «Кастомные
+// типы», «Бизнес-правила» и форма клиента — они завязаны друг на друга через
+// общий мутабельный `state` (и editingId/editingOverrideType/
+// editingCustomTypeName/editingBusinessRuleIndex) на ~500 строк; безопасно
+// разнести их по файлам значит сначала вынести это состояние в явный
+// стор/класс — отдельная, более рискованная задача для живого инструмента,
+// который меняет реальные API-ключи и бизнес-правила клиентов. Сделать
+// отдельным шагом, если Итан подтвердит объём.
 
 import { DOC_TYPES, DOC_FIELDS, isTableType, columnsForType } from '../js/config/docSchema.js';
 import { createIdleSession } from '../js/idleSession.js';
+import { createChipEditor } from './chipEditor.js';
+import { splitFields, ruleSummaryText } from './format.js';
+import { renderClients as renderClientsList } from './clientsList.js';
+import { ruleFieldCatalog, refreshRuleFieldPickers as refreshPickers } from './fieldPicker.js';
 
 const SECRET_KEY = 'tamga_admin_secret';
 const session = createIdleSession(SECRET_KEY);
@@ -124,93 +142,6 @@ function adminFetch(path, options = {}) {
   });
 }
 
-// --- Переиспользуемый редактор списка полей: чипы с крестиком + добавление
-// своего значения + (опционально) кнопки-подсказки из стандартной схемы типа. ---
-
-function createChipEditor(container, initialValues) {
-  container.innerHTML = '';
-  let values = [...(initialValues || [])];
-
-  const selectedRow = document.createElement('div');
-  selectedRow.className = 'admin-chip-editor-selected';
-  const addRow = document.createElement('div');
-  addRow.className = 'admin-chip-add-row';
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'admin-input';
-  input.placeholder = 'Своё поле — введите название и нажмите «Добавить»';
-  const addBtn = document.createElement('button');
-  addBtn.className = 'btn-secondary';
-  addBtn.type = 'button';
-  addBtn.textContent = 'Добавить';
-  addRow.appendChild(input);
-  addRow.appendChild(addBtn);
-  const suggestionsRow = document.createElement('div');
-  suggestionsRow.className = 'admin-chip-suggestions';
-
-  container.appendChild(selectedRow);
-  container.appendChild(addRow);
-  container.appendChild(suggestionsRow);
-
-  let suggestions = [];
-
-  function renderSelected() {
-    selectedRow.innerHTML = '';
-    values.forEach(v => {
-      const chip = document.createElement('span');
-      chip.className = 'admin-chip';
-      const text = document.createElement('span');
-      text.textContent = v;
-      chip.appendChild(text);
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.textContent = '×';
-      removeBtn.title = 'Убрать поле';
-      removeBtn.addEventListener('click', () => {
-        values = values.filter(x => x !== v);
-        renderSelected();
-        renderSuggestions();
-      });
-      chip.appendChild(removeBtn);
-      selectedRow.appendChild(chip);
-    });
-  }
-
-  function renderSuggestions() {
-    suggestionsRow.innerHTML = '';
-    suggestions.filter(s => !values.includes(s)).forEach(s => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'admin-chip-suggestion';
-      btn.textContent = '+ ' + s;
-      btn.addEventListener('click', () => {
-        values.push(s);
-        renderSelected();
-        renderSuggestions();
-      });
-      suggestionsRow.appendChild(btn);
-    });
-  }
-
-  function addFromInput() {
-    const v = input.value.trim();
-    if (!v || values.includes(v)) { input.value = ''; return; }
-    values.push(v);
-    input.value = '';
-    renderSelected();
-    renderSuggestions();
-  }
-  addBtn.addEventListener('click', addFromInput);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addFromInput(); } });
-
-  renderSelected();
-
-  return {
-    getValues: () => values,
-    setSuggestions: (list) => { suggestions = list || []; renderSuggestions(); }
-  };
-}
-
 // --- Гейт по секрету ---
 
 async function tryEnter(secret, restoring = false) {
@@ -248,86 +179,8 @@ if (savedSecret) {
 
 // --- Список клиентов ---
 
-function formatUpdatedAt(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-}
-
-function badgesFor(client) {
-  const badges = [];
-  if (client.has_password) badges.push('🔒 Пароль на сайт');
-  if (client.page_limit != null) {
-    const exhausted = client.pages_used >= client.page_limit;
-    badges.push(`${exhausted ? '⛔' : '📄'} Страниц: ${client.pages_used}/${client.page_limit}`);
-  }
-  if (client.fields && client.fields.length) badges.push('Устар. поля (любой тип)');
-  if (client.field_overrides && Object.keys(client.field_overrides).length) badges.push(`Переопределений: ${Object.keys(client.field_overrides).length}`);
-  if (client.custom_doc_types && Object.keys(client.custom_doc_types).length) badges.push(`Своих типов: ${Object.keys(client.custom_doc_types).length}`);
-  if (client.formatting && (client.formatting.dateFormat || client.formatting.decimalSeparator)) badges.push('Формат');
-  if (client.formatting && client.formatting.maxConcurrency) badges.push(`Приоритет ×${client.formatting.maxConcurrency}`);
-  if (client.formatting && client.formatting.webhookUrl) badges.push('Вебхук');
-  if (client.formatting && Array.isArray(client.formatting.businessRules) && client.formatting.businessRules.length) badges.push(`Правил: ${client.formatting.businessRules.length}`);
-  if (client.display_name || client.logo_url || client.accent_color) badges.push('Фасад');
-  return badges;
-}
-
 function renderClients(clients) {
-  if (!clients.length) {
-    clientsEmpty.style.display = 'block';
-    clientsTableWrap.style.display = 'none';
-    return;
-  }
-  clientsEmpty.style.display = 'none';
-  clientsTableWrap.style.display = 'block';
-  clientsBody.innerHTML = '';
-
-  clients.forEach(client => {
-    const tr = document.createElement('tr');
-
-    const idCell = document.createElement('td');
-    idCell.className = 'admin-id-cell';
-    if (client.api_key) { const d = document.createElement('div'); d.textContent = `API: ${client.api_key}`; idCell.appendChild(d); }
-    if (client.client_slug) { const d = document.createElement('div'); d.textContent = `Slug: ${client.client_slug}`; idCell.appendChild(d); }
-    tr.appendChild(idCell);
-
-    const labelCell = document.createElement('td');
-    labelCell.textContent = client.label || '—';
-    tr.appendChild(labelCell);
-
-    const badgesCell = document.createElement('td');
-    const badgeWrap = document.createElement('div');
-    badgeWrap.className = 'admin-badges';
-    const badges = badgesFor(client);
-    if (!badges.length) {
-      badgeWrap.textContent = '—';
-    } else {
-      badges.forEach(b => {
-        const span = document.createElement('span');
-        span.className = 'admin-badge';
-        span.textContent = b;
-        badgeWrap.appendChild(span);
-      });
-    }
-    badgesCell.appendChild(badgeWrap);
-    tr.appendChild(badgesCell);
-
-    const updatedCell = document.createElement('td');
-    updatedCell.className = 'admin-updated';
-    updatedCell.textContent = formatUpdatedAt(client.updated_at);
-    tr.appendChild(updatedCell);
-
-    const actionsCell = document.createElement('td');
-    actionsCell.className = 'admin-row-actions';
-    const editBtn = document.createElement('button');
-    editBtn.className = 'admin-link-btn';
-    editBtn.textContent = 'Изменить';
-    editBtn.addEventListener('click', () => openForm(client));
-    actionsCell.appendChild(editBtn);
-    tr.appendChild(actionsCell);
-
-    clientsBody.appendChild(tr);
-  });
+  renderClientsList({ clientsEmpty, clientsTableWrap, clientsBody }, clients, openForm);
 }
 
 async function reloadClients() {
@@ -339,127 +192,17 @@ async function reloadClients() {
 // --- Блок «Переопределение полей» ---
 
 // Пикер полей для конструктора бизнес-правил (Ethan, 9 сен 2026: "могу
-// добавить такой же пикер в админку?" — портировано из public/settings/settings.js
-// один в один, оба места используют одинаковые id элементов формы правил).
-// Ниже — makeSearchablePicker (генерическая, без зависимостей от state) и
-// ruleFieldCatalog/refreshRuleFieldPickers (используют DOC_FIELDS/state этого
-// файла) — вынесены сюда, а не в отдельный общий модуль, т.к. оба файла и так
-// не делят код (разные HTML-страницы, разный набор допустимых действий).
+// добавить такой же пикер в админку?") — makeSearchablePicker/
+// ruleFieldCatalog/refreshRuleFieldPickers живут в fieldPicker.js (вынесены
+// 15 сен 2026); здесь только тонкая обёртка, привязанная к конкретным
+// DOM-элементам формы правил и к state этого файла.
 let ruleFieldPickersReady = false;
-
-function makeSearchablePicker(picker, placeholder) {
-  const labels = Array.from(picker.querySelectorAll('label'));
-  const details = document.createElement('details');
-  details.className = 'admin-picker-dropdown';
-  details.open = picker.dataset.open === 'true';
-  const summary = document.createElement('summary');
-  const search = document.createElement('input');
-  search.type = 'search';
-  search.className = 'admin-input';
-  search.placeholder = placeholder;
-  search.setAttribute('aria-label', placeholder);
-  search.value = picker.dataset.search || '';
-  const list = document.createElement('div');
-  list.className = 'admin-picker-options';
-  labels.forEach(label => list.appendChild(label));
-  const empty = document.createElement('p');
-  empty.className = 'admin-note';
-  empty.textContent = 'Ничего не найдено. Попробуйте другое название.';
-  empty.setAttribute('role', 'status');
-  const normalize = value => value.toLocaleLowerCase('ru').replace(/ё/g, 'е').trim();
-  const filter = () => {
-    const terms = normalize(search.value).split(/\s+/).filter(Boolean);
-    picker.dataset.search = search.value;
-    labels.forEach(label => {
-      label.hidden = !terms.every(term => normalize(label.textContent).includes(term));
-    });
-    empty.hidden = labels.some(label => !label.hidden);
-  };
-  const updateSummary = () => {
-    const selected = labels.filter(label => label.querySelector('input').checked);
-    summary.textContent = selected.length
-      ? selected.map(label => label.querySelector('span').firstChild.textContent).join(', ')
-      : 'Выберите из списка';
-  };
-  search.addEventListener('input', filter);
-  list.addEventListener('change', updateSummary);
-  details.addEventListener('toggle', () => { picker.dataset.open = String(details.open); });
-  details.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { details.open = false; summary.focus(); }
-  });
-  details.append(summary, search, list, empty);
-  picker.appendChild(details);
-  filter();
-  updateSummary();
-}
-
-// Табличные типы (Ethan, 9 сен 2026, живой тест на /settings — тот же баг,
-// портированный сюда бы, если бы не был исправлен здесь заранее): checkBusinessRules
-// проверяет ТОЛЬКО fields, никогда items (построчную таблицу) — для табличных
-// типов единственные fields это totals (см. docSchema.js), не columns.
-function ruleFieldCatalog() {
-  const catalog = new Map();
-  const types = new Set([...DOC_TYPES, ...Object.keys(state.customDocTypes)]);
-  for (const type of types) {
-    const docFieldsEntry = DOC_FIELDS[type];
-    const isTable = docFieldsEntry && !Array.isArray(docFieldsEntry) && docFieldsEntry.mode === 'table';
-    let fields;
-    if (isTable) {
-      fields = docFieldsEntry.totals || [];
-    } else {
-      const schema = state.fieldOverrides[type] || state.customDocTypes[type]?.fields || docFieldsEntry || [];
-      fields = Array.isArray(schema) ? schema : [];
-    }
-    for (const field of fields) {
-      if (!catalog.has(field)) catalog.set(field, []);
-      catalog.get(field).push(type);
-    }
-  }
-  return catalog;
-}
 
 function refreshRuleFieldPickers() {
   if (!ruleFieldPickersReady) return;
-  const catalog = ruleFieldCatalog();
-  for (const input of [ruleBaseField, ruleValueField, ruleSumFields, ruleTargetField, ruleEarlierField, ruleLaterField, ruleRequiredField, ruleRangeField]) {
-    const multiple = input === ruleSumFields;
-    const selected = multiple ? splitFields(input.value) : input.value ? [input.value] : [];
-    input.type = 'hidden';
-    let picker = document.getElementById(input.id + 'Picker');
-    if (!picker) {
-      picker = document.createElement('fieldset');
-      picker.id = input.id + 'Picker';
-      picker.className = 'admin-field-picker';
-      input.after(picker);
-    }
-    picker.replaceChildren();
-    const legend = document.createElement('legend');
-    legend.textContent = multiple ? 'Выберите одно или несколько полей' : 'Выберите одно поле';
-    picker.appendChild(legend);
-    const options = new Map(catalog);
-    selected.forEach(field => { if (!options.has(field)) options.set(field, []); });
-    for (const [field, types] of options) {
-      const label = document.createElement('label');
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.value = field;
-      checkbox.checked = selected.includes(field);
-      const text = document.createElement('span');
-      text.textContent = field;
-      const source = document.createElement('small');
-      source.textContent = types.length ? types.join(', ') : 'Поле удалено из списка документов — проверьте правило';
-      text.appendChild(source);
-      label.append(checkbox, text);
-      picker.appendChild(label);
-      checkbox.addEventListener('change', () => {
-        if (!multiple && checkbox.checked) {
-          picker.querySelectorAll('input').forEach(other => { if (other !== checkbox) other.checked = false; });
-        }
-        input.value = Array.from(picker.querySelectorAll('input:checked'), el => el.value).join(', ');
-      });
-    }
-    makeSearchablePicker(picker, 'Поиск по названию поля или типу документа');
-  }
+  const catalog = ruleFieldCatalog({ docTypes: DOC_TYPES, docFields: DOC_FIELDS, customDocTypes: state.customDocTypes, fieldOverrides: state.fieldOverrides });
+  const inputs = [ruleBaseField, ruleValueField, ruleSumFields, ruleTargetField, ruleEarlierField, ruleLaterField, ruleRequiredField, ruleRangeField];
+  refreshPickers(inputs, ruleSumFields, catalog, splitFields);
 }
 
 function renderFieldOverridesList() {
@@ -668,31 +411,7 @@ confirmCustomTypeBtn.addEventListener('click', () => {
 // явного вопроса про свободные формулы — Ethan сам выбрал конструктор из
 // готовых типов, увидев пример заготовленного списка правил). См.
 // public/js/postprocess/businessRules.js — тот же формат объекта правила,
-// что рендерится/сохраняется здесь.
-
-function splitFields(text) {
-  return text.split(',').map(s => s.trim()).filter(Boolean);
-}
-
-function ruleSummaryText(rule) {
-  const levelLabel = rule.level === 'info' ? 'информация' : 'ошибка';
-  switch (rule.type) {
-    case 'percentage_match':
-      return `«${rule.valueField}» ≈ ${rule.expectedPercent}% от «${rule.baseField}» (допуск ±${rule.tolerancePercent ?? 1}, уровень: ${levelLabel})`;
-    case 'sum_match':
-      return `Сумма «${rule.sumFields.join('», «')}» ≈ «${rule.targetField}» (допуск ±${rule.tolerancePercent ?? 1}, уровень: ${levelLabel})`;
-    case 'date_order':
-      return `«${rule.earlierField}» не позже «${rule.laterField}» (уровень: ${levelLabel})`;
-    case 'required_field':
-      return `«${rule.field}» обязательно для заполнения (уровень: ${levelLabel})`;
-    case 'range_check': {
-      const bounds = [rule.min != null ? `от ${rule.min}` : null, rule.max != null ? `до ${rule.max}` : null].filter(Boolean).join(' ');
-      return `«${rule.field}» ${bounds} (уровень: ${levelLabel})`;
-    }
-    default:
-      return rule.type;
-  }
-}
+// что рендерится/сохраняется здесь. splitFields/ruleSummaryText — в format.js.
 
 function renderBusinessRulesList() {
   businessRulesList.innerHTML = '';
