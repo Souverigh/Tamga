@@ -109,9 +109,13 @@ function buildFlaggedTable(flagged) {
 // branding — { displayName, logoUrl, accentColor } | null, тот же формат,
 // что и в pdfExport.js — премиум-клиент видит своё название/лого и на сводке,
 // не только на подетальном экспорте.
+//
+// left:-9999px (не left:0!) — та же правка, что в pdfExport.js:
+// buildOffscreenContainer, 15 сен 2026 (Ethan заметил визуальную вспышку
+// контейнера при скачивании) — см. комментарий там подробно.
 function buildSummaryContainer(groups, { branding = null } = {}) {
   const container = document.createElement('div');
-  container.style.cssText = 'position:fixed; left:0; top:0; z-index:99999; width:520px; padding:24px; font-family:Arial, sans-serif; color:#1E2433; background:#fff;';
+  container.style.cssText = 'position:fixed; left:-9999px; top:0; z-index:99999; width:520px; padding:24px; font-family:Arial, sans-serif; color:#1E2433; background:#fff;';
 
   const accent = (branding && branding.accentColor) || '#1E2433';
   let logoImg = null;

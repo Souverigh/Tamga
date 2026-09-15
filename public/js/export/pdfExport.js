@@ -56,9 +56,17 @@ function buildLineItemsTable(docType, items, columnsOverride, keysOverride) {
 // (downloadPdf), чтобы дождаться его загрузки ПЕРЕД html2canvas: без этого
 // картинка почти наверняка не успеет прогрузиться за два requestAnimationFrame
 // и просто не попадёт на итоговый PDF (пустой квадрат вместо лого).
+//
+// left:-9999px (не left:0!) — 15 сен 2026, Ethan заметил, что при "Скачать
+// PDF" сам этот контейнер на секунду реально появляется на экране: left:0;
+// top:0 держал его ровно в левом верхнем углу viewport несмотря на название
+// "офскрин", z-index:99999 держал его поверх всего остального. html2canvas
+// всё равно корректно рендерит элемент, сдвинутый далеко за пределы экрана
+// (он не в display:none, просто вне видимой области) — то же исправление в
+// summaryReport.js:buildSummaryContainer, там был тот же баг.
 function buildOffscreenContainer(groups, { maskSensitive = false, branding = null } = {}) {
   const container = document.createElement('div');
-  container.style.cssText = 'position:fixed; left:0; top:0; z-index:99999; width:520px; padding:24px; font-family:Arial, sans-serif; color:#1E2433; background:#fff;';
+  container.style.cssText = 'position:fixed; left:-9999px; top:0; z-index:99999; width:520px; padding:24px; font-family:Arial, sans-serif; color:#1E2433; background:#fff;';
 
   const accent = (branding && branding.accentColor) || '#1E2433';
   let logoImg = null;
