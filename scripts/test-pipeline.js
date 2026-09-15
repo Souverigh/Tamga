@@ -80,6 +80,35 @@ async function main() {
     assert.strictEqual((await recognizeDocument({ ...input, includeText: true })).text, 'Текст');
     assert.ok(schemas[1].text);
   });
+  await scenario('Дефолт text по типу: карточный — true, табличный — false (без явного includeText/formatting)', async () => {
+    getClientConfigImpl = async () => null;
+    const schemas = [];
+    callGeminiImpl = async args => {
+      schemas.push(args.schemaProperties);
+      return { result: { documentType: 'Справка', text: 'Текст', fields: [], confidence: 90 }, usage: null };
+    };
+    await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Справка' });
+    assert.ok(schemas[0].text, 'карточный тип: text должен запрашиваться по умолчанию');
+
+    schemas.length = 0;
+    callGeminiImpl = async args => {
+      schemas.push(args.schemaProperties);
+      return { result: { documentType: 'Счёт-фактура / Инвойс', fields: [], items: [], confidence: 90 }, usage: null };
+    };
+    await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Счёт-фактура / Инвойс' });
+    assert.strictEqual(schemas[0].text, undefined, 'табличный тип: text НЕ должен запрашиваться по умолчанию (15 сен 2026, задержка на крупных накладных)');
+  });
+  await scenario('Дефолт text по типу уступает явному formatting.includeText=true клиента (табличный тип)', async () => {
+    getClientConfigImpl = async () => ({ formatting: { includeText: true }, businessRules: [] });
+    const schemas = [];
+    callGeminiImpl = async args => {
+      schemas.push(args.schemaProperties);
+      return { result: { documentType: 'Счёт-фактура / Инвойс', text: 'Текст', fields: [], items: [], confidence: 90 }, usage: null };
+    };
+    const r = await recognizeDocument({ base64: FAKE_BASE64, mimeType: 'image/png', docType: 'Счёт-фактура / Инвойс', clientSlug: 'test-client' });
+    assert.ok(schemas[0].text, 'клиент явно включил text=true — должен запрашиваться, несмотря на табличный тип');
+    assert.strictEqual(r.text, 'Текст');
+  });
   await scenario('Клиентский тип: подсказка, точные поля, одно списание за два этапа', async () => {
     consumedPages = 0;
     const calls = [];

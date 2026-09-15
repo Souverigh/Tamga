@@ -260,9 +260,20 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
     await geminiRateLimiter.acquire(signal);
     // includeTextCheckbox — "Настройки распознавания" (Ethan, 9 сен 2026: "что
     // если человеку не нужен полный текст"), читаем ЗДЕСЬ (не параметром функции)
-    // — тот же приём, что и postProcessCheckbox выше в этом файле. false — только
-    // если человек сам явно снял галочку (по умолчанию включена, см. index.html).
-    const includeText = includeTextCheckbox.checked;
+    // — тот же приём, что и postProcessCheckbox выше в этом файле.
+    //
+    // 15 сен 2026 (Ethan: "именно когда готовится накладные там с огромным
+    // количеством позиций, там и в основном задержка идёт") — если человек НЕ
+    // трогал этот чекбокс сам (dataset.userChanged, та же метка, что уже
+    // использует branding.js для восстановления сохранённого выбора клиента),
+    // отправляем includeText НЕ ОПРЕДЕЛЁННЫМ, а не текущее checkbox.checked
+    // (которое всегда true по умолчанию из index.html). Сервер тогда сам решает
+    // дефолт по типу документа (lib/recognize.js) — true для карточных, false
+    // для табличных типов (накладная и т.п.), что и убирает двойную генерацию
+    // (текст+items) на крупных накладных без необходимости менять сам чекбокс.
+    // Если человек явно поставил/снял галочку — его выбор побеждает всегда,
+    // независимо от типа документа.
+    const includeText = includeTextCheckbox.dataset.userChanged ? includeTextCheckbox.checked : undefined;
     const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug, clientToken, includeText });
     return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys, confidence: result.confidence, warnings: result.warnings || [] };
   }
