@@ -15,7 +15,7 @@ const gateError = document.getElementById('gateError');
 const acctMain = document.getElementById('acctMain');
 
 const fileInput = document.getElementById('fileInput');
-const fileName = document.getElementById('fileName');
+const fileList = document.getElementById('fileList');
 const recognizeBtn = document.getElementById('recognizeBtn');
 const acctError = document.getElementById('acctError');
 const acctLoading = document.getElementById('acctLoading');
@@ -31,8 +31,16 @@ const itemsSection = document.getElementById('itemsSection');
 const itemsSectionTitle = document.getElementById('itemsSectionTitle');
 const rulesList = document.getElementById('rulesList');
 
-let selectedFile = null;
-let lastResult = null; // { doc_type, header, items, overall_status, validation } — для кнопки экспорта
+// Bulk-загрузка (15 сен 2026, §18 хендовера) — Ethan подтвердил: каждый
+// файл независимый документ, без сверки между ними. "docs" — по одной
+// записи на выбранный файл, в порядке выбора:
+//   { file: File, status: 'pending'|'recognizing'|'done'|'error',
+//     result: <ответ admin-recognize> | null, error: string | null }
+// base64 не кэшируется на весь батч заранее — считается по одному прямо
+// перед отправкой на распознавание (и повторно при показе превью того же
+// файла), чтобы не держать в памяти все файлы сразу в base64 одновременно.
+let docs = [];
+let activeIndex = -1;
 
 async function authedFetch(path, options = {}) {
   const secret = session.get();
@@ -61,15 +69,41 @@ gateBtn.addEventListener('click', () => {
   showMain();
 });
 
-fileInput.addEventListener('change', () => {
-  selectedFile = fileInput.files[0] || null;
-  recognizeBtn.disabled = !selectedFile;
-  if (selectedFile) {
-    fileName.textContent = selectedFile.name;
-    fileName.style.display = '';
-  } else {
-    fileName.style.display = 'none';
+const FILE_STATUS_LABELS = { pending: 'В очереди', recognizing: 'Распознаём...', done: 'Готово', error: 'Ошибка' };
+
+function renderFileList() {
+  if (!docs.length) {
+    fileList.style.display = 'none';
+    fileList.innerHTML = '';
+    return;
   }
+  fileList.style.display = '';
+  fileList.innerHTML = '';
+  docs.forEach((doc, index) => {
+    const row = document.createElement('div');
+    row.className = `acct-file-item${index === activeIndex ? ' acct-file-active' : ''}`;
+    row.innerHTML = `
+      <span class="acct-file-name">${doc.file.name}</span>
+      <span class="acct-file-status acct-file-status-${doc.status}">${FILE_STATUS_LABELS[doc.status]}</span>
+    `;
+    row.addEventListener('click', () => selectDoc(index));
+    fileList.appendChild(row);
+  });
+}
+
+fileInput.addEventListener('change', () => {
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) return;
+  // Новый выбор файлов ЗАМЕНЯЕТ предыдущий батч (а не добавляет к нему) —
+  // самое предсказуемое поведение для input[type=file], без отдельного
+  // UI "добавить ещё"/"очистить список" в этом первом срезе.
+  docs = files.map(file => ({ file, status: 'pending', result: null, error: null }));
+  activeIndex = -1;
+  resultPanel.style.display = 'none';
+  exportBtn.disabled = true;
+  acctError.style.display = 'none';
+  renderFileList();
+  recognizeBtn.disabled = false;
 });
 
 function fileToBase64(file) {
@@ -255,43 +289,98 @@ function renderRules(results) {
   }
 }
 
-recognizeBtn.addEventListener('click', async () => {
-  if (!selectedFile) return;
-  acctError.style.display = 'none';
-  acctLoading.style.display = '';
-  resultPanel.style.display = 'none';
-  recognizeBtn.disabled = true;
+// Показывает документ по индексу в правой/левой колонках (превью + поля +
+// проверки) — общая функция для клика по строке списка и для показа только
+// что распознанного документа сразу после recognize.
+async function selectDoc(index) {
+  const doc = docs[index];
+  if (!doc) return;
+  activeIndex = index;
+  renderFileList();
+
+  const base64 = await fileToBase64(doc.file);
+  renderPreview(doc.file.type, base64);
+
+  if (doc.status === 'error') {
+    resultPanel.style.display = 'none';
+    return;
+  }
+  if (doc.status !== 'done' || !doc.result) {
+    resultPanel.style.display = 'none';
+    return;
+  }
+  const data = doc.result;
+  overallBadge.textContent = data.overall_status;
+  overallBadge.className = `acct-badge acct-badge-${data.overall_status}`;
+  docTypeLabel.textContent = DOC_TYPE_LABELS[data.doc_type] || data.doc_type;
+  renderHeaderTable(data.header);
+  renderItemsTable(data.items);
+  renderRules(data.validation);
+  resultPanel.style.display = '';
+}
+
+async function recognizeOne(doc) {
+  doc.status = 'recognizing';
+  doc.error = null;
+  renderFileList();
 
   try {
-    const base64 = await fileToBase64(selectedFile);
-    renderPreview(selectedFile.type, base64);
-
+    const base64 = await fileToBase64(doc.file);
     const res = await authedFetch('/api/accounting/admin-recognize', {
       method: 'POST',
-      body: JSON.stringify({ image: base64, mimeType: selectedFile.type })
+      body: JSON.stringify({ image: base64, mimeType: doc.file.type })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
-
-    lastResult = { ...data, file_name: selectedFile.name };
-    overallBadge.textContent = data.overall_status;
-    overallBadge.className = `acct-badge acct-badge-${data.overall_status}`;
-    docTypeLabel.textContent = DOC_TYPE_LABELS[data.doc_type] || data.doc_type;
-    renderHeaderTable(data.header);
-    renderItemsTable(data.items);
-    renderRules(data.validation);
-    resultPanel.style.display = '';
+    doc.status = 'done';
+    doc.result = { ...data, file_name: doc.file.name };
   } catch (err) {
-    acctError.textContent = err.message || 'Не удалось распознать документ';
-    acctError.style.display = '';
-  } finally {
-    acctLoading.style.display = 'none';
-    recognizeBtn.disabled = false;
+    doc.status = 'error';
+    doc.error = err.message || 'Не удалось распознать документ';
   }
+  renderFileList();
+}
+
+// Распознаём файлы ПОСЛЕДОВАТЕЛЬНО, не параллельно — тот же приём, что уже
+// был у admin-recognize.js для одного файла: Gemini free tier ~20 запросов/
+// мин (см. ways-of-working.md), параллельная пачка из нескольких файлов
+// рисковала бы упереться в лимит сразу на нескольких документах одновременно.
+recognizeBtn.addEventListener('click', async () => {
+  if (!docs.length) return;
+  acctError.style.display = 'none';
+  recognizeBtn.disabled = true;
+  exportBtn.disabled = true;
+  acctLoading.style.display = '';
+
+  const pending = docs.map((doc, index) => ({ doc, index })).filter(({ doc }) => doc.status === 'pending' || doc.status === 'error');
+  let firstDoneIndex = -1;
+  let anyError = false;
+
+  for (const { doc, index } of pending) {
+    acctLoading.textContent = `Распознаём ${index + 1} из ${docs.length}...`;
+    await recognizeOne(doc);
+    if (doc.status === 'done' && firstDoneIndex === -1) firstDoneIndex = index;
+    if (doc.status === 'error') anyError = true;
+  }
+
+  acctLoading.style.display = 'none';
+  recognizeBtn.disabled = false;
+  exportBtn.disabled = !docs.some(d => d.status === 'done');
+  if (anyError) {
+    const errored = docs.filter(d => d.status === 'error').length;
+    acctError.textContent = `Не удалось распознать ${errored} из ${docs.length} файлов — см. статус в списке файлов.`;
+    acctError.style.display = '';
+  }
+
+  // Показываем первый успешно распознанный документ (или первый вообще,
+  // если все с ошибкой), чтобы правая колонка не оставалась пустой.
+  const showIndex = firstDoneIndex !== -1 ? firstDoneIndex : (docs.length ? 0 : -1);
+  if (showIndex !== -1) await selectDoc(showIndex);
 });
 
 exportBtn.addEventListener('click', async () => {
-  if (!lastResult) return;
+  const done = docs.filter(d => d.status === 'done');
+  if (!done.length) return;
   exportError.style.display = 'none';
   exportBtn.disabled = true;
   exportBtn.textContent = 'Формируем файл...';
@@ -299,7 +388,7 @@ exportBtn.addEventListener('click', async () => {
   try {
     const res = await authedFetch('/api/accounting/export', {
       method: 'POST',
-      body: JSON.stringify(lastResult)
+      body: JSON.stringify({ documents: done.map(d => d.result) })
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -309,7 +398,11 @@ exportBtn.addEventListener('click', async () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${(lastResult.file_name || 'export').replace(/\.[^.]+$/, '')}.xlsx`;
+    // Одно имя на пачку, а не на файл — при экспорте нескольких документов
+    // сразу отдельного смысла в имени первого файла нет.
+    link.download = done.length === 1
+      ? `${(done[0].result.file_name || 'export').replace(/\.[^.]+$/, '')}.xlsx`
+      : `accounting-export-${done.length}-docs.xlsx`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -318,7 +411,7 @@ exportBtn.addEventListener('click', async () => {
     exportError.textContent = err.message || 'Не удалось скачать файл';
     exportError.style.display = '';
   } finally {
-    exportBtn.disabled = false;
+    exportBtn.disabled = !docs.some(d => d.status === 'done');
     exportBtn.textContent = 'Скачать Excel';
   }
 });

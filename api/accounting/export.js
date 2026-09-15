@@ -6,11 +6,19 @@ const { readRequestBody } = require('../../lib/multipart');
 // admin-recognize.js: этот endpoint дергается только с review-экрана
 // (public/admin/accounting.html), не публичный API.
 //
-// Тело запроса — РОВНО та форма, что уже вернул /api/accounting/admin-recognize
-// клиенту (см. комментарий в lib/accounting/export.js): { doc_type, header,
-// items, overall_status, validation, file_name? }. Сервер по новой ничего не
-// распознаёт и не лезет в Supabase — экспортирует то же самое, что бухгалтер
-// уже видит на экране.
+// Тело запроса — либо ОДИН документ, РОВНО та форма, что уже вернул
+// /api/accounting/admin-recognize клиенту (см. комментарий в
+// lib/accounting/export.js): { doc_type, header, items, overall_status,
+// validation, file_name? } — либо, для bulk-режима (15 сен 2026, §18
+// хендовера, Ethan подтвердил: "каждый файл независимо", без сверки между
+// документами), { documents: [ ...та же форма для каждого... ] }. Сервер по
+// новой ничего не распознаёт и не лезет в Supabase — экспортирует то же
+// самое, что бухгалтер уже видел на экране (для каждого файла отдельно).
+function normalizeDocument(raw) {
+  const { doc_type: docType, header, items, overall_status: overallStatus, validation, file_name: fileName } = raw || {};
+  return { docType, header, items, overallStatus, validation, fileName };
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Метод не поддерживается, используйте POST' });
@@ -25,14 +33,20 @@ module.exports = async (req, res) => {
 
   try {
     const body = await readRequestBody(req);
-    const { doc_type: docType, header, items, overall_status: overallStatus, validation, file_name: fileName } = body;
+    const documents = Array.isArray(body.documents) ? body.documents.map(normalizeDocument) : [normalizeDocument(body)];
 
-    if (!header || !Array.isArray(items)) {
-      res.status(400).json({ error: 'Поля "header" и "items" обязательны' });
+    if (documents.length === 0) {
+      res.status(400).json({ error: 'Нет ни одного документа для экспорта' });
       return;
     }
+    for (const doc of documents) {
+      if (!doc.header || !Array.isArray(doc.items)) {
+        res.status(400).json({ error: 'У каждого документа обязательны поля "header" и "items"' });
+        return;
+      }
+    }
 
-    const workbook = buildAccountingWorkbook([{ docType, header, items, overallStatus, validation, fileName }]);
+    const workbook = buildAccountingWorkbook(documents);
     const buffer = await workbook.xlsx.writeBuffer();
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
