@@ -262,18 +262,17 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
     // если человеку не нужен полный текст"), читаем ЗДЕСЬ (не параметром функции)
     // — тот же приём, что и postProcessCheckbox выше в этом файле.
     //
-    // 15 сен 2026 (Ethan: "именно когда готовится накладные там с огромным
-    // количеством позиций, там и в основном задержка идёт") — если человек НЕ
-    // трогал этот чекбокс сам (dataset.userChanged, та же метка, что уже
-    // использует branding.js для восстановления сохранённого выбора клиента),
-    // отправляем includeText НЕ ОПРЕДЕЛЁННЫМ, а не текущее checkbox.checked
-    // (которое всегда true по умолчанию из index.html). Сервер тогда сам решает
-    // дефолт по типу документа (lib/recognize.js) — true для карточных, false
-    // для табличных типов (накладная и т.п.), что и убирает двойную генерацию
-    // (текст+items) на крупных накладных без необходимости менять сам чекбокс.
-    // Если человек явно поставил/снял галочку — его выбор побеждает всегда,
-    // независимо от типа документа.
-    const includeText = includeTextCheckbox.dataset.userChanged ? includeTextCheckbox.checked : undefined;
+    // 15 сен 2026 (Ethan: "по умолчанию он будет не выбранным") — чекбокс по
+    // умолчанию выключен в index.html (для ВСЕХ типов документов, не только
+    // табличных — упростили обратно после более тонкой per-type логики того же
+    // дня). Читаем .checked напрямую, без обёртки через dataset.userChanged:
+    // чекбокс сам по себе честно отражает, что произойдёт, никакого скрытого
+    // "сервер решит иначе, если не трогали" — если человек его не включил,
+    // текст не запрашивается, для любого типа. Серверный дефолт по типу в
+    // lib/recognize.js (true для карточных/false для табличных) остаётся —
+    // просто для сайта он больше не используется, т.к. клиент всегда шлёт explicit
+    // значение; актуален для вызывающих без явного includeText (например, API).
+    const includeText = includeTextCheckbox.checked;
     const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug, clientToken, includeText });
     return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys, confidence: result.confidence, warnings: result.warnings || [] };
   }
