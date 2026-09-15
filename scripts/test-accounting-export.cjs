@@ -121,3 +121,35 @@ test('multiple documents produce one row each, in order', () => {
   assert.equal(docsSheet.getRow(2).getCell('file').value, 'a.pdf');
   assert.equal(docsSheet.getRow(3).getCell('file').value, 'b.pdf');
 });
+
+// Bank requisites (15 сен 2026, Ethan) — отдельные структурные поля у ЭСФ/
+// накладной/акта, плюс общий additional_notes catch-all во всех 4 типах.
+test('bank requisites and additional_notes land in the right columns', () => {
+  const doc = sampleEsfDocument({
+    header: {
+      invoice_number: field('154'),
+      invoice_date: field('2026-08-31'),
+      seller_name: field('ОсОО «Ала-Тоо Сервис»'),
+      seller_inn: field('12345678901234'),
+      seller_bank_name: field('РСК Банк'),
+      seller_bik: field('129001'),
+      seller_account: field('1234567890123456'),
+      seller_correspondent_account: field('30101810000000000601'),
+      buyer_name: field('ОсОО «Нур Трейд»'),
+      buyer_inn: field('98765432109876'),
+      subtotal: field('100000'),
+      vat_rate: field('0.12'),
+      vat_total: field('12000'),
+      total: field('112000'),
+      currency: field('KGS'),
+      additional_notes: field('Подписал: Иванов И.И., директор. По Договору №12 от 01.08.2026')
+    }
+  });
+  const workbook = buildAccountingWorkbook([doc]);
+  const docsSheet = workbook.getWorksheet('Документы');
+  assert.equal(docsSheet.getRow(2).getCell('sellerBankName').value, 'РСК Банк');
+  assert.equal(docsSheet.getRow(2).getCell('sellerBik').value, '129001');
+  assert.equal(docsSheet.getRow(2).getCell('sellerAccount').value, '1234567890123456');
+  assert.equal(docsSheet.getRow(2).getCell('sellerCorrespondentAccount').value, '30101810000000000601');
+  assert.equal(docsSheet.getRow(2).getCell('additionalNotes').value, 'Подписал: Иванов И.И., директор. По Договору №12 от 01.08.2026');
+});

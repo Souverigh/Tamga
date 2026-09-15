@@ -93,14 +93,26 @@ const HEADER_FIELD_LABELS = {
   invoice_date: 'Дата',
   seller_name: 'Продавец',
   seller_inn: 'ИНН продавца',
+  seller_bank_name: 'Банк продавца',
+  seller_bik: 'БИК продавца',
+  seller_account: 'Расчётный счёт продавца',
+  seller_correspondent_account: 'Корр. счёт продавца',
   delivery_note_number: 'Номер накладной',
   delivery_note_date: 'Дата',
   supplier_name: 'Поставщик',
   supplier_inn: 'ИНН поставщика',
+  supplier_bank_name: 'Банк поставщика',
+  supplier_bik: 'БИК поставщика',
+  supplier_account: 'Расчётный счёт поставщика',
+  supplier_correspondent_account: 'Корр. счёт поставщика',
   act_number: 'Номер акта',
   act_date: 'Дата',
   contractor_name: 'Исполнитель',
   contractor_inn: 'ИНН исполнителя',
+  contractor_bank_name: 'Банк исполнителя',
+  contractor_bik: 'БИК исполнителя',
+  contractor_account: 'Расчётный счёт исполнителя',
+  contractor_correspondent_account: 'Корр. счёт исполнителя',
   payment_order_number: 'Номер платёжного поручения',
   payment_order_date: 'Дата',
   recipient_name: 'Получатель',
@@ -114,7 +126,8 @@ const HEADER_FIELD_LABELS = {
   vat_rate: 'Ставка НДС',
   vat_total: 'Сумма НДС',
   total: 'Итого',
-  currency: 'Валюта'
+  currency: 'Валюта',
+  additional_notes: 'Доп. текст (подпись/печать/реквизиты договора)'
 };
 
 const DOC_TYPE_LABELS = {
