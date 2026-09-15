@@ -23,5 +23,9 @@
   "accounting.act.lines_sum_mismatch": "Сумма строк ({sum}) не совпадает с «Сумма без НДС» документа ({subtotal}). Разница: {difference}.",
   "accounting.act.total_mismatch": "«Сумма без НДС» + «Сумма НДС» ({expected}) не совпадает с «Итого» ({actual}). Разница: {difference}.",
   "accounting.act.low_confidence": "«{field}» распознано неуверенно (уверенность {confidence}%) — стоит проверить вручную.",
-  "accounting.act.insufficient_data": "Недостаточно данных для проверки «{rule}» — одно или несколько нужных полей не распознаны."
+  "accounting.act.insufficient_data": "Недостаточно данных для проверки «{rule}» — одно или несколько нужных полей не распознаны.",
+
+  "accounting.payment_order.required_field_missing": "Не удалось уверенно распознать «{field}» — поле не заполнено или отсутствует в документе.",
+  "accounting.payment_order.inn_format_invalid": "«{field}» ({value}) не похож на корректный ИНН — проверьте вручную.",
+  "accounting.payment_order.low_confidence": "«{field}» распознано неуверенно (уверенность {confidence}%) — стоит проверить вручную."
 }

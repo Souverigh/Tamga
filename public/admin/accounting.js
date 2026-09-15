@@ -27,6 +27,8 @@ const exportBtn = document.getElementById('exportBtn');
 const exportError = document.getElementById('exportError');
 const headerTable = document.getElementById('headerTable');
 const itemsBody = document.getElementById('itemsBody');
+const itemsSection = document.getElementById('itemsSection');
+const itemsSectionTitle = document.getElementById('itemsSectionTitle');
 const rulesList = document.getElementById('rulesList');
 
 let selectedFile = null;
@@ -99,6 +101,13 @@ const HEADER_FIELD_LABELS = {
   act_date: 'Дата',
   contractor_name: 'Исполнитель',
   contractor_inn: 'ИНН исполнителя',
+  payment_order_number: 'Номер платёжного поручения',
+  payment_order_date: 'Дата',
+  recipient_name: 'Получатель',
+  recipient_inn: 'ИНН получателя',
+  buyer_account: 'Счёт плательщика',
+  recipient_account: 'Счёт получателя',
+  payment_purpose: 'Назначение платежа',
   buyer_name: 'Покупатель',
   buyer_inn: 'ИНН покупателя',
   subtotal: 'Сумма без НДС',
@@ -111,7 +120,8 @@ const HEADER_FIELD_LABELS = {
 const DOC_TYPE_LABELS = {
   esf: 'Счет-фактура / ЭСФ',
   nakladnaya: 'Товарная накладная',
-  act: 'Акт выполненных работ'
+  act: 'Акт выполненных работ',
+  payment_order: 'Платёжное поручение'
 };
 
 // Человеко-читаемые названия правил для интерфейса — только для отображения.
@@ -140,7 +150,10 @@ const RULE_LABELS = {
   'ACT-002': 'Кол-во × цена = сумма строки',
   'ACT-003': 'Сумма строк = сумма без НДС',
   'ACT-004': 'Сумма без НДС + НДС = итого',
-  'ACT-CONF': 'Уверенность распознавания'
+  'ACT-CONF': 'Уверенность распознавания',
+  'PP-001': 'Обязательные поля',
+  'PP-INN': 'Формат ИНН',
+  'PP-CONF': 'Уверенность распознавания'
 };
 
 const LOW_CONFIDENCE_THRESHOLD = 70;
@@ -178,8 +191,15 @@ function renderHeaderTable(header) {
   }
 }
 
+// Платёжное поручение (15 сен 2026) не имеет таблицы строк — items всегда
+// пустой массив для этого типа (см. buildPaymentOrderDoc). Прячем секцию
+// "Строки" целиком вместо пустой таблицы с заголовками, но без содержимого.
 function renderItemsTable(items) {
   itemsBody.innerHTML = '';
+  const hasItems = Array.isArray(items) && items.length > 0;
+  itemsSection.style.display = hasItems ? '' : 'none';
+  itemsSectionTitle.style.display = hasItems ? '' : 'none';
+  if (!hasItems) return;
   for (const item of items) {
     const row = document.createElement('tr');
     row.innerHTML = `
