@@ -85,7 +85,7 @@ module.exports = async (req, res) => {
         fieldOverrides: config.fieldOverrides || null,
         customDocTypes: config.customDocTypes || null,
         businessRules: config.businessRules || [],
-        includeText: config.formatting?.includeText !== false,
+        includeText: config.formatting?.includeText === true,
         displayName: config.displayName || null,
         logoUrl: config.logoUrl || null,
         accentColor: config.accentColor || null
@@ -206,7 +206,7 @@ module.exports = async (req, res) => {
       fieldOverrides: saved.field_overrides || null,
       customDocTypes: saved.custom_doc_types || null,
       businessRules: (saved.formatting && Array.isArray(saved.formatting.businessRules)) ? saved.formatting.businessRules : [],
-      includeText: saved.formatting?.includeText !== false,
+      includeText: saved.formatting?.includeText === true,
       displayName: saved.display_name || null,
       logoUrl: saved.logo_url || null,
       accentColor: saved.accent_color || null

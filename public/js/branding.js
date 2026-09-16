@@ -273,7 +273,7 @@ export async function initBranding() {
       applyCustomDocTypes(config);
       const textCheckbox = document.getElementById('includeTextCheckbox');
       if (textCheckbox && !textCheckbox.disabled && !textCheckbox.dataset?.userChanged) {
-        textCheckbox.checked = config.includeText !== false;
+        textCheckbox.checked = config.includeText === true;
       }
       // Только безопасные для браузера поля — то же самое, что уже отдал
       // /api/client-config (см. его комментарий: намеренно НЕ полный конфиг).

@@ -30,6 +30,9 @@ import { registerTab } from '../contentTabs.js';
 import { DOC_TYPE_LABELS } from '../../admin/accounting/labels.js';
 import { renderFileList, renderPreview, renderHeaderTable, renderItemsTable, renderRules } from '../../admin/accounting/render.js';
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
+import { runWithConcurrency } from '../utils/concurrencyPool.js';
+
+const MAX_ACCOUNTING_CONCURRENCY = 20;
 
 async function recognizeViaApi(token, slug, base64, mimeType) {
   const res = await fetch('/api/accounting/client-recognize', {
@@ -99,7 +102,7 @@ export async function initAccounting() {
   // (общий таб-контроллер вынесен в public/js/contentTabs.js 16 сен 2026,
   // когда добавился модуль "Перевод" — раньше таб-бар строился прямо
   // здесь и умел показывать только эти две вкладки.)
-  const root = el('section', null, 'panel acct-wrap');
+  const root = el('section', null, 'panel acct-wrap acct-accounting-wrap');
   root.id = 'accountingPanel';
 
   const panelHeader = el('div', null, 'acct-panel-header');
@@ -121,10 +124,17 @@ export async function initAccounting() {
   root.append(dropzone);
 
   const fileListEl = el('div', null, 'acct-file-list'); fileListEl.style.display = 'none';
-  root.append(fileListEl);
+  const originalPanel = el('div', null, 'panel acct-col-original');
+  originalPanel.style.display = 'none';
+  originalPanel.append(el('div', 'Оригинал', 'step-label'));
+  const previewBox = el('div');
+  originalPanel.append(previewBox);
+  const fileWorkspace = el('div', null, 'acct-accounting-workspace');
+  fileWorkspace.append(fileListEl, originalPanel);
+  root.append(fileWorkspace);
 
   const recognizeBtn = button('Распознать', 'btn-primary');
-  recognizeBtn.style.marginTop = '12px';
+  recognizeBtn.classList.add('acct-recognize-btn');
   recognizeBtn.disabled = true;
   root.append(recognizeBtn);
 
@@ -140,28 +150,20 @@ export async function initAccounting() {
   progressWrap.append(progressText, progressTrack);
   root.append(acctError, progressWrap);
 
-  const resultPanel = el('section'); resultPanel.style.display = 'none';
-  const columns = el('div', null, 'acct-columns');
-
-  const colOriginal = el('div', null, 'panel acct-col-original');
-  colOriginal.append(el('div', 'Оригинал', 'step-label'));
-  const previewBox = el('div');
-  colOriginal.append(previewBox);
-
-  const colFields = el('div', null, 'panel acct-col-fields');
+  const resultPanel = el('section', null, 'panel acct-col-fields'); resultPanel.style.display = 'none';
   const statusRow = el('div', null, 'acct-status-row');
   const docTypeLabel = el('div', 'Документ', 'step-label'); docTypeLabel.style.margin = '0';
   const overallBadge = el('span', null, 'acct-badge');
   statusRow.append(docTypeLabel, overallBadge);
-  colFields.append(statusRow);
+  resultPanel.append(statusRow);
 
   const exportBtn = button('Скачать Excel'); exportBtn.style.marginBottom = '14px'; exportBtn.disabled = true;
   exportBtn.prepend(excelIcon());
   const exportError = el('div', null, 'admin-error'); exportError.style.display = 'none';
-  colFields.append(exportBtn, exportError);
+  resultPanel.append(exportBtn, exportError);
 
   const headerTable = el('table', null, 'admin-table acct-header-table');
-  colFields.append(headerTable);
+  resultPanel.append(headerTable);
 
   const itemsSectionTitle = el('div', 'Строки', 'admin-section-title');
   const itemsSection = el('div', null, 'acct-table-scroll');
@@ -173,14 +175,12 @@ export async function initAccounting() {
   const itemsBody = el('tbody');
   itemsTable.append(thead, itemsBody);
   itemsSection.append(itemsTable);
-  colFields.append(itemsSectionTitle, itemsSection);
+  resultPanel.append(itemsSectionTitle, itemsSection);
 
-  colFields.append(el('div', 'Проверки', 'admin-section-title'));
+  resultPanel.append(el('div', 'Проверки', 'admin-section-title'));
   const rulesList = el('div', null, 'acct-rules-list');
-  colFields.append(rulesList);
+  resultPanel.append(rulesList);
 
-  columns.append(colOriginal, colFields);
-  resultPanel.append(columns);
   root.append(resultPanel);
 
   // --- состояние и обработчики (см. public/admin/accounting.js — тот же
@@ -195,6 +195,7 @@ export async function initAccounting() {
     if (!fileList || !fileList.length) return;
     docs = createDocsFromFiles(fileList);
     activeIndex = -1;
+    originalPanel.style.display = 'none';
     resultPanel.style.display = 'none';
     exportBtn.disabled = true;
     acctError.style.display = 'none';
@@ -222,6 +223,7 @@ export async function initAccounting() {
 
     const base64 = await fileToBase64(doc.file);
     renderPreview(previewBox, doc.file.type, base64);
+    originalPanel.style.display = '';
 
     if (doc.status !== 'done' || !doc.result) {
       resultPanel.style.display = 'none';
@@ -261,21 +263,22 @@ export async function initAccounting() {
     progressWrap.style.display = '';
     progressFill.style.width = '0%';
 
-    // Последовательно, не параллельно — тот же приём, что у review-экрана
-    // (Gemini free tier ~20 запросов/мин, см. ways-of-working.md).
     const pending = docs.map((doc, index) => ({ doc, index })).filter(({ doc }) => doc.status === 'pending' || doc.status === 'error');
     let firstDoneIndex = -1;
     let anyError = false;
     let done = 0;
 
-    for (const { doc, index } of pending) {
-      progressText.textContent = `Распознаём ${done + 1} из ${docs.length}...`;
+    // Документы обрабатываются параллельно, но не более 20 одновременно.
+    // recognizeOne перехватывает ошибку каждого документа, поэтому сбой
+    // одного запроса не останавливает остальные задачи пула.
+    await runWithConcurrency(pending, MAX_ACCOUNTING_CONCURRENCY, async ({ doc, index }) => {
+      progressText.textContent = `Распознаём ${done + 1} из ${pending.length}...`;
       await recognizeOne(doc);
       done += 1;
       progressFill.style.width = `${Math.round((done / pending.length) * 100)}%`;
       if (doc.status === 'done' && firstDoneIndex === -1) firstDoneIndex = index;
       if (doc.status === 'error') anyError = true;
-    }
+    });
 
     progressWrap.style.display = 'none';
     recognizeBtn.disabled = false;

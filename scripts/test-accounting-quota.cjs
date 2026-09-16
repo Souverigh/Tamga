@@ -84,7 +84,16 @@ async function main() {
     consumeUsageCalls = [];
     recordUsageEventCalls = [];
     let geminiCalled = false;
-    callGeminiImpl = async () => { geminiCalled = true; return fakeEsfResponse(); };
+    callGeminiImpl = async args => {
+      geminiCalled = true;
+      assert.ok(args.requiredFields.includes('invoice_number'));
+      assert.ok(args.requiredFields.includes('payment_purpose'));
+      assert.ok(args.requiredFields.includes('items'));
+      assert.deepStrictEqual(args.schemaProperties.items.items.required, [
+        'description', 'quantity', 'unit', 'unit_price', 'amount', 'vat_rate', 'vat_amount'
+      ]);
+      return fakeEsfResponse();
+    };
     const result = await recognizeAccountingDocument({ base64: FAKE_BASE64, mimeType: 'image/png', apiKey: 'fake' });
     assert.strictEqual(result.docType, 'esf');
     assert.strictEqual(geminiCalled, true);

@@ -39,6 +39,13 @@
   color:var(--accent-deep); display:flex; align-items:center; justify-content:center; flex-shrink:0;
 }
 .acct-wrap .dropzone{ margin-bottom:4px; }
+.acct-accounting-wrap .acct-accounting-workspace{ display:grid; grid-template-columns:minmax(0, 1fr) 132px; gap:14px; align-items:start; }
+.acct-accounting-wrap .acct-file-list{ margin-top:0; }
+.acct-accounting-wrap .acct-col-original{ min-width:0; padding:12px; }
+.acct-accounting-wrap .acct-col-original .step-label{ margin-bottom:10px; }
+.acct-accounting-wrap .acct-preview{ max-height:96px; object-fit:contain; }
+.acct-accounting-wrap .acct-recognize-btn{ margin:20px 0; }
+.acct-accounting-wrap > .acct-col-fields{ width:100%; box-sizing:border-box; }
 
 /* --- панель "Перевод" (public/js/translationDocs/panel.js, 16 сен 2026) --- */
 .acct-export-toolbar{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
@@ -100,6 +107,8 @@
 .acct-table-scroll table{ min-width:520px; }
 
 @media (max-width: 760px){
+  .acct-accounting-wrap .acct-accounting-workspace{ grid-template-columns:1fr; }
+  .acct-accounting-wrap .acct-col-original{ width:fit-content; }
   .acct-columns{ flex-direction:column; }
   .acct-col-original{ position:static; flex:none; width:100%; }
   .acct-table-scroll{ overflow-x:visible; }

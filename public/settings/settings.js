@@ -621,7 +621,7 @@ function collectSettingsDraft() {
 // --- Загрузка/сохранение ---
 
 function applyLoadedConfig(data) {
-  fIncludeText.checked = data.includeText !== false;
+  fIncludeText.checked = data.includeText === true;
   state = {
     fieldOverrides: data.fieldOverrides ? JSON.parse(JSON.stringify(data.fieldOverrides)) : {},
     customDocTypes: data.customDocTypes ? JSON.parse(JSON.stringify(data.customDocTypes)) : {},

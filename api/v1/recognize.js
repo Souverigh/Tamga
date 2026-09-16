@@ -6,7 +6,7 @@ const { readRequestBody } = require('../../lib/multipart');
 //
 // POST /api/v1/recognize
 // Заголовки: x-api-key: <ваш ключ>, Content-Type: application/json
-// Тело:      { "image": "<base64>", "mimeType": "image/png", "docType": "Справка" (опционально), "includeText": true (опционально, по умолчанию true), "batchId": "batch_..." (опционально) }
+// Тело:      { "image": "<base64>", "mimeType": "image/png", "docType": "Справка" (опционально), "includeText": true (опционально, по умолчанию true для API), "batchId": "batch_..." (опционально) }
 // Ответ:     { "documentType": "...", "text": "...", "fields": [{label, value, confidence}, ...], "items": [], "confidence": 92, "warnings": [] }
 //            (для табличных типов дополнительно: "columns": [...], "columnKeys": [...] — см. ниже)
 //
