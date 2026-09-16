@@ -39,6 +39,15 @@
   color:var(--accent-deep); display:flex; align-items:center; justify-content:center; flex-shrink:0;
 }
 .acct-wrap .dropzone{ margin-bottom:4px; }
+.acct-original-file-area{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px;padding:12px;
+}
+.acct-original-file-area>.step-label{width:100%;margin:0}
+.acct-original-preview{width:132px;min-height:70px}
+.acct-original-preview .acct-preview{max-height:120px;object-fit:contain}
+.acct-original-preview a{display:inline-flex;align-items:center;min-height:36px}
+.acct-original-download{display:inline-flex;align-items:center;gap:7px}
+.acct-original-download svg{width:16px;height:16px}
 .acct-accounting-wrap .acct-accounting-workspace{ display:grid; grid-template-columns:minmax(0, 1fr) 132px; gap:14px; align-items:start; }
 .acct-accounting-wrap .acct-file-list{ margin-top:0; }
 .acct-accounting-wrap .acct-col-original{ min-width:0; padding:12px; }
@@ -72,11 +81,16 @@
 }
 .translation-compare-header h3{margin:0;font-size:1.05rem}
 .translation-compare-table{table-layout:fixed}
-.translation-compare-table th:first-child,.translation-compare-table td:first-child{width:28%}
+.translation-compare-table th:first-child,.translation-compare-table td:first-child{width:23%}
+.translation-compare-table th:nth-child(2),.translation-compare-table td:nth-child(2),
+.translation-compare-table th:nth-child(3),.translation-compare-table td:nth-child(3){width:30%}
+.translation-compare-table th:last-child,.translation-compare-table td:last-child{width:17%}
 .translation-compare-table textarea,.translation-compare-table input,.translation-compare-table select{
   width:100%;min-height:72px;resize:vertical;margin-bottom:8px;
 }
-.translation-compare-table select{min-height:0}
+.translation-compare-table input,.translation-compare-table select{min-height:40px}
+.translation-compare-table textarea{display:block}
+.translation-compare-table .compare-type-cell{vertical-align:top}
 .translation-compare-table .compare-delete{min-height:34px;padding:6px 10px}
 
 /* --- admin-* утилиты (только используемые здесь, скопированы из admin.css) --- */
@@ -143,7 +157,7 @@
   .acct-table-scroll{ overflow-x:visible; }
   .translation-compare-modal{padding:8px}
   .translation-compare-dialog{padding:12px}
-  .translation-compare-table{font-size:.82rem}
+  .translation-compare-table{font-size:.82rem;min-width:720px}
   .translation-compare-table th,.translation-compare-table td{padding:8px 6px}
   #acctItemsTable{ min-width:0; width:100%; }
   #acctItemsTable thead{ display:none; }

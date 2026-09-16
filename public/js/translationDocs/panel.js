@@ -138,6 +138,16 @@ export async function initTranslationDocs() {
   const fileListEl = el('div', null, 'acct-file-list'); fileListEl.style.display = 'none';
   root.append(fileListEl);
 
+  const originalArea = el('section', null, 'panel acct-original-file-area');
+  originalArea.style.display = 'none';
+  originalArea.append(el('div', 'Оригинал', 'step-label'));
+  const previewBox = el('div', null, 'acct-original-preview');
+  const originalDownload = button('Скачать оригинал');
+  originalDownload.prepend(svg('<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>', '0 0 24 24'));
+  originalDownload.disabled = true;
+  originalArea.append(previewBox, originalDownload);
+  root.append(originalArea);
+
   const translateBtn = button('Перевести', 'btn-primary');
   translateBtn.style.marginTop = '12px';
   translateBtn.disabled = true;
@@ -157,11 +167,6 @@ export async function initTranslationDocs() {
 
   const resultPanel = el('section'); resultPanel.style.display = 'none';
   const columns = el('div', null, 'acct-columns');
-
-  const colOriginal = el('div', null, 'panel acct-col-original');
-  colOriginal.append(el('div', 'Оригинал', 'step-label'));
-  const previewBox = el('div');
-  colOriginal.append(previewBox);
 
   const colFields = el('div', null, 'panel acct-col-fields');
   const statusRow = el('div', null, 'acct-status-row');
@@ -185,7 +190,7 @@ export async function initTranslationDocs() {
   const fieldsTable = el('table', null, 'admin-table acct-header-table');
   colFields.append(fieldsTable);
 
-  columns.append(colOriginal, colFields);
+  columns.append(colFields);
   resultPanel.append(columns);
   root.append(resultPanel);
 
@@ -194,6 +199,21 @@ export async function initTranslationDocs() {
   let activeIndex = -1;
 
   function refreshFileList() { renderFileList(fileListEl, docs, activeIndex, selectDoc); }
+
+  let originalDownloadUrl = null;
+  function updateOriginalDownload(file, base64) {
+    if (originalDownloadUrl) URL.revokeObjectURL(originalDownloadUrl);
+    const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+    originalDownloadUrl = URL.createObjectURL(new Blob([bytes], { type: file.type }));
+    originalDownload.classList.add('acct-original-download');
+    originalDownload.onclick = () => {
+      const link = document.createElement('a');
+      link.href = originalDownloadUrl;
+      link.download = file.name;
+      link.click();
+    };
+    originalDownload.disabled = false;
+  }
 
   function loadFiles(fileList) {
     if (!fileList || !fileList.length) return;
@@ -260,12 +280,15 @@ export async function initTranslationDocs() {
   // (pairedLayoutBlocks и производные exportDocx/exportTxt/printTranslation)
   // — переиспользуется как есть, только вместо документов из обычного
   // потока сюда попадают поля апостиля.
-  function buildExportDocs(doc) {
-    const visible = doc.result.fields.filter(f => f.value && f.value.trim());
+  function buildExportDocs(doc, language) {
+    const visible = doc.result.doc_type === 'apostille'
+      ? doc.result.fields
+      : doc.result.fields.filter(f => f.value && f.value.trim());
     const name = doc.file.name;
     const original = { name, fields: visible.map(f => ({ label: f.label, value: f.value })), columns: [], items: [], keys: [], paragraphs: [] };
     const translation = {
       name,
+      language,
       template: doc.result.doc_type === 'apostille' ? 'apostille' : undefined,
       fields: visible.map(f => ({ label: f.targetLabel || f.label, value: f.translated || '' })),
       columns: [], items: [], keys: [], paragraphs: []
@@ -280,7 +303,9 @@ export async function initTranslationDocs() {
     refreshFileList();
 
     const base64 = await fileToBase64(doc.file);
+    originalArea.style.display = '';
     renderPreview(previewBox, doc.file.type, base64);
+    updateOriginalDownload(doc.file, base64);
 
     if (doc.status !== 'done' || !doc.result) {
       resultPanel.style.display = 'none';
@@ -372,7 +397,7 @@ export async function initTranslationDocs() {
     if (!doc || doc.status !== 'done') return;
     exportError.style.display = 'none';
     try {
-      const { original, translation } = buildExportDocs(doc);
+      const { original, translation } = buildExportDocs(doc, langSelect.value);
       await exportDocx(original, translation, false);
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .docx';
@@ -385,7 +410,7 @@ export async function initTranslationDocs() {
     if (!doc || doc.status !== 'done') return;
     exportError.style.display = 'none';
     try {
-      const { original, translation } = buildExportDocs(doc);
+      const { original, translation } = buildExportDocs(doc, langSelect.value);
       exportTxt(original, translation, false);
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .txt';
@@ -398,7 +423,7 @@ export async function initTranslationDocs() {
     if (!doc || doc.status !== 'done') return;
     exportError.style.display = 'none';
     try {
-      const { original, translation } = buildExportDocs(doc);
+      const { original, translation } = buildExportDocs(doc, langSelect.value);
       await downloadTranslationPdf(translation);
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось скачать PDF';
@@ -420,7 +445,7 @@ export async function initTranslationDocs() {
     const save = button('Сохранить изменения', 'btn-primary');
     toolbar.append(add, save);
     const table = el('table', null, 'admin-table translation-compare-table');
-    table.innerHTML = '<thead><tr><th>Поле</th><th>Оригинал</th><th>Перевод</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>Что за поле</th><th>Оригинал</th><th>Перевод</th><th>Тип</th></tr></thead>';
     const tbody = el('tbody');
     table.append(tbody);
     const makeRow = field => {
@@ -433,12 +458,14 @@ export async function initTranslationDocs() {
         const option = el('option', text); option.value = value; option.selected = field.translationStatus === value; status.append(option);
       });
       const remove = button('Удалить'); remove.className = 'btn-secondary compare-delete';
-      fieldCell.append(label, status, remove);
+      fieldCell.append(label);
       const original = document.createElement('textarea'); original.className = 'compare-original'; original.value = field.value || '';
       const translated = document.createElement('textarea'); translated.className = 'compare-translated'; translated.value = field.translated || '';
       const sourceCell = el('td'); sourceCell.append(original);
       const translatedCell = el('td'); translatedCell.append(translated);
-      row.append(fieldCell, sourceCell, translatedCell);
+      const typeCell = el('td', null, 'compare-type-cell');
+      typeCell.append(status, remove);
+      row.append(fieldCell, sourceCell, translatedCell, typeCell);
       remove.addEventListener('click', () => { row.remove(); sync(); });
       return row;
     };
