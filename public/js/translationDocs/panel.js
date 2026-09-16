@@ -28,7 +28,7 @@ import { renderFileList, renderPreview } from '../../admin/accounting/render.js'
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
 import { LOW_CONFIDENCE_THRESHOLD } from '../../admin/accounting/labels.js';
 import { LANGUAGES } from '../translation/model.mjs';
-import { exportTxt, exportDocx, downloadTranslationPdf } from '../translation/export.mjs';
+import { exportTxt, exportDocx, downloadTranslationPdf, apostilleConvention } from '../translation/export.mjs';
 import { runWithConcurrency } from '../utils/concurrencyPool.js';
 import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.mjs';
 
@@ -125,6 +125,7 @@ export async function initTranslationDocs() {
   langRow.append(langSelect);
   langRow.style.marginBottom = '12px';
   root.append(langRow);
+  let selectedLanguage = langSelect.value;
 
   // --- загрузка файлов — тот же .dropzone, что у главного экрана и у
   // модуля бухгалтерии, с drag&drop. -----------------------------------------
@@ -226,6 +227,24 @@ export async function initTranslationDocs() {
     translateBtn.disabled = false;
   }
 
+  langSelect.addEventListener('change', () => {
+    selectedLanguage = langSelect.value;
+    if (!docs.length) return;
+    docs.forEach(doc => {
+      if (doc.status === 'done') {
+        doc.status = 'pending';
+        doc.result = null;
+        doc.error = null;
+      }
+    });
+    activeIndex = -1;
+    resultPanel.style.display = 'none';
+    originalArea.style.display = 'none';
+    tdError.style.display = 'none';
+    refreshFileList();
+    translateBtn.disabled = false;
+  });
+
   fileInput.addEventListener('change', () => {
     loadFiles(fileInput.files);
     fileInput.value = ''; // позволяет выбрать те же файлы повторно
@@ -323,7 +342,9 @@ export async function initTranslationDocs() {
     const data = doc.result;
     docTypeLabel.textContent = DOC_TYPE_LABELS[data.doc_type] || data.doc_type;
     regulationNote.replaceChildren();
-    const regulationTitle = data.regulation?.title || 'Требования принимающего органа';
+    const regulationTitle = data.doc_type === 'apostille'
+      ? apostilleConvention(selectedLanguage).replace(/^\(|\)$/g, '')
+      : (data.regulation?.title || 'Требования принимающего органа');
     const regulationNoteText = data.regulation?.note ||
       'Перед подачей проверьте требования страны назначения, включая легализацию и заверение перевода.';
     const regulationList = document.createElement('ul');
@@ -363,7 +384,7 @@ export async function initTranslationDocs() {
 
   translateBtn.addEventListener('click', async () => {
     if (!docs.length) return;
-    const language = langSelect.value;
+    const language = selectedLanguage;
     tdError.style.display = 'none';
     translateBtn.disabled = true;
     [exportDocxBtn, exportTxtBtn, printBtn].forEach(b => b.disabled = true);
@@ -401,7 +422,7 @@ export async function initTranslationDocs() {
     if (!doc || doc.status !== 'done') return;
     exportError.style.display = 'none';
     try {
-      const { original, translation } = buildExportDocs(doc, langSelect.value);
+      const { original, translation } = buildExportDocs(doc, selectedLanguage);
       await exportDocx(original, translation, false);
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .docx';
@@ -414,7 +435,7 @@ export async function initTranslationDocs() {
     if (!doc || doc.status !== 'done') return;
     exportError.style.display = 'none';
     try {
-      const { original, translation } = buildExportDocs(doc, langSelect.value);
+      const { original, translation } = buildExportDocs(doc, selectedLanguage);
       exportTxt(original, translation, false);
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .txt';
@@ -427,7 +448,7 @@ export async function initTranslationDocs() {
     if (!doc || doc.status !== 'done') return;
     exportError.style.display = 'none';
     try {
-      const { original, translation } = buildExportDocs(doc, langSelect.value);
+      const { original, translation } = buildExportDocs(doc, selectedLanguage);
       await downloadTranslationPdf(translation);
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось скачать PDF';
