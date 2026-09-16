@@ -18,6 +18,15 @@ export function layoutBlocks(doc) {
   return blocks;
 }
 
+function apostilleBlocks(doc) {
+  const fields = doc.fields || [];
+  return [
+    { heading: 'APOSTILLE' },
+    { text: '(Convention de La Haye du 5 octobre 1961)' },
+    { table: fields.map((field, index) => [`${index + 1}. ${field.label}`, field.value || '']) }
+  ];
+}
+
 // Bilingual cell: original and translated value shown together, never one
 // replacing the other. Used only where doubling the column count would make
 // an already-wide table unreadable (line-item tables); requisites and running
@@ -58,11 +67,13 @@ export function pairedLayoutBlocks(original,translation) {
 }
 
 function buildBlocks(original,translation,paired) {
+  if (!paired && translation.template === 'apostille') return apostilleBlocks(translation);
   return paired ? pairedLayoutBlocks(original,translation) : layoutBlocks(translation);
 }
 const txtCell = c => (c && c.__bi) ? `${c.a} → ${c.b}` : String(c);
 export function buildTranslationTxt(original,translation,paired) {
-  return `${original.name}\n\n`+buildBlocks(original,translation,paired).map(b=>b.table?b.table.map(row=>row.map(txtCell).join('\t')).join('\n'):(b.heading||b.text)).join('\n');
+  const title = paired ? original.name : (translation.template === 'apostille' ? 'APOSTILLE' : translation.name);
+  return `${title}\n\n`+buildBlocks(original,translation,paired).map(b=>b.table?b.table.map(row=>row.map(txtCell).join('\t')).join('\n'):(b.heading||b.text)).join('\n');
 }
 export function downloadBlob(blob,name) {
   const url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -81,7 +92,8 @@ const translatedRun = text => '<w:p><w:pPr><w:spacing w:before="20" w:after="80"
 const cellXml = cell => (cell && cell.__bi) ? paragraph(cell.a)+translatedRun('→ '+cell.b) : paragraph(cell);
 const table = rows => '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders>'+['top','left','bottom','right','insideH','insideV'].map(side=>`<w:${side} w:val="single" w:sz="4" w:color="BBBBBB"/>`).join('')+'</w:tblBorders></w:tblPr>'+rows.map(row=>'<w:tr>'+row.map(cell=>'<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>'+cellXml(cell)+'</w:tc>').join('')+'</w:tr>').join('')+'</w:tbl>';
 export function buildDocumentXml(original,translation,paired) {
-  let body=paragraph(original.name,true);
+  const title = paired ? original.name : (translation.template === 'apostille' ? 'APOSTILLE' : translation.name);
+  let body=paragraph(title,true);
   for (const b of buildBlocks(original,translation,paired)) body+=b.table?table(b.table):paragraph(b.heading||b.text,!!b.heading);
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
 }
@@ -106,3 +118,65 @@ export function printTranslation(original,translation,paired) {
   const button=win.document.createElement('button');button.textContent='Печать / сохранить PDF';button.onclick=()=>win.print();win.document.body.prepend(button);
 }
 
+export async function downloadTranslationPdf(translation) {
+  if (!globalThis.html2canvas || !globalThis.jspdf?.jsPDF) {
+    throw new Error('Модуль PDF не загрузился. Обновите страницу и повторите попытку.');
+  }
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:720px;padding:44px;background:#fff;color:#111;font:16px Arial,sans-serif;line-height:1.35;';
+  const title = document.createElement('h1');
+  title.textContent = translation.template === 'apostille' ? 'APOSTILLE' : translation.name;
+  title.style.cssText = 'text-align:center;font-size:24px;margin:0 0 8px;';
+  container.append(title);
+  if (translation.template === 'apostille') {
+    const subtitle = document.createElement('div');
+    subtitle.textContent = '(Convention de La Haye du 5 octobre 1961)';
+    subtitle.style.cssText = 'text-align:center;margin-bottom:24px;';
+    container.append(subtitle);
+  }
+  const tableEl = document.createElement('table');
+  tableEl.style.cssText = 'width:100%;border-collapse:collapse;table-layout:fixed;';
+  (translation.fields || []).forEach((field, index) => {
+    const row = document.createElement('tr');
+    const label = document.createElement('td');
+    label.textContent = translation.template === 'apostille' ? `${index + 1}. ${field.label}` : field.label;
+    const value = document.createElement('td');
+    value.textContent = field.value || '';
+    [label, value].forEach(cell => {
+      cell.style.cssText = 'border:1px solid #777;padding:10px;vertical-align:top;overflow-wrap:anywhere;';
+    });
+    label.style.width = '42%';
+    row.append(label, value);
+    tableEl.append(row);
+  });
+  container.append(tableEl);
+  document.body.append(container);
+  try {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#fff' });
+    const { jsPDF } = globalThis.jspdf;
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+    const margin = 30;
+    const width = 595.28 - margin * 2;
+    const height = 841.89 - margin * 2;
+    const scale = width / canvas.width;
+    const pageHeight = Math.floor(height / scale);
+    let offset = 0;
+    let first = true;
+    while (offset < canvas.height) {
+      const sliceHeight = Math.min(pageHeight, canvas.height - offset);
+      const slice = document.createElement('canvas');
+      slice.width = canvas.width;
+      slice.height = sliceHeight;
+      slice.getContext('2d').drawImage(canvas, 0, offset, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+      if (!first) pdf.addPage();
+      pdf.addImage(slice.toDataURL('image/png'), 'PNG', margin, margin, width, sliceHeight * scale);
+      first = false;
+      offset += sliceHeight;
+    }
+    const name = safeName(translation.name || 'translation').replace(/\.[^.]+$/, '');
+    pdf.save(`${name}-translation.pdf`);
+  } finally {
+    container.remove();
+  }
+}

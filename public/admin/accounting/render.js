@@ -108,7 +108,12 @@ export function renderRules(rulesList, results) {
     const div = document.createElement('div');
     div.className = `acct-rule acct-rule-${r.status}`;
     const label = RULE_LABELS[r.rule_id] || r.rule_id;
-    div.innerHTML = `<span class="acct-rule-id" title="${r.rule_id}">${label}</span><span>${r.message || r.status}</span>`;
+    const statusText = {
+      FAILED: 'Проверка не пройдена',
+      WARNING: 'Требуется проверка',
+      INSUFFICIENT_DATA: 'Недостаточно данных для проверки'
+    }[r.status] || r.status;
+    div.innerHTML = `<span class="acct-rule-id" title="${r.rule_id}">${label}</span><span>${r.message || statusText}</span>`;
     rulesList.appendChild(div);
   }
   const uniquePassedIds = [...new Set(passed.map(r => r.rule_id))];

@@ -90,6 +90,12 @@ export const RULE_LABELS = {
   'PP-CONF': 'Уверенность распознавания'
 };
 
-export const FILE_STATUS_LABELS = { pending: 'В очереди', recognizing: 'Распознаём...', done: 'Готово', error: 'Ошибка' };
+export const FILE_STATUS_LABELS = {
+  pending: 'В очереди',
+  recognizing: 'Обрабатываем...',
+  done: 'Готово',
+  error: 'Ошибка обработки',
+  insufficient_data: 'Недостаточно данных'
+};
 
 export const LOW_CONFIDENCE_THRESHOLD = 70;

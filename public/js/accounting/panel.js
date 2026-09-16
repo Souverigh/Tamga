@@ -41,7 +41,15 @@ async function recognizeViaApi(token, slug, base64, mimeType) {
     body: JSON.stringify({ image: base64, mimeType, clientSlug: slug })
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
+  if (!res.ok) {
+    const messages = {
+      QUOTA_EXCEEDED: 'Лимит страниц по вашему тарифу исчерпан.',
+      QUOTA_UNAVAILABLE: 'Сервис учёта лимита временно недоступен. Повторите попытку позже.',
+      INVALID_DOCUMENT: 'Не удалось определить документ. Загрузите более чёткий скан.',
+      INVALID_FILE: 'Файл имеет неподдерживаемый формат.'
+    };
+    throw new Error(messages[data.code] || data.error || `Не удалось обработать документ (код ${res.status}).`);
+  }
   return data;
 }
 
@@ -53,7 +61,7 @@ async function exportViaApi(token, slug, documents) {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `Ошибка ${res.status}`);
+    throw new Error(data.error || `Не удалось скачать Excel-файл (код ${res.status}).`);
   }
   return res.blob();
 }

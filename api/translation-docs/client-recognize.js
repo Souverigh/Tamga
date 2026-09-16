@@ -36,7 +36,14 @@ module.exports = async (req, res) => {
       language: recognition.language,
       regulation: recognition.regulation,
       fields: recognition.fields.map(f => ({
-        key: f.key, label: f.label, value: f.value, raw_text: f.rawText, confidence: f.confidence, translated: f.translated
+        key: f.key,
+        label: f.label,
+        targetLabel: f.targetLabel,
+        value: f.value,
+        raw_text: f.rawText,
+        confidence: f.confidence,
+        translated: f.translated,
+        translationStatus: f.translationStatus
       }))
     });
   } catch (error) {
