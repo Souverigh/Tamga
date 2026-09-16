@@ -1,4 +1,5 @@
-﻿export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
+import { validateApostille } from './apostille.mjs';
+export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 
 export function documentBlocks(doc) {
   const blocks = [];
@@ -32,16 +33,13 @@ export function apostilleConvention(language) {
 }
 
 function apostilleBlocks(doc) {
-  const elements = Array.isArray(doc.elements) && doc.elements.length
-    ? doc.elements
-    : (doc.fields || []).map((field, index) => ({ number: String(index + 1), label: field.label, value: field.value || '' }));
+  const elements = validateApostille(doc.elements, doc.language, true);
   return [
-    { heading: 'APOSTILLE' },
     { text: apostilleConvention(doc.language) },
-    { table: [elements.map(element => [
-      element.number ? `${element.number}. ${element.label}` : element.label,
+    { table: elements.map(element => [
+      element.number ? `${element.number}. ${element.label || ''}` : (element.label || ''),
       element.value || ''
-    ])] }
+    ]), widths: [4048, 5590] }
   ];
 }
 
@@ -85,6 +83,7 @@ export function pairedLayoutBlocks(original,translation) {
 }
 
 function buildBlocks(original,translation,paired) {
+  if (translation.template === 'apostille') validateApostille(translation.elements, translation.language, true);
   if (!paired && translation.template === 'apostille') return apostilleBlocks(translation);
   return paired ? pairedLayoutBlocks(original,translation) : layoutBlocks(translation);
 }
@@ -108,11 +107,17 @@ const paragraph = (text,heading=false) => '<w:p><w:pPr><w:spacing w:before="'+(h
 // exported document reads the same way it was reviewed.
 const translatedRun = text => '<w:p><w:pPr><w:spacing w:before="20" w:after="80" w:line="260" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="20"/><w:i/><w:color w:val="555555"/></w:rPr><w:t xml:space="preserve">'+escapeXml(text).replace(/\r?\n/g,'</w:t><w:br/><w:t xml:space="preserve">')+'</w:t></w:r></w:p>';
 const cellXml = cell => (cell && cell.__bi) ? paragraph(cell.a)+translatedRun('→ '+cell.b) : paragraph(cell);
-const table = rows => '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders>'+['top','left','bottom','right','insideH','insideV'].map(side=>`<w:${side} w:val="single" w:sz="4" w:color="BBBBBB"/>`).join('')+'</w:tblBorders></w:tblPr>'+rows.map(row=>'<w:tr>'+row.map(cell=>'<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>'+cellXml(cell)+'</w:tc>').join('')+'</w:tr>').join('')+'</w:tbl>';
+const table = (rows, widths) => {
+  const properties = widths
+    ? '<w:tblW w:w="9638" w:type="dxa"/><w:tblLayout w:type="fixed"/>'
+    : '<w:tblW w:w="0" w:type="auto"/>';
+  const grid = widths ? '<w:tblGrid>'+widths.map(width=>`<w:gridCol w:w="${width}"/>`).join('')+'</w:tblGrid>' : '';
+  return '<w:tbl><w:tblPr>'+properties+'<w:tblBorders>'+['top','left','bottom','right','insideH','insideV'].map(side=>`<w:${side} w:val="single" w:sz="4" w:color="BBBBBB"/>`).join('')+'</w:tblBorders></w:tblPr>'+grid+rows.map(row=>'<w:tr>'+row.map((cell,index)=>'<w:tc><w:tcPr>'+(widths ? `<w:tcW w:w="${widths[index]}" w:type="dxa"/>` : '<w:tcW w:w="0" w:type="auto"/>')+'</w:tcPr>'+cellXml(cell)+'</w:tc>').join('')+'</w:tr>').join('')+'</w:tbl>';
+};
 export function buildDocumentXml(original,translation,paired) {
   const title = paired ? original.name : (translation.template === 'apostille' ? 'APOSTILLE' : translation.name);
   let body=paragraph(title,true);
-  for (const b of buildBlocks(original,translation,paired)) body+=b.table?table(b.table):paragraph(b.heading||b.text,!!b.heading);
+  for (const b of buildBlocks(original,translation,paired)) body+=b.table?table(b.table,b.widths):paragraph(b.heading||b.text,!!b.heading);
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
 }
 export async function exportDocx(original,translation,paired) {
@@ -127,7 +132,8 @@ const cellHtml = cell => (cell && cell.__bi)
   ? escapeXml(cell.a)+'<br><span class="tr">→ '+escapeXml(cell.b)+'</span>'
   : escapeXml(cell);
 export function buildPrintHtml(original,translation,paired) {
-  return '<!doctype html><html lang="ru"><meta charset="utf-8"><title>Перевод</title><style>body{font:11pt Arial,sans-serif;line-height:1.3;margin:24px;color:#111}p{white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 6pt;orphans:2;widows:2}h1{font-size:18pt}h2{font-size:14pt}h3{font-size:11pt;margin:14pt 0 6pt;break-after:avoid}table{border-collapse:collapse;width:100%;table-layout:fixed}td{border:1px solid #aaa;padding:6px;white-space:pre-wrap;overflow-wrap:anywhere;vertical-align:top}.tr{color:#555;font-style:italic}h2{break-after:avoid}tr{break-inside:avoid}@page{size:A4;margin:18mm}@media print{button{display:none}}</style><h1>'+escapeXml(original.name)+'</h1>'+buildBlocks(original,translation,paired).map(b=>b.table?'<table>'+b.table.map(row=>'<tr>'+row.map(cell=>'<td>'+cellHtml(cell)+'</td>').join('')+'</tr>').join('')+'</table>':b.heading?'<h3>'+escapeXml(b.heading)+'</h3>':'<p>'+escapeXml(b.text)+'</p>').join('')+'</html>';
+  const title = !paired && translation.template === 'apostille' ? 'APOSTILLE' : original.name;
+  return '<!doctype html><html lang="ru"><meta charset="utf-8"><title>Перевод</title><style>body{font:11pt Arial,sans-serif;line-height:1.3;margin:24px;color:#111}p{white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 6pt;orphans:2;widows:2}h1{font-size:18pt}h2{font-size:14pt}h3{font-size:11pt;margin:14pt 0 6pt;break-after:avoid}table{border-collapse:collapse;width:100%;table-layout:fixed}td{border:1px solid #aaa;padding:6px;white-space:pre-wrap;overflow-wrap:anywhere;vertical-align:top}.tr{color:#555;font-style:italic}h2{break-after:avoid}tr{break-inside:avoid}@page{size:A4;margin:18mm}@media print{button{display:none}}</style><h1>'+escapeXml(title)+'</h1>'+buildBlocks(original,translation,paired).map(b=>b.table?'<table>'+b.table.map(row=>'<tr>'+row.map(cell=>'<td>'+cellHtml(cell)+'</td>').join('')+'</tr>').join('')+'</table>':b.heading?'<h3>'+escapeXml(b.heading)+'</h3>':'<p>'+escapeXml(b.text)+'</p>').join('')+'</html>';
 }
 export function printTranslation(original,translation,paired) {
   const win=window.open('','_blank');
@@ -137,6 +143,7 @@ export function printTranslation(original,translation,paired) {
 }
 
 export async function downloadTranslationPdf(translation) {
+  if (translation.template === 'apostille') validateApostille(translation.elements, translation.language, true);
   if (!globalThis.html2canvas || !globalThis.jspdf?.jsPDF) {
     throw new Error('Модуль PDF не загрузился. Обновите страницу и повторите попытку.');
   }
@@ -154,19 +161,36 @@ export async function downloadTranslationPdf(translation) {
   }
   const tableEl = document.createElement('table');
   tableEl.style.cssText = 'width:100%;border-collapse:collapse;table-layout:fixed;';
-  (translation.fields || []).forEach((field, index) => {
-    const row = document.createElement('tr');
-    const label = document.createElement('td');
-    label.textContent = translation.template === 'apostille' ? `${index + 1}. ${field.label}` : field.label;
-    const value = document.createElement('td');
-    value.textContent = field.value || '';
-    [label, value].forEach(cell => {
-      cell.style.cssText = 'border:1px solid #777;padding:10px;vertical-align:top;overflow-wrap:anywhere;';
+  if (translation.template === 'apostille') {
+    const elements = validateApostille(translation.elements, translation.language, true);
+    elements.forEach(element => {
+      const row = document.createElement('tr');
+      const label = document.createElement('td');
+      label.textContent = element.number ? `${element.number}. ${element.label || ''}` : (element.label || '');
+      const value = document.createElement('td');
+      value.textContent = element.value || '';
+      [label, value].forEach(cell => {
+        cell.style.cssText = 'border:1px solid #777;padding:10px;vertical-align:top;overflow-wrap:anywhere;white-space:pre-wrap;';
+      });
+      label.style.width = '42%';
+      row.append(label, value);
+      tableEl.append(row);
     });
-    label.style.width = '42%';
-    row.append(label, value);
-    tableEl.append(row);
-  });
+  } else {
+    (translation.fields || []).forEach(field => {
+      const row = document.createElement('tr');
+      const label = document.createElement('td');
+      label.textContent = field.label;
+      const value = document.createElement('td');
+      value.textContent = field.value || '';
+      [label, value].forEach(cell => {
+        cell.style.cssText = 'border:1px solid #777;padding:10px;vertical-align:top;overflow-wrap:anywhere;';
+      });
+      label.style.width = '42%';
+      row.append(label, value);
+      tableEl.append(row);
+    });
+  }
   container.append(tableEl);
   document.body.append(container);
   try {

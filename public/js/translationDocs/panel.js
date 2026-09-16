@@ -328,6 +328,9 @@ export async function initTranslationDocs() {
         ? doc.result.elements.map(e => {
           const field = visible.find(f => f.key === e.key);
           return {
+            key: e.key,
+            elementType: e.elementType,
+            sourceValue: e.sourceValue ?? e.value,
             number: e.number,
             label: field?.targetLabel || e.targetLabel || e.label,
             value: field?.translated ?? e.translated ?? ''

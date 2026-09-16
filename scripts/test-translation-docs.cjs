@@ -69,6 +69,7 @@ require.cache[require.resolve(uaPath)] = {
 };
 
 let translateSegmentsCalls = [];
+let translateText = text => `[TR]${text}`;
 const translationPath = path.join(ROOT, 'lib/translation.js');
 require.cache[require.resolve(translationPath)] = {
   id: translationPath, filename: translationPath, loaded: true,
@@ -76,7 +77,7 @@ require.cache[require.resolve(translationPath)] = {
     validateTranslationRequest: body => body, // проходит как есть — сама валидация не тестируется здесь
     translateSegments: async (request, clientRef) => {
       translateSegmentsCalls.push({ request, clientRef });
-      return { segments: request.segments.map(s => ({ id: s.id, text: `[TR]${s.text}` })) };
+      return { segments: request.segments.map(s => ({ id: s.id, text: translateText(s.text) })) };
     }
   }
 };
@@ -116,6 +117,39 @@ function fakeEmptyApostilleResponse() {
 }
 
 async function main() {
+  await scenario('Chinese apostille translates seal and stamp text without changing source data', async () => {
+    const { APOSTILLE_FIELDS } = require('../lib/translationDocs/apostille');
+    const source = ['Kyrgyz Republic', '', 'Amanova G.', 'Head', 'Zharandyk abaldyn aktylaryn kattoo bolumu', '', 'Bishkek', '30-01-18', 'Justice Department', '54-1', '[seal]', 'Zh. R. Ismailov'];
+    const target = ['吉尔吉斯共和国', '', 'Amanova G.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-18', '司法局', '54-1', '[印章]', 'Zh. R. Ismailov'];
+    const dictionary = new Map(source.map((s, i) => [s, target[i]]));
+    dictionary.set('Ministry of Justice', '司法部');
+    translateText = text => dictionary.get(text);
+    callGeminiImpl = async () => fakeApostilleResponse({ elements: [
+      ...APOSTILLE_FIELDS.map((f, i) => ({ key: f.key, label: f.label, element_type: f.elementType || 'numbered_field', number: f.number || '', value: source[i], confidence: 95 })),
+      { key: 'stamp_text_1', element_type: 'stamp_text', number: '', label: '', value: 'Ministry of Justice', confidence: 95 }
+    ] });
+    try {
+      const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'zh' });
+      assert.deepStrictEqual(result.fields.map(f => f.translated), target);
+      assert.strictEqual(result.elements.at(-1).translated, '司法部');
+      assert.strictEqual(result.elements.filter(e => e.number).length, 10);
+    } finally { translateText = text => `[TR]${text}`; }
+  });
+  await scenario('Apostille preserves names and translates authority descriptions', async () => {
+    translateSegmentsCalls = [];
+    callGeminiImpl = async () => fakeApostilleResponse({
+      signatory_name: { value: 'Аманова Г.', confidence: 95 },
+      seal_authority: { value: 'Zharandyk abaldyn aktylaryn kattoo bolumu', confidence: 95 }
+    });
+    const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
+    assert.strictEqual(result.fields.find(f => f.key === 'signatory_name').translated, 'Аманова Г.');
+    assert.ok(translateSegmentsCalls[0].request.segments.some(s => s.text === 'Zharandyk abaldyn aktylaryn kattoo bolumu'));
+    assert.strictEqual(result.elements.find(e => e.key === 'seal_authority').translated, '[TR]Zharandyk abaldyn aktylaryn kattoo bolumu');
+  });
+  await scenario('Apostille rejects shifted field numbers before translation', async () => {
+    callGeminiImpl = async () => fakeApostilleResponse({ elements: [{ key: 'public_document', element_type: 'numbered_field', number: '2', value: '' }] });
+    await assert.rejects(recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' }), /apostille/i);
+  });
   await scenario('Без clientApiKey/clientSlug — квота вообще не проверяется, документ переводится', async () => {
     consumeUsageCalls = []; recordUsageEventCalls = []; translateSegmentsCalls = [];
     let geminiCalled = false;
@@ -209,7 +243,7 @@ async function main() {
     assert.strictEqual(byKey.country.translated, '[TR]Кыргызская Республика');
     assert.strictEqual(byKey.apostille_number.translated, '482');
     assert.strictEqual(byKey.apostille_number.translationStatus, 'preserved');
-    assert.strictEqual(byKey.certified_date.translated, '10-09-26');
+    assert.strictEqual(byKey.certified_date.translated, '2026-09-10');
     assert.strictEqual(byKey.certified_date.translationStatus, 'preserved');
     assert.strictEqual(byKey.signatory_name.value, '');
     assert.strictEqual(byKey.signatory_name.translated, '', 'пустые поля не переводятся');
