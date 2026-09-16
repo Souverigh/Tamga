@@ -204,10 +204,12 @@ async function main() {
     translateSegmentsCalls = [];
     callGeminiImpl = async () => fakeApostilleResponse();
     const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', apiKey: 'fake', language: 'en', clientSlug: 'acme' });
-    assert.strictEqual(translateSegmentsCalls[0].request.segments.length, 4, 'только 4 непустых поля (country/apostille_number/certified_place/certified_date)');
+    assert.strictEqual(translateSegmentsCalls[0].request.segments.length, 2, 'только переводимые поля (country/certified_place)');
     const byKey = Object.fromEntries(result.fields.map(f => [f.key, f]));
     assert.strictEqual(byKey.country.translated, '[TR]Кыргызская Республика');
-    assert.strictEqual(byKey.apostille_number.translated, '[TR]482');
+    assert.strictEqual(byKey.apostille_number.translated, '482');
+    assert.strictEqual(byKey.apostille_number.translationStatus, 'preserved');
+    assert.strictEqual(byKey.certified_date.translated, '2026-09-10');
     assert.strictEqual(byKey.signatory_name.value, '');
     assert.strictEqual(byKey.signatory_name.translated, '', 'пустые поля не переводятся');
   });

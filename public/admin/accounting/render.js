@@ -33,6 +33,7 @@ export function renderFileList(fileListEl, docs, activeIndex, onSelect) {
       <span class="acct-file-name">${doc.file.name}</span>
       <span class="acct-file-status acct-file-status-${doc.status}">${FILE_STATUS_LABELS[doc.status]}</span>
     `;
+    if (doc.error) row.title = doc.error;
     row.addEventListener('click', () => onSelect(index));
     fileListEl.appendChild(row);
   });

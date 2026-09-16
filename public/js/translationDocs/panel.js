@@ -159,13 +159,17 @@ export async function initTranslationDocs() {
   const docTypeLabel = el('div', 'Документ', 'step-label'); docTypeLabel.style.margin = '0';
   statusRow.append(docTypeLabel);
   colFields.append(statusRow);
+  const regulationNote = el('div', null, 'admin-note');
+  regulationNote.style.marginTop = '8px';
+  colFields.append(regulationNote);
 
   const exportToolbar = el('div', null, 'acct-export-toolbar');
   const exportDocxBtn = button('Скачать .docx'); exportDocxBtn.prepend(docxIcon());
   const exportTxtBtn = button('Скачать .txt');
   const printBtn = button('Печать / PDF');
-  [exportDocxBtn, exportTxtBtn, printBtn].forEach(b => { b.disabled = true; });
-  exportToolbar.append(exportDocxBtn, exportTxtBtn, printBtn);
+  const compareBtn = button('Сравнить оригинал и перевод');
+  [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => { b.disabled = true; });
+  exportToolbar.append(exportDocxBtn, exportTxtBtn, printBtn, compareBtn);
   const exportError = el('div', null, 'admin-error'); exportError.style.display = 'none';
   colFields.append(exportToolbar, exportError);
 
@@ -187,7 +191,7 @@ export async function initTranslationDocs() {
     docs = createDocsFromFiles(fileList);
     activeIndex = -1;
     resultPanel.style.display = 'none';
-    [exportDocxBtn, exportTxtBtn, printBtn].forEach(b => b.disabled = true);
+    [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = true);
     tdError.style.display = 'none';
     refreshFileList();
     translateBtn.disabled = false;
@@ -219,7 +223,20 @@ export async function initTranslationDocs() {
     const tbody = el('tbody');
     visible.forEach(f => {
       const row = el('tr');
-      row.append(el('td', f.label));
+      const labelCell = el('td');
+      labelCell.append(el('span', f.targetLabel || f.label));
+      const statusLabels = {
+        translated: ['Перевод', '#18794e'],
+        transliterated: ['Транслитерировано', '#7c3aed'],
+        preserved: ['Сохранено', '#52606d']
+      };
+      const status = statusLabels[f.translationStatus];
+      if (status) {
+        const badge = el('span', status[0]);
+        badge.style.cssText = `display:inline-block;margin-left:8px;padding:2px 7px;border-radius:10px;background:${status[1]};color:#fff;font-size:11px;white-space:nowrap`;
+        labelCell.append(badge);
+      }
+      row.append(labelCell);
       const valueTd = el('td', f.value || '—');
       if (f.confidence != null && f.confidence < LOW_CONFIDENCE_THRESHOLD) valueTd.classList.add('acct-low-confidence');
       row.append(valueTd);
@@ -238,7 +255,7 @@ export async function initTranslationDocs() {
     const visible = doc.result.fields.filter(f => f.value && f.value.trim());
     const name = doc.file.name;
     const original = { name, fields: visible.map(f => ({ label: f.label, value: f.value })), columns: [], items: [], keys: [], paragraphs: [] };
-    const translation = { name, fields: visible.map(f => ({ label: f.label, value: f.translated || '' })), columns: [], items: [], keys: [], paragraphs: [] };
+    const translation = { name, fields: visible.map(f => ({ label: f.targetLabel || f.label, value: f.translated || '' })), columns: [], items: [], keys: [], paragraphs: [] };
     return { original, translation };
   }
 
@@ -253,14 +270,33 @@ export async function initTranslationDocs() {
 
     if (doc.status !== 'done' || !doc.result) {
       resultPanel.style.display = 'none';
-      [exportDocxBtn, exportTxtBtn, printBtn].forEach(b => b.disabled = true);
+      [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = true);
+      if (doc.error) {
+        tdError.textContent = `Ошибка файла "${doc.file.name}": ${doc.error}`;
+        tdError.style.display = '';
+      }
       return;
     }
     const data = doc.result;
     docTypeLabel.textContent = DOC_TYPE_LABELS[data.doc_type] || data.doc_type;
+    regulationNote.replaceChildren();
+    const regulationTitle = data.regulation?.title || 'Требования принимающего органа';
+    const regulationNoteText = data.regulation?.note ||
+      'Перед подачей проверьте требования страны назначения, включая легализацию и заверение перевода.';
+    const regulationList = document.createElement('ul');
+    regulationList.style.margin = '6px 0 0';
+    regulationList.style.paddingLeft = '20px';
+    [
+      `Регуляция: ${regulationTitle}`,
+      regulationNoteText,
+      'Перевод выполнен автоматически',
+      'Перед подачей проверьте требования принимающего органа',
+      'При необходимости заверьте перевод у уполномоченного переводчика или нотариуса'
+    ].forEach(item => regulationList.append(el('li', item)));
+    regulationNote.append(el('strong', 'Важная информация'), regulationList);
     renderFieldsTable(data.fields);
     resultPanel.style.display = '';
-    [exportDocxBtn, exportTxtBtn, printBtn].forEach(b => b.disabled = false);
+    [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = false);
   }
 
   async function translateOne(doc, language) {
@@ -352,5 +388,61 @@ export async function initTranslationDocs() {
       exportError.textContent = err.message || 'Не удалось открыть окно печати';
       exportError.style.display = '';
     }
+  });
+
+  compareBtn.addEventListener('click', () => {
+    const doc = docs[activeIndex];
+    if (!doc || doc.status !== 'done' || !doc.result) return;
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+    const rows = doc.result.fields
+      .filter(field => field.value || field.translated)
+      .map(field => `<tr data-key="${escapeHtml(field.key)}"><th><input class="compare-label" value="${escapeHtml(field.targetLabel || field.label)}"><select class="compare-status"><option value="translated" ${field.translationStatus === 'translated' ? 'selected' : ''}>Перевод</option><option value="transliterated" ${field.translationStatus === 'transliterated' ? 'selected' : ''}>Транслитерировано</option><option value="preserved" ${field.translationStatus === 'preserved' ? 'selected' : ''}>Сохранено</option></select><button class="compare-delete" type="button">Удалить</button></th><td><textarea class="compare-original">${escapeHtml(field.value || '')}</textarea></td><td><textarea class="compare-translated">${escapeHtml(field.translated || '')}</textarea></td></tr>`)
+      .join('');
+    const win = window.open('', '_blank', 'noopener,noreferrer,width=1200,height=800');
+    if (!win) {
+      exportError.textContent = 'Разрешите открытие нового окна для сравнения документов.';
+      exportError.style.display = '';
+      return;
+    }
+    win.document.write(`<!doctype html><html lang="ru"><meta charset="utf-8"><title>Сравнение перевода</title>
+      <style>body{font:14px Arial,sans-serif;color:#111;margin:24px}h1{font-size:20px}table{border-collapse:collapse;width:100%;table-layout:fixed}th,td{border:1px solid #bbb;padding:10px;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere}th{background:#f3f5f7;text-align:left}thead th{position:sticky;top:0}.label{width:30%}.source,.translated{width:35%}@media print{button{display:none}}</style>
+      <h1>${escapeHtml(doc.file.name)}</h1><p>Сверка оригинала и перевода</p>
+      <button id="compare-add" type="button">Добавить поле</button>
+      <button id="compare-save" type="button">Сохранить изменения</button>
+      <table><thead><tr><th class="label">Поле</th><th class="source">Оригинал</th><th class="translated">Перевод</th></tr></thead><tbody>${rows}</tbody></table></html>`);
+    win.document.close();
+    const sync = () => {
+      const fields = [];
+      win.document.querySelectorAll('tbody tr').forEach(row => {
+        const field = doc.result.fields.find(item => item.key === row.dataset.key);
+        if (!field) return;
+        field.targetLabel = row.querySelector('.compare-label').value;
+        field.value = row.querySelector('.compare-original').value;
+        field.translated = row.querySelector('.compare-translated').value;
+        field.translationStatus = row.querySelector('.compare-status').value;
+        fields.push(field);
+      });
+      doc.result.fields = fields;
+      renderFieldsTable(doc.result.fields);
+    };
+    win.document.getElementById('compare-save').onclick = sync;
+    win.document.querySelectorAll('.compare-delete').forEach(button => {
+      button.onclick = () => { button.closest('tr').remove(); sync(); };
+    });
+    win.document.getElementById('compare-add').onclick = () => {
+      const key = `custom_${Date.now()}`;
+      doc.result.fields.push({
+        key, label: 'Новое поле', targetLabel: 'Новое поле',
+        value: '', translated: '', translationStatus: 'translated', confidence: 100
+      });
+      const row = win.document.createElement('tr');
+      row.dataset.key = key;
+      row.innerHTML = `<th><input class="compare-label" value="Новое поле"><select class="compare-status"><option value="translated">Перевод</option><option value="transliterated">Транслитерировано</option><option value="preserved">Сохранено</option></select><button class="compare-delete" type="button">Удалить</button></th><td><textarea class="compare-original"></textarea></td><td><textarea class="compare-translated"></textarea></td>`;
+      win.document.querySelector('tbody').append(row);
+      row.querySelector('.compare-delete').onclick = () => { row.remove(); sync(); };
+      row.querySelector('.compare-label').focus();
+    };
   });
 }
