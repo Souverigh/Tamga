@@ -1,3 +1,5 @@
+import { buildExportDocs } from './export-model.mjs';
+import { TRANSLATION_STATUSES } from '../translation/field-rules.mjs';
 // public/js/translationDocs/panel.js — клиентская веб-панель модуля
 // "Перевод" (Ethan, 16 сен 2026: "то же самое [что бухгалтерия] для
 // перевода — отдельная загрузка, как бухгалтерия; общий лимит страниц с
@@ -273,12 +275,7 @@ export async function initTranslationDocs() {
       const row = el('tr');
       const labelCell = el('td');
       labelCell.append(el('span', f.targetLabel || f.label));
-      const statusLabels = {
-        translated: ['Перевод', '#18794e'],
-        transliterated: ['Транслитерировано', '#7c3aed'],
-        preserved: ['Сохранено', '#52606d']
-      };
-      const status = statusLabels[f.translationStatus];
+      const status = TRANSLATION_STATUSES[f.translationStatus];
       row.append(labelCell);
       const valueTd = el('td', f.value || '—');
       if (f.confidence != null && f.confidence < LOW_CONFIDENCE_THRESHOLD) valueTd.classList.add('acct-low-confidence');
@@ -303,44 +300,6 @@ export async function initTranslationDocs() {
   // (pairedLayoutBlocks и производные exportDocx/exportTxt/printTranslation)
   // — переиспользуется как есть, только вместо документов из обычного
   // потока сюда попадают поля апостиля.
-  function buildExportDocs(doc, language) {
-    const visible = doc.result.doc_type === 'apostille'
-      ? doc.result.fields
-      : doc.result.fields.filter(f => f.value && f.value.trim());
-    const name = doc.file.name;
-    const original = {
-      name,
-      fields: visible.map(f => ({ label: f.label, value: f.value })),
-      elements: Array.isArray(doc.result.elements)
-        ? doc.result.elements.map(e => {
-          const field = visible.find(f => f.key === e.key);
-          return { number: e.number, label: e.label, value: field?.value ?? e.value ?? '' };
-        })
-        : undefined,
-      columns: [], items: [], keys: [], paragraphs: []
-    };
-    const translation = {
-      name,
-      language,
-      template: doc.result.doc_type === 'apostille' ? 'apostille' : undefined,
-      fields: visible.map(f => ({ label: f.targetLabel || f.label, value: f.translated || '' })),
-      elements: Array.isArray(doc.result.elements)
-        ? doc.result.elements.map(e => {
-          const field = visible.find(f => f.key === e.key);
-          return {
-            key: e.key,
-            elementType: e.elementType,
-            sourceValue: e.sourceValue ?? e.value,
-            number: e.number,
-            label: field?.targetLabel || e.targetLabel || e.label,
-            value: field?.translated ?? e.translated ?? ''
-          };
-        })
-        : undefined,
-      columns: [], items: [], keys: [], paragraphs: []
-    };
-    return { original, translation };
-  }
 
   async function selectDoc(index) {
     const doc = docs[index];
@@ -363,6 +322,7 @@ export async function initTranslationDocs() {
       return;
     }
     const data = doc.result;
+    exportError.style.display = 'none';
     docTypeLabel.textContent = DOC_TYPE_LABELS[data.doc_type] || data.doc_type;
     regulationNote.replaceChildren();
     const regulationTitle = data.doc_type === 'apostille'
@@ -502,7 +462,7 @@ export async function initTranslationDocs() {
       const fieldCell = el('td');
       const label = document.createElement('input'); label.className = 'compare-label'; label.value = field.targetLabel || field.label || '';
       const status = document.createElement('select'); status.className = 'compare-status';
-      [['translated', 'Перевод'], ['transliterated', 'Транслитерировано'], ['preserved', 'Сохранено']].forEach(([value, text]) => {
+      Object.entries(TRANSLATION_STATUSES).forEach(([value, [text]]) => {
         const option = el('option', text); option.value = value; option.selected = field.translationStatus === value; status.append(option);
       });
       const remove = button('Удалить'); remove.className = 'btn-secondary compare-delete';
@@ -519,7 +479,8 @@ export async function initTranslationDocs() {
     };
     doc.result.fields.filter(field => field.value || field.translated).forEach(field => tbody.append(makeRow(field)));
     const sync = () => {
-      const fields = [];
+      // Hidden empty headings are part of the legal structure, not deleted rows.
+      const fields = doc.result.fields.filter(field => !field.value && !field.translated);
       tbody.querySelectorAll('tr').forEach(row => {
         const field = doc.result.fields.find(item => item.key === row.dataset.key);
         if (!field) return;

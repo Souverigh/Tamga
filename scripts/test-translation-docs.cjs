@@ -117,10 +117,57 @@ function fakeEmptyApostilleResponse() {
 }
 
 async function main() {
+  await scenario('Real client endpoint → panel adapter → downloadable DOCX/TXT, with names/dates/IDs', async () => {
+    const { APOSTILLE_FIELDS } = require('../lib/translationDocs/apostille');
+    const source = ['Кыргыз Республикасы', '', 'Алманова Т.', 'жетекчи', 'Жарандык абалдын актыларын каттоо органы', '', 'Бишкек шаары', '30.01.2018-ж.', 'Чүй-Бишкек аймактык Башкармалыгы', '54-1', '[seal]', 'Ж.Р. Исмаилов [signature]'];
+    const target = ['吉尔吉斯共和国', '', 'Almanova T.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-18', '楚河-比什凯克区域管理局', '54-1', '【印章】', 'Zh.R. Ismailov 【签字】'];
+    const dictionary = new Map(source.map((s, i) => [s, target[i]]));
+    translateSegmentsCalls = [];
+    translateText = text => dictionary.get(text);
+    callGeminiImpl = async () => fakeApostilleResponse({ elements: APOSTILLE_FIELDS.map((f, i) => ({ key: f.key, label: f.label, element_type: f.elementType || 'numbered_field', number: f.number || '', value: source[i], raw_text: source[i], confidence: 95 })) });
+    const accessPath = require.resolve('../lib/translationAccess');
+    const bodyPath = require.resolve('../lib/multipart');
+    const originals = [require.cache[accessPath], require.cache[bodyPath]];
+    require.cache[accessPath] = { id: accessPath, filename: accessPath, loaded: true, exports: { requirePaidTranslationClient: async () => 'test-client' } };
+    require.cache[bodyPath] = { id: bodyPath, filename: bodyPath, loaded: true, exports: { readRequestBody: async req => req.body } };
+    const saved = { document: global.document, JSZip: global.JSZip, create: URL.createObjectURL, setTimeout: global.setTimeout };
+    try {
+      const endpoint = require('../api/translation-docs/client-recognize');
+      const response = { setHeader() {}, status(n) { this.statusCode = n; return this; }, json(data) { this.data = JSON.parse(JSON.stringify(data)); } };
+      await endpoint({ method: 'POST', body: { image: FAKE_BASE64, mimeType: 'image/png', language: 'zh', clientSlug: 'test-client' } }, response);
+      assert.strictEqual(response.statusCode, 200);
+      assert.deepStrictEqual(response.data.fields.map(f => f.translated), target);
+      assert.strictEqual(response.data.fields[2].translationStatus, 'transliterated');
+      assert.strictEqual(response.data.fields[7].translationStatus, 'translated');
+      assert.strictEqual(response.data.fields[9].translationStatus, 'preserved');
+      const sent = translateSegmentsCalls.flatMap(c => c.request.segments.map(s => s.text));
+      for (const i of [2, 7, 9, 10, 11]) assert.ok(!sent.includes(source[i]), 'deterministic values must not reach the translator');
+      const { buildExportDocs } = await import('../public/js/translationDocs/export-model.mjs');
+      const { exportDocx, exportTxt } = await import('../public/js/translation/export.mjs');
+      const { original, translation } = buildExportDocs({ file: { name: 'apostille.png' }, result: response.data }, 'zh');
+      const downloads = [];
+      let blob;
+      global.document = { createElement: () => ({ click() { downloads.push({ name: this.download, blob }); } }) };
+      URL.createObjectURL = value => { blob = value; return 'blob:test'; };
+      global.setTimeout = () => 0;
+      global.JSZip = require('jszip');
+      await exportDocx(original, translation, false);
+      exportTxt(original, translation, false);
+      assert.strictEqual(downloads.length, 2);
+      const zip = await global.JSZip.loadAsync(await downloads[0].blob.arrayBuffer());
+      const xml = await zip.file('word/document.xml').async('string');
+      for (const expected of ['Almanova T.', '30-01-18', '54-1', 'Zh.R. Ismailov']) assert.ok(xml.includes(expected));
+      assert.ok((await downloads[1].blob.text()).includes('30-01-18'));
+    } finally {
+      [accessPath, bodyPath].forEach((p, i) => { if (originals[i]) require.cache[p] = originals[i]; else delete require.cache[p]; });
+      global.document = saved.document; global.JSZip = saved.JSZip; URL.createObjectURL = saved.create; global.setTimeout = saved.setTimeout;
+      translateText = text => `[TR]${text}`;
+    }
+  });
   await scenario('Chinese apostille translates seal and stamp text without changing source data', async () => {
     const { APOSTILLE_FIELDS } = require('../lib/translationDocs/apostille');
     const source = ['Kyrgyz Republic', '', 'Amanova G.', 'Head', 'Zharandyk abaldyn aktylaryn kattoo bolumu', '', 'Bishkek', '30-01-18', 'Justice Department', '54-1', '[seal]', 'Zh. R. Ismailov'];
-    const target = ['吉尔吉斯共和国', '', 'Amanova G.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-18', '司法局', '54-1', '[印章]', 'Zh. R. Ismailov'];
+    const target = ['吉尔吉斯共和国', '', 'Amanova G.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-18', '司法局', '54-1', '【印章】', 'Zh. R. Ismailov'];
     const dictionary = new Map(source.map((s, i) => [s, target[i]]));
     dictionary.set('Ministry of Justice', '司法部');
     translateText = text => dictionary.get(text);
@@ -135,20 +182,21 @@ async function main() {
       assert.strictEqual(result.elements.filter(e => e.number).length, 10);
     } finally { translateText = text => `[TR]${text}`; }
   });
-  await scenario('Apostille preserves names and translates authority descriptions', async () => {
+  await scenario('Apostille transliterates names and translates authority descriptions', async () => {
     translateSegmentsCalls = [];
     callGeminiImpl = async () => fakeApostilleResponse({
       signatory_name: { value: 'Аманова Г.', confidence: 95 },
       seal_authority: { value: 'Zharandyk abaldyn aktylaryn kattoo bolumu', confidence: 95 }
     });
     const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
-    assert.strictEqual(result.fields.find(f => f.key === 'signatory_name').translated, 'Аманова Г.');
+    assert.strictEqual(result.fields.find(f => f.key === 'signatory_name').translated, 'Amanova G.');
+    assert.strictEqual(result.fields.find(f => f.key === 'signatory_name').translationStatus, 'transliterated');
     assert.ok(translateSegmentsCalls[0].request.segments.some(s => s.text === 'Zharandyk abaldyn aktylaryn kattoo bolumu'));
     assert.strictEqual(result.elements.find(e => e.key === 'seal_authority').translated, '[TR]Zharandyk abaldyn aktylaryn kattoo bolumu');
   });
   await scenario('Apostille rejects shifted field numbers before translation', async () => {
     callGeminiImpl = async () => fakeApostilleResponse({ elements: [{ key: 'public_document', element_type: 'numbered_field', number: '2', value: '' }] });
-    await assert.rejects(recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' }), /apostille/i);
+    await assert.rejects(recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' }), /apostille|\u0430\u043f\u043e\u0441\u0442\u0438\u043b/i);
   });
   await scenario('Без clientApiKey/clientSlug — квота вообще не проверяется, документ переводится', async () => {
     consumeUsageCalls = []; recordUsageEventCalls = []; translateSegmentsCalls = [];
@@ -243,8 +291,8 @@ async function main() {
     assert.strictEqual(byKey.country.translated, '[TR]Кыргызская Республика');
     assert.strictEqual(byKey.apostille_number.translated, '482');
     assert.strictEqual(byKey.apostille_number.translationStatus, 'preserved');
-    assert.strictEqual(byKey.certified_date.translated, '2026-09-10');
-    assert.strictEqual(byKey.certified_date.translationStatus, 'preserved');
+    assert.strictEqual(byKey.certified_date.translated, '10-09-26');
+    assert.strictEqual(byKey.certified_date.translationStatus, 'translated');
     assert.strictEqual(byKey.signatory_name.value, '');
     assert.strictEqual(byKey.signatory_name.translated, '', 'пустые поля не переводятся');
   });
