@@ -16,16 +16,18 @@ test('all text exports retain ten fields and unnumbered headings', async () => {
     assert.doesNotMatch(text, /(?:11|12)\.|\d\. (?:本公文|认证)[<\t]/);
   }
 });
-test('all ten fields including signature share one table, headings are parenthetical values', async () => {
+test('all ten fields including signature share one table with separate unnumbered headings', async () => {
   const { buildDocumentXml, buildTranslationTxt, buildPrintHtml } = await import('../public/js/translation/export.mjs');
   const doc = document();
   const xml = buildDocumentXml(doc, doc, false);
   const rows = xml.match(/<w:tr>.*?<\/w:tr>/g);
-  assert.equal(rows.length, 11);
+  assert.equal(rows.length, 13);
   assert.equal((xml.match(/<w:tbl>/g) || []).length, 1);
-  assert.match(rows[1], /吉尔吉斯共和国 \(本公文\)/);
-  assert.match(rows[4], /民事身份登记机关 \(认证\)/);
-  assert.match(rows[10], /10\. 签名/);
+  assert.match(rows[2], /本公文/);
+  assert.match(rows[6], /认证/);
+  assert.doesNotMatch(rows[2] + rows[6], /\d\. /);
+  assert.doesNotMatch(rows[1] + rows[5], /\((?:本公文|认证)\)/);
+  assert.match(rows[12], /10\. 签名/);
   assert.equal((rows[0].match(/<w:tc>/g) || []).length, 1);
   assert.match(rows[0], /<w:gridSpan w:val="2"\/>/);
   for (const row of rows.slice(1)) assert.equal((row.match(/<w:tc>/g) || []).length, 2);

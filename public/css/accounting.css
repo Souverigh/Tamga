@@ -58,19 +58,19 @@
 
 /* --- панель "Перевод" (public/js/translationDocs/panel.js, 16 сен 2026) --- */
 .acct-export-toolbar{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
-.translationDocsPanel .acct-columns{ align-items:start; }
-.translationDocsPanel .acct-col-fields{ min-width:0; overflow:hidden; }
-.translationDocsPanel .acct-header-table{ table-layout:fixed; }
-.translationDocsPanel .acct-header-table th,
-.translationDocsPanel .acct-header-table td{ overflow-wrap:anywhere; word-break:break-word; }
-.translationDocsPanel .acct-header-table th:first-child,
-.translationDocsPanel .acct-header-table td:first-child{ width:28%; }
-.translationDocsPanel .acct-header-table th:nth-child(2),
-.translationDocsPanel .acct-header-table td:nth-child(2),
-.translationDocsPanel .acct-header-table th:nth-child(3),
-.translationDocsPanel .acct-header-table td:nth-child(3){ width:28%; }
-.translationDocsPanel .acct-header-table th:last-child,
-.translationDocsPanel .acct-header-table td:last-child{ width:16%; }
+#translationDocsPanel .acct-columns{ align-items:start; }
+#translationDocsPanel .acct-col-fields{ min-width:0; overflow:hidden; }
+#translationDocsPanel .acct-header-table{ table-layout:fixed; }
+#translationDocsPanel .acct-header-table th,
+#translationDocsPanel .acct-header-table td{ overflow-wrap:anywhere; word-break:break-word; }
+#translationDocsPanel .acct-header-table th:first-child,
+#translationDocsPanel .acct-header-table td:first-child{ width:28%; }
+#translationDocsPanel .acct-header-table th:nth-child(2),
+#translationDocsPanel .acct-header-table td:nth-child(2),
+#translationDocsPanel .acct-header-table th:nth-child(3),
+#translationDocsPanel .acct-header-table td:nth-child(3){ width:28%; }
+#translationDocsPanel .acct-header-table th:last-child,
+#translationDocsPanel .acct-header-table td:last-child{ width:16%; }
 .translation-status-badge{
   display:inline-flex;align-items:center;justify-content:center;
   padding:3px 8px;border-radius:999px;color:#fff;font-size:11px;
@@ -103,6 +103,12 @@
 .translation-compare-table textarea{display:block}
 .translation-compare-table .compare-type-cell{vertical-align:top}
 .translation-compare-table .compare-delete{min-height:34px;padding:6px 10px}
+.translation-compare-table input[type="checkbox"]{
+  width:20px;min-height:20px;height:20px;margin:0;flex:none;resize:none;
+}
+.translation-compare-table .compare-type-cell label{
+  display:flex;align-items:center;gap:8px;min-height:44px;
+}
 
 /* --- admin-* утилиты (только используемые здесь, скопированы из admin.css) --- */
 .admin-note{ font-size:0.8rem; color:var(--ink-soft); margin-top:6px; line-height:1.45; }
@@ -168,7 +174,6 @@
   .acct-table-scroll{ overflow-x:visible; }
   .translation-compare-modal{padding:8px}
   .translation-compare-dialog{padding:12px}
-  .translation-compare-table{font-size:.82rem;min-width:720px}
   .translation-compare-table th,.translation-compare-table td{padding:8px 6px}
   #acctItemsTable{ min-width:0; width:100%; }
   #acctItemsTable thead{ display:none; }
@@ -177,4 +182,69 @@
   #acctItemsTable td{ display:flex; justify-content:space-between; align-items:baseline; gap:12px;
     padding:6px 0; border:none; text-align:right; }
   #acctItemsTable td::before{ content:attr(data-label); color:var(--ink-soft); font-weight:600; text-align:left; flex-shrink:0; }
+}
+
+/* Translation keeps full-width, labelled values on phones instead of four
+   squeezed columns. Scoped here so accounting tables and exports stay intact. */
+@media (max-width: 760px){
+  #translationDocsPanel{padding:14px;}
+  #translationDocsPanel .acct-columns,
+  #translationDocsPanel .acct-col-fields{width:100%;min-width:0;box-sizing:border-box;}
+  #translationDocsPanel .acct-col-fields{padding:12px;overflow:visible;}
+  #translationDocsPanel .translation-field{min-width:0;}
+  #translationDocsPanel button,
+  #translationDocsPanel select{min-height:44px;max-width:100%;white-space:normal;}
+  #translationDocsPanel .translation-field select{width:100%;font-size:16px;}
+  #translationDocsPanel .acct-export-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  #translationDocsPanel .acct-export-toolbar button{width:100%;padding:10px 8px;line-height:1.35;}
+  #translationDocsPanel .acct-export-toolbar button:nth-child(n+3){grid-column:1 / -1;}
+  #translationDocsPanel .acct-header-table thead,
+  #translationDocsPanel .translation-compare-table thead{display:none;}
+  #translationDocsPanel .acct-header-table,
+  #translationDocsPanel .acct-header-table tbody,
+  #translationDocsPanel .translation-compare-table,
+  #translationDocsPanel .translation-compare-table tbody{display:block;width:100%;min-width:0;}
+  #translationDocsPanel .acct-header-table tr{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 8px;
+    border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;
+    background:var(--surface);box-sizing:border-box;
+  }
+  #translationDocsPanel .acct-header-table td:nth-child(n){
+    display:block;width:auto;min-width:0;padding:0;border:0;font-size:16px;
+    line-height:1.5;word-break:normal;overflow-wrap:anywhere;white-space:pre-wrap;
+  }
+  #translationDocsPanel .acct-header-table td:first-child{grid-column:1;grid-row:1;font-weight:600;}
+  #translationDocsPanel .acct-header-table td:nth-child(2),
+  #translationDocsPanel .acct-header-table td:nth-child(3){grid-column:1 / -1;}
+  #translationDocsPanel .acct-header-table td:last-child{grid-column:2;grid-row:1;align-self:start;max-width:130px;}
+  #translationDocsPanel .acct-header-table td:nth-child(2)::before,
+  #translationDocsPanel .acct-header-table td:nth-child(3)::before,
+  #translationDocsPanel .translation-compare-table td::before{
+    content:attr(data-label);display:block;color:var(--ink-soft);font-size:12px;
+    font-weight:500;line-height:1.4;margin-bottom:4px;
+  }
+  #translationDocsPanel .translation-status-badge{white-space:normal;text-align:center;max-width:100%;box-sizing:border-box;font-size:11px;padding:5px 8px;}
+  #translationDocsPanel .translation-compare-modal{padding:8px;box-sizing:border-box;}
+  #translationDocsPanel .translation-compare-dialog{
+    width:100%;min-width:0;max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);
+    padding:12px;box-sizing:border-box;overscroll-behavior:contain;
+  }
+  #translationDocsPanel .translation-compare-header{
+    position:sticky;top:-12px;z-index:1;background:var(--surface);padding:10px 0;
+  }
+  #translationDocsPanel .translation-compare-header h3{flex:1;min-width:0;overflow-wrap:anywhere;}
+  #translationDocsPanel .translation-compare-toolbar{display:grid;grid-template-columns:1fr;}
+  #translationDocsPanel .translation-compare-table tr{
+    display:block;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;
+  }
+  #translationDocsPanel .translation-compare-table td{
+    display:block;width:100%;padding:0;margin-bottom:12px;border:0;box-sizing:border-box;
+  }
+  #translationDocsPanel .translation-compare-table td:last-child{margin-bottom:0;}
+  #translationDocsPanel .translation-compare-table textarea,
+  #translationDocsPanel .translation-compare-table input:not([type="checkbox"]),
+  #translationDocsPanel .translation-compare-table select{
+    width:100%;min-width:0;box-sizing:border-box;font:inherit;font-size:16px;padding:10px;
+  }
+  #translationDocsPanel .translation-compare-table textarea{min-height:96px;line-height:1.5;}
 }

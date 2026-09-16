@@ -274,17 +274,22 @@ export async function initTranslationDocs() {
     visible.forEach(f => {
       const row = el('tr');
       const labelCell = el('td');
+      labelCell.dataset.label = 'Поле';
       labelCell.append(el('span', f.targetLabel || f.label));
       const status = TRANSLATION_STATUSES[f.translationStatus];
       row.append(labelCell);
       const valueTd = el('td', f.value || '—');
+      valueTd.dataset.label = 'Оригинал';
       if (f.requiresReview && (f.reviewedSource !== f.value || f.reviewedTranslation !== f.translated)) {
         valueTd.append(el('div', f.reviewReason || 'Требует сверки с оригиналом', 'admin-error'));
       }
       if (f.confidence != null && f.confidence < LOW_CONFIDENCE_THRESHOLD) valueTd.classList.add('acct-low-confidence');
       row.append(valueTd);
-      row.append(el('td', f.translated || '—'));
+      const translatedTd = el('td', f.translated || '—');
+      translatedTd.dataset.label = 'Перевод';
+      row.append(translatedTd);
       const typeCell = el('td');
+      typeCell.dataset.label = 'Тип';
       if (status) {
         const badge = el('span', status[0], 'translation-status-badge');
         badge.style.background = status[1];
@@ -463,6 +468,7 @@ export async function initTranslationDocs() {
       const row = el('tr');
       row.dataset.key = field.key;
       const fieldCell = el('td');
+      fieldCell.dataset.label = 'Поле';
       const label = document.createElement('input'); label.className = 'compare-label'; label.value = field.targetLabel || field.label || '';
       const status = document.createElement('select'); status.className = 'compare-status';
       Object.entries(TRANSLATION_STATUSES).forEach(([value, [text]]) => {
@@ -473,8 +479,14 @@ export async function initTranslationDocs() {
       const original = document.createElement('textarea'); original.className = 'compare-original'; original.value = field.value || '';
       const translated = document.createElement('textarea'); translated.className = 'compare-translated'; translated.value = field.translated || '';
       const sourceCell = el('td'); sourceCell.append(original);
+      sourceCell.dataset.label = 'Оригинал';
       const translatedCell = el('td'); translatedCell.append(translated);
+      translatedCell.dataset.label = 'Перевод';
       const typeCell = el('td', null, 'compare-type-cell');
+      typeCell.dataset.label = 'Тип обработки';
+      [[label, 'Название поля'], [original, 'Оригинал'], [translated, 'Перевод'], [status, 'Тип обработки']].forEach(([control, text]) => {
+        control.setAttribute('aria-label', `${text}: ${field.targetLabel || field.label || ''}`);
+      });
       typeCell.append(status, remove);
       if (field.requiresReview) {
         sourceCell.append(el('div', field.reviewReason, 'admin-error'));
