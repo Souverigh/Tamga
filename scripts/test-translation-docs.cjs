@@ -209,7 +209,8 @@ async function main() {
     assert.strictEqual(byKey.country.translated, '[TR]Кыргызская Республика');
     assert.strictEqual(byKey.apostille_number.translated, '482');
     assert.strictEqual(byKey.apostille_number.translationStatus, 'preserved');
-    assert.strictEqual(byKey.certified_date.translated, '2026-09-10');
+    assert.strictEqual(byKey.certified_date.translated, '10-09-26');
+    assert.strictEqual(byKey.certified_date.translationStatus, 'preserved');
     assert.strictEqual(byKey.signatory_name.value, '');
     assert.strictEqual(byKey.signatory_name.translated, '', 'пустые поля не переводятся');
   });
