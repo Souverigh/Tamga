@@ -11,6 +11,31 @@
 
 :root{ --acct-ok:#2E7D46; --acct-ok-tint:#E8F3EB; }
 
+/* --- табы "Распознавание" / "Бухгалтерия" (16 сен 2026) --- */
+.acct-tabs{
+  display:flex; gap:4px; padding:4px; margin:-8px 0 20px;
+  border:1px solid var(--line); border-radius:10px; background:var(--surface);
+  width:fit-content; max-width:100%;
+}
+.acct-tab{
+  border:0; background:transparent; padding:8px 16px; border-radius:7px;
+  font-family:inherit; font-size:0.88rem; font-weight:500; color:var(--ink-soft);
+  cursor:pointer; transition:background .15s, color .15s; white-space:nowrap;
+}
+.acct-tab:hover{ color:var(--ink); }
+.acct-tab:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.acct-tab-active{ background:var(--ink); color:#fff; }
+.acct-tab-active:hover{ color:#fff; }
+
+/* --- шапка панели (иконка + заголовок), тот же язык, что translation-header --- */
+.acct-panel-header-title{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+.acct-panel-header-title h2{ font-size:1.12rem; margin:0; }
+.acct-panel-icon{
+  width:30px; height:30px; border-radius:8px; background:var(--accent-tint);
+  color:var(--accent-deep); display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.acct-wrap .dropzone{ margin-bottom:4px; }
+
 /* --- admin-* утилиты (только используемые здесь, скопированы из admin.css) --- */
 .admin-note{ font-size:0.8rem; color:var(--ink-soft); margin-top:6px; line-height:1.45; }
 .admin-section-title{ font-family:'Space Grotesk', sans-serif; font-size:1rem; font-weight:600; margin:28px 0 14px; padding-top:18px; border-top:1px solid var(--line); }

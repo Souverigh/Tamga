@@ -1,18 +1,27 @@
 // public/js/accounting/panel.js — клиентская веб-панель модуля бухгалтерии
-// (Ethan, 15 сен 2026: "добавить модуль бухгалтерии для платных клиентов").
+// (Ethan, 15 сен 2026: "добавить модуль бухгалтерии для платных клиентов";
+// 16 сен 2026: "табы сверху блока, общий проход по полировке UI" — вместо
+// панели, свалившейся ниже результатов обычного распознавания).
+//
 // По образцу public/js/translation/panel.js: весь DOM строится в JS и
 // добавляется в страницу, панель показывается ТОЛЬКО если у клиента есть
 // slug И валидный x-client-token (тот же критерий "платный клиент с
 // паролем", что уже используют translation/panel.js и requirePaidAccountingClient
 // на сервере — см. lib/accounting/clientAccess.js).
 //
-// В отличие от перевода (который работает с уже распознанными документами
-// основного OCR-потока), бухгалтерия — СВОЙ отдельный поток загрузки/
-// распознавания, как review-экран public/admin/accounting.js, поэтому здесь
-// переиспользуются его DOM-агностичные модули (render.js/fileQueue.js/
-// labels.js принимают элементы/данные параметрами — ничего не знают про
-// admin-секрет), только сетевой слой и гейт свои — под клиентский токен, не
-// под x-admin-secret.
+// Структура страницы (16 сен 2026): #recognizeFlow в index.html оборачивает
+// ВЕСЬ поток обычного распознавания (загрузка/прогресс/результаты) — этот
+// модуль вставляет над ним переключатель табов "Распознавание"/"Бухгалтерия"
+// и показывает ровно один из двух блоков за раз. Сайт остаётся
+// однoколоночным (max-width:720px, тот же контейнер, что у results/
+// translation-panel) — Ethan подтвердил табы сверху вместо боковой вкладки,
+// т.к. настоящий боковой рельс потребовал бы отдельной мобильной раскладки.
+//
+// Бухгалтерия — СВОЙ отдельный поток загрузки/распознавания, как
+// review-экран public/admin/accounting.js, поэтому здесь переиспользуются
+// его DOM-агностичные модули (render.js/fileQueue.js/labels.js принимают
+// элементы/данные параметрами — ничего не знают про admin-секрет), только
+// сетевой слой и гейт свои — под клиентский токен, не под x-admin-secret.
 import { getClientSlug, getClientToken } from '../branding.js';
 import { DOC_TYPE_LABELS } from '../../admin/accounting/labels.js';
 import { renderFileList, renderPreview, renderHeaderTable, renderItemsTable, renderRules } from '../../admin/accounting/render.js';
@@ -44,25 +53,90 @@ async function exportViaApi(token, slug, documents) {
 
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text) n.textContent = text; if (cls) n.className = cls; return n; };
 const button = (text, cls = 'btn-secondary') => { const b = el('button', text, cls); b.type = 'button'; return b; };
+const svg = (paths, viewBox = '0 0 20 20') => {
+  const wrap = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  wrap.setAttribute('viewBox', viewBox);
+  wrap.setAttribute('fill', 'none');
+  wrap.setAttribute('stroke', 'currentColor');
+  wrap.setAttribute('stroke-width', '1.6');
+  wrap.setAttribute('stroke-linecap', 'round');
+  wrap.setAttribute('stroke-linejoin', 'round');
+  wrap.setAttribute('aria-hidden', 'true');
+  wrap.innerHTML = paths;
+  return wrap;
+};
+
+// Иконка «документ с галочкой» — визуально в той же стилистике, что
+// translation-icon (см. public/css/translation.css): скруглённый квадрат
+// с акцентным фоном, внутри — линейная иконка тем же stroke-width/линиями,
+// что svg-иконки экспорта на главной странице (index.html:downloadXlsxBtn
+// и т.п.), а не новый набор произвольных иконок.
+function panelIcon() {
+  const box = el('span', null, 'acct-panel-icon');
+  const icon = svg('<path d="M6 2.5h6l4 4v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z"/><path d="M12 2.5v4h4"/><path d="M7.5 12.5l1.8 1.8L13.5 10"/>', '0 0 20 20');
+  icon.setAttribute('width', '16'); icon.setAttribute('height', '16');
+  box.append(icon);
+  return box;
+}
+
+function excelIcon() {
+  const icon = svg('<rect x="2.5" y="3" width="15" height="14" rx="1"/><line x1="2.5" y1="8" x2="17.5" y2="8"/><line x1="2.5" y1="13" x2="17.5" y2="13"/><line x1="8" y1="3" x2="8" y2="17"/><line x1="13" y1="3" x2="13" y2="17"/>', '0 0 20 20');
+  icon.setAttribute('width', '16'); icon.setAttribute('height', '16');
+  icon.setAttribute('stroke-width', '1.5');
+  icon.classList.add('btn-icon');
+  return icon;
+}
 
 export async function initAccounting() {
   const slug = getClientSlug(), token = getClientToken();
-  if (!slug || !token) return; // не платный клиент с паролем — панель не показываем, как и перевод
+  if (!slug || !token) return; // не платный клиент с паролем — вкладка не показывается, как и перевод
 
+  const recognizeFlow = document.getElementById('recognizeFlow');
+  if (!recognizeFlow) return; // защитно — без обёртки переключать нечего
+
+  // --- таб-переключатель "Распознавание" / "Бухгалтерия" ------------------
+  const tabs = el('nav', null, 'acct-tabs');
+  tabs.setAttribute('role', 'tablist');
+  const recognizeTab = button('Распознавание', 'acct-tab acct-tab-active');
+  const accountingTab = button('Бухгалтерия', 'acct-tab');
+  [recognizeTab, accountingTab].forEach(t => t.setAttribute('role', 'tab'));
+  recognizeTab.setAttribute('aria-selected', 'true');
+  accountingTab.setAttribute('aria-selected', 'false');
+  tabs.append(recognizeTab, accountingTab);
+  recognizeFlow.before(tabs);
+
+  // --- корневой блок панели ------------------------------------------------
   const root = el('section', null, 'panel acct-wrap');
   root.id = 'accountingPanel';
+  root.style.display = 'none';
 
-  const header = el('div', null, 'step-label');
-  header.textContent = 'Модуль бухгалтерии';
-  root.append(header);
-  root.append(el('div', 'ЭСФ, товарная накладная, акт выполненных работ, платёжное поручение — распознавание и проверка по бухгалтерским правилам. Расходует тот же пакет страниц, что и обычное распознавание.', 'admin-note'));
+  const panelHeader = el('div', null, 'acct-panel-header');
+  const panelTitle = el('div', null, 'acct-panel-header-title');
+  panelTitle.append(panelIcon(), el('h2', 'Модуль бухгалтерии'));
+  panelHeader.append(panelTitle);
+  root.append(panelHeader);
+  root.append(el('p', 'ЭСФ, товарная накладная, акт выполненных работ, платёжное поручение — распознавание и проверка по бухгалтерским правилам. Расходует тот же пакет страниц, что и обычное распознавание.', 'admin-note'));
 
-  const fileLabel = el('label', 'Выбрать файлы', 'btn-secondary acct-file-label');
-  const fileInput = el('input'); fileInput.type = 'file'; fileInput.id = 'acctFileInput';
+  function switchTab(target) {
+    const showAccounting = target === 'accounting';
+    recognizeFlow.style.display = showAccounting ? 'none' : '';
+    root.style.display = showAccounting ? '' : 'none';
+    recognizeTab.classList.toggle('acct-tab-active', !showAccounting);
+    accountingTab.classList.toggle('acct-tab-active', showAccounting);
+    recognizeTab.setAttribute('aria-selected', String(!showAccounting));
+    accountingTab.setAttribute('aria-selected', String(showAccounting));
+  }
+  recognizeTab.addEventListener('click', () => switchTab('recognize'));
+  accountingTab.addEventListener('click', () => switchTab('accounting'));
+
+  // --- загрузка файлов — тот же .dropzone, что на главном экране (styles.css),
+  // с drag&drop, вместо голой кнопки выбора файла. -------------------------
+  const dropzone = el('label', null, 'dropzone');
+  dropzone.append(el('div', '📄', 'icon'), el('div', 'Нажмите здесь или перетащите файл', 'main'), el('div', 'Фото, скан или PDF — можно сразу несколько', 'sub'));
+  const fileInput = el('input'); fileInput.type = 'file';
   fileInput.accept = 'image/png,image/jpeg,image/webp,application/pdf'; fileInput.multiple = true;
-  fileInput.className = 'acct-file-input';
-  fileLabel.htmlFor = 'acctFileInput';
-  root.append(fileLabel, fileInput);
+  dropzone.append(fileInput);
+  root.append(dropzone);
 
   const fileListEl = el('div', null, 'acct-file-list'); fileListEl.style.display = 'none';
   root.append(fileListEl);
@@ -73,8 +147,16 @@ export async function initAccounting() {
   root.append(recognizeBtn);
 
   const acctError = el('div', null, 'admin-error'); acctError.style.display = 'none';
-  const acctLoading = el('div', null, 'admin-note'); acctLoading.style.display = 'none';
-  root.append(acctError, acctLoading);
+
+  // Прогресс пачки — тот же .progress-track/.progress-fill, что у обычного
+  // распознавания (styles.css), вместо голой строки текста "Распознаём N из M".
+  const progressWrap = el('div'); progressWrap.style.display = 'none'; progressWrap.style.marginTop = '10px';
+  const progressText = el('div', null, 'admin-note');
+  const progressTrack = el('div', null, 'progress-track');
+  const progressFill = el('div', null, 'progress-fill');
+  progressTrack.append(progressFill);
+  progressWrap.append(progressText, progressTrack);
+  root.append(acctError, progressWrap);
 
   const resultPanel = el('section'); resultPanel.style.display = 'none';
   const columns = el('div', null, 'acct-columns');
@@ -92,6 +174,7 @@ export async function initAccounting() {
   colFields.append(statusRow);
 
   const exportBtn = button('Скачать Excel'); exportBtn.style.marginBottom = '14px'; exportBtn.disabled = true;
+  exportBtn.prepend(excelIcon());
   const exportError = el('div', null, 'admin-error'); exportError.style.display = 'none';
   colFields.append(exportBtn, exportError);
 
@@ -118,26 +201,37 @@ export async function initAccounting() {
   resultPanel.append(columns);
   root.append(resultPanel);
 
-  const appRoot = document.getElementById('appRoot');
-  const footer = appRoot ? appRoot.querySelector('footer') : null;
-  if (footer) footer.before(root); else (appRoot || document.body).append(root);
+  recognizeFlow.before(root);
 
   // --- состояние и обработчики (см. public/admin/accounting.js — тот же
-  // поток, только сеть/гейт под клиентский токен) -----------------------
+  // поток, только сеть/гейт под клиентский токен, плюс drag&drop и прогресс-
+  // бар вместо голого текста) -----------------------------------------------
   let docs = [];
   let activeIndex = -1;
 
   function refreshFileList() { renderFileList(fileListEl, docs, activeIndex, selectDoc); }
 
-  fileInput.addEventListener('change', () => {
-    if (!fileInput.files || !fileInput.files.length) return;
-    docs = createDocsFromFiles(fileInput.files);
+  function loadFiles(fileList) {
+    if (!fileList || !fileList.length) return;
+    docs = createDocsFromFiles(fileList);
     activeIndex = -1;
     resultPanel.style.display = 'none';
     exportBtn.disabled = true;
     acctError.style.display = 'none';
     refreshFileList();
     recognizeBtn.disabled = false;
+  }
+
+  fileInput.addEventListener('change', () => {
+    loadFiles(fileInput.files);
+    fileInput.value = ''; // позволяет выбрать те же файлы повторно
+  });
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag');
+    if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files);
   });
 
   async function selectDoc(index) {
@@ -184,22 +278,26 @@ export async function initAccounting() {
     acctError.style.display = 'none';
     recognizeBtn.disabled = true;
     exportBtn.disabled = true;
-    acctLoading.style.display = '';
+    progressWrap.style.display = '';
+    progressFill.style.width = '0%';
 
     // Последовательно, не параллельно — тот же приём, что у review-экрана
     // (Gemini free tier ~20 запросов/мин, см. ways-of-working.md).
     const pending = docs.map((doc, index) => ({ doc, index })).filter(({ doc }) => doc.status === 'pending' || doc.status === 'error');
     let firstDoneIndex = -1;
     let anyError = false;
+    let done = 0;
 
     for (const { doc, index } of pending) {
-      acctLoading.textContent = `Распознаём ${index + 1} из ${docs.length}...`;
+      progressText.textContent = `Распознаём ${done + 1} из ${docs.length}...`;
       await recognizeOne(doc);
+      done += 1;
+      progressFill.style.width = `${Math.round((done / pending.length) * 100)}%`;
       if (doc.status === 'done' && firstDoneIndex === -1) firstDoneIndex = index;
       if (doc.status === 'error') anyError = true;
     }
 
-    acctLoading.style.display = 'none';
+    progressWrap.style.display = 'none';
     recognizeBtn.disabled = false;
     exportBtn.disabled = !docs.some(d => d.status === 'done');
     if (anyError) {
@@ -217,7 +315,8 @@ export async function initAccounting() {
     if (!done.length) return;
     exportError.style.display = 'none';
     exportBtn.disabled = true;
-    exportBtn.textContent = 'Формируем файл...';
+    const originalLabel = exportBtn.lastChild;
+    exportBtn.lastChild.textContent = 'Формируем файл...';
     try {
       const blob = await exportViaApi(token, slug, done.map(d => d.result));
       const url = URL.createObjectURL(blob);
@@ -235,7 +334,7 @@ export async function initAccounting() {
       exportError.style.display = '';
     } finally {
       exportBtn.disabled = !docs.some(d => d.status === 'done');
-      exportBtn.textContent = 'Скачать Excel';
+      originalLabel.textContent = 'Скачать Excel';
     }
   });
 }
