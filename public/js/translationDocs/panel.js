@@ -247,7 +247,7 @@ export async function initTranslationDocs() {
     }
     const thead = el('thead');
     const headRow = el('tr');
-    ['Поле', 'Оригинал', 'Перевод'].forEach(t => headRow.append(el('th', t)));
+    ['Поле', 'Оригинал', 'Перевод', 'Тип'].forEach(t => headRow.append(el('th', t)));
     thead.append(headRow);
     const tbody = el('tbody');
     visible.forEach(f => {
@@ -260,16 +260,20 @@ export async function initTranslationDocs() {
         preserved: ['Сохранено', '#52606d']
       };
       const status = statusLabels[f.translationStatus];
-      if (status) {
-        const badge = el('span', status[0]);
-        badge.style.cssText = `display:inline-block;margin-left:8px;padding:2px 7px;border-radius:10px;background:${status[1]};color:#fff;font-size:11px;white-space:nowrap`;
-        labelCell.append(badge);
-      }
       row.append(labelCell);
       const valueTd = el('td', f.value || '—');
       if (f.confidence != null && f.confidence < LOW_CONFIDENCE_THRESHOLD) valueTd.classList.add('acct-low-confidence');
       row.append(valueTd);
       row.append(el('td', f.translated || '—'));
+      const typeCell = el('td');
+      if (status) {
+        const badge = el('span', status[0], 'translation-status-badge');
+        badge.style.background = status[1];
+        typeCell.append(badge);
+      } else {
+        typeCell.textContent = '—';
+      }
+      row.append(typeCell);
       tbody.append(row);
     });
     fieldsTable.append(thead, tbody);

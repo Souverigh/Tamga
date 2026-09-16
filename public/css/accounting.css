@@ -65,6 +65,17 @@
 .translationDocsPanel .acct-header-table td{ overflow-wrap:anywhere; word-break:break-word; }
 .translationDocsPanel .acct-header-table th:first-child,
 .translationDocsPanel .acct-header-table td:first-child{ width:28%; }
+.translationDocsPanel .acct-header-table th:nth-child(2),
+.translationDocsPanel .acct-header-table td:nth-child(2),
+.translationDocsPanel .acct-header-table th:nth-child(3),
+.translationDocsPanel .acct-header-table td:nth-child(3){ width:28%; }
+.translationDocsPanel .acct-header-table th:last-child,
+.translationDocsPanel .acct-header-table td:last-child{ width:16%; }
+.translation-status-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:3px 8px;border-radius:999px;color:#fff;font-size:11px;
+  line-height:1.2;white-space:nowrap;
+}
 
 .translation-compare-modal{
   position:fixed;inset:0;z-index:1000;background:rgba(20,20,19,.48);

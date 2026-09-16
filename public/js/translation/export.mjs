@@ -18,9 +18,8 @@ export function layoutBlocks(doc) {
   return blocks;
 }
 
-function apostilleBlocks(doc) {
-  const fields = doc.fields || [];
-  const convention = {
+export function apostilleConvention(language) {
+  return {
     ru: '(Гаагская конвенция от 5 октября 1961 года)',
     ky: '(Гаага конвенциясы, 1961-жылдын 5-октябры)',
     en: '(Convention de La Haye du 5 octobre 1961)',
@@ -29,10 +28,14 @@ function apostilleBlocks(doc) {
     tr: '(5 Ekim 1961 tarihli Lahey Sözleşmesi)',
     zh: '(1961年10月5日《海牙公约》)',
     de: '(Haager Übereinkommen vom 5. Oktober 1961)'
-  }[doc.language] || '(Convention de La Haye du 5 octobre 1961)';
+  }[language] || '(Convention de La Haye du 5 octobre 1961)';
+}
+
+function apostilleBlocks(doc) {
+  const fields = doc.fields || [];
   return [
     { heading: 'APOSTILLE' },
-    { text: convention },
+    { text: apostilleConvention(doc.language) },
     { table: fields.map((field, index) => [`${index + 1}. ${field.label}`, field.value || '']) }
   ];
 }
@@ -140,16 +143,7 @@ export async function downloadTranslationPdf(translation) {
   container.append(title);
   if (translation.template === 'apostille') {
     const subtitle = document.createElement('div');
-    subtitle.textContent = {
-      ru: '(Гаагская конвенция от 5 октября 1961 года)',
-      ky: '(Гаага конвенциясы, 1961-жылдын 5-октябры)',
-      en: '(Convention de La Haye du 5 octobre 1961)',
-      kk: '(1961 жылғы 5 қазандағы Гаага конвенциясы)',
-      uz: '(1961-yil 5-oktabrdagi Gaaga konventsiyasi)',
-      tr: '(5 Ekim 1961 tarihli Lahey Sözleşmesi)',
-      zh: '(1961年10月5日《海牙公约》)',
-      de: '(Haager Übereinkommen vom 5. Oktober 1961)'
-    }[translation.language] || '(Convention de La Haye du 5 octobre 1961)';
+    subtitle.textContent = apostilleConvention(translation.language);
     subtitle.style.cssText = 'text-align:center;margin-bottom:24px;';
     container.append(subtitle);
   }
