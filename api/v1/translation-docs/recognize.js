@@ -54,12 +54,13 @@ module.exports = async (req, res) => {
       language: recognition.language,
       regulation: recognition.regulation,
       fields: recognition.fields.map(f => ({
-        key: f.key, label: f.label, targetLabel: f.targetLabel, value: f.value, raw_text: f.rawText, confidence: f.confidence, translated: f.translated, translationStatus: f.translationStatus
+        key: f.key, label: f.label, targetLabel: f.targetLabel, value: f.value, raw_text: f.rawText, confidence: f.confidence, translated: f.translated, translationStatus: f.translationStatus,
+        requiresReview: f.requiresReview, reviewReason: f.reviewReason, verificationCandidate: f.verificationCandidate
       })),
       ...(Array.isArray(recognition.elements) ? { elements: recognition.elements.map(e => ({
         key: e.key, type: e.elementType, number: e.number || null, label: e.label,
         targetLabel: e.targetLabel, value: e.value, translated: e.translated,
-        raw_text: e.rawText, confidence: e.confidence
+        raw_text: e.rawText, confidence: e.confidence, requiresReview: e.requiresReview, reviewReason: e.reviewReason
       })) } : {})
     });
   } catch (error) {

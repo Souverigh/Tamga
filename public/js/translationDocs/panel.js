@@ -278,6 +278,9 @@ export async function initTranslationDocs() {
       const status = TRANSLATION_STATUSES[f.translationStatus];
       row.append(labelCell);
       const valueTd = el('td', f.value || '—');
+      if (f.requiresReview && (f.reviewedSource !== f.value || f.reviewedTranslation !== f.translated)) {
+        valueTd.append(el('div', f.reviewReason || 'Требует сверки с оригиналом', 'admin-error'));
+      }
       if (f.confidence != null && f.confidence < LOW_CONFIDENCE_THRESHOLD) valueTd.classList.add('acct-low-confidence');
       row.append(valueTd);
       row.append(el('td', f.translated || '—'));
@@ -473,14 +476,24 @@ export async function initTranslationDocs() {
       const translatedCell = el('td'); translatedCell.append(translated);
       const typeCell = el('td', null, 'compare-type-cell');
       typeCell.append(status, remove);
+      if (field.requiresReview) {
+        sourceCell.append(el('div', field.reviewReason, 'admin-error'));
+        if (field.verificationCandidate) sourceCell.append(el('div', `Повторное чтение: ${field.verificationCandidate}`, 'admin-note'));
+        const review = document.createElement('input'); review.type = 'checkbox'; review.className = 'compare-reviewed';
+        review.checked = field.reviewedSource === field.value && field.reviewedTranslation === field.translated;
+        const reviewLabel = el('label', ' Сверено с оригиналом'); reviewLabel.prepend(review);
+        typeCell.append(reviewLabel);
+        [original, translated].forEach(input => input.addEventListener('input', () => { review.checked = false; }));
+        remove.disabled = true;
+      }
       row.append(fieldCell, sourceCell, translatedCell, typeCell);
       remove.addEventListener('click', () => { row.remove(); sync(); });
       return row;
     };
-    doc.result.fields.filter(field => field.value || field.translated).forEach(field => tbody.append(makeRow(field)));
+    doc.result.fields.filter(field => field.value || field.translated || field.requiresReview).forEach(field => tbody.append(makeRow(field)));
     const sync = () => {
       // Hidden empty headings are part of the legal structure, not deleted rows.
-      const fields = doc.result.fields.filter(field => !field.value && !field.translated);
+      const fields = doc.result.fields.filter(field => !field.value && !field.translated && !field.requiresReview);
       tbody.querySelectorAll('tr').forEach(row => {
         const field = doc.result.fields.find(item => item.key === row.dataset.key);
         if (!field) return;
@@ -488,6 +501,10 @@ export async function initTranslationDocs() {
         field.value = row.querySelector('.compare-original').value;
         field.translated = row.querySelector('.compare-translated').value;
         field.translationStatus = row.querySelector('.compare-status').value;
+        if (field.requiresReview) {
+          field.reviewedSource = row.querySelector('.compare-reviewed')?.checked ? field.value : undefined;
+          field.reviewedTranslation = row.querySelector('.compare-reviewed')?.checked ? field.translated : undefined;
+        }
         fields.push(field);
       });
       doc.result.fields = fields;

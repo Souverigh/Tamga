@@ -16,12 +16,16 @@ test('all text exports retain ten fields and unnumbered headings', async () => {
     assert.doesNotMatch(text, /(?:11|12)\.|\d\. (?:本公文|认证)[<\t]/);
   }
 });
-test('Word uses twelve horizontal two-cell rows with stable column widths and one title', async () => {
+test('all ten fields including signature share one table, headings are parenthetical values', async () => {
   const { buildDocumentXml, buildTranslationTxt, buildPrintHtml } = await import('../public/js/translation/export.mjs');
   const doc = document();
   const xml = buildDocumentXml(doc, doc, false);
   const rows = xml.match(/<w:tr>.*?<\/w:tr>/g);
-  assert.equal(rows.length, 13);
+  assert.equal(rows.length, 11);
+  assert.equal((xml.match(/<w:tbl>/g) || []).length, 1);
+  assert.match(rows[1], /吉尔吉斯共和国 \(本公文\)/);
+  assert.match(rows[4], /民事身份登记机关 \(认证\)/);
+  assert.match(rows[10], /10\. 签名/);
   assert.equal((rows[0].match(/<w:tc>/g) || []).length, 1);
   assert.match(rows[0], /<w:gridSpan w:val="2"\/>/);
   for (const row of rows.slice(1)) assert.equal((row.match(/<w:tc>/g) || []).length, 2);
@@ -100,6 +104,20 @@ test('date formats and status colors match the requested rules', async () => {
   assert.equal(TRANSLATION_STATUSES.translated[1], '#18794e');
   assert.equal(TRANSLATION_STATUSES.transliterated[1], '#7c3aed');
   assert.equal(TRANSLATION_STATUSES.preserved[1], '#64748b');
+});
+test('uncertain names require explicit review, and editing invalidates the confirmation', async () => {
+  const { buildExportDocs } = await import('../public/js/translationDocs/export-model.mjs');
+  const { buildTranslationTxt } = await import('../public/js/translation/export.mjs');
+  const fixture = document();
+  const fields = fixture.elements.map(e => ({ ...e, translated: e.value }));
+  fields[2].requiresReview = true;
+  const doc = { file: { name: 'test' }, result: { doc_type: 'apostille', fields, elements: fixture.elements } };
+  const render = () => { const { original, translation } = buildExportDocs(doc, 'zh'); return buildTranslationTxt(original, translation, false); };
+  assert.throws(render, /требует сверки/);
+  fields[2].reviewedSource = fields[2].value; fields[2].reviewedTranslation = fields[2].translated;
+  assert.doesNotThrow(render);
+  fields[2].value = 'Amanova T.'; fields[2].translated = 'Amanova T.';
+  assert.throws(render, /требует сверки/);
 });
 test('PDF renders the same apostille layout and reaches save without validation errors', async () => {
   const { downloadTranslationPdf, buildTranslationHtmlBody } = await import('../public/js/translation/export.mjs');

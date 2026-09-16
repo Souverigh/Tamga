@@ -14,7 +14,7 @@
     "test": "npm run test:consistency && npm run test:pipeline && npm run test:pages && npm run test:security && npm run test:translation && npm run test:document-templates && npm run test:verified-transliterations && npm run test:forgery-signals && npm run test:accounting-quota && npm run test:translation-docs",
     "test:translation": "node --test scripts/test-translation.cjs",
     "test:accounting-quota": "node scripts/test-accounting-quota.cjs",
-    "test:translation-docs": "node scripts/test-translation-docs.cjs && node --test scripts/test-apostille.cjs",
+    "test:translation-docs": "node scripts/test-translation-docs.cjs && node --test scripts/test-apostille.cjs scripts/test-apostille-verification.cjs",
     "test:security": "node --test scripts/audit-security.cjs",
     "test:document-templates": "node --test scripts/test-document-templates.cjs",
     "test:verified-transliterations": "node --test scripts/test-verified-transliterations.cjs",

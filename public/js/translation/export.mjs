@@ -34,12 +34,16 @@ export function apostilleConvention(language) {
 
 function apostilleBlocks(doc) {
   const elements = validateApostille(doc.elements, doc.language, true);
-  const row = element => [element.number ? `${element.number}. ${element.label || ''}` : (element.label || ''), element.value || ''];
-  const fields = elements.filter(e => e.elementType !== 'stamp_text');
+  const row = element => {
+    const headingKey = { country: 'public_document', seal_authority: 'certified' }[element.key];
+    const heading = headingKey && elements.find(e => e.key === headingKey);
+    const note = heading ? [heading.label, heading.value].filter(Boolean).join(' ') : '';
+    return [`${element.number}. ${element.label || ''}`, `${element.value || ''}${note ? ` (${note})` : ''}`];
+  };
+  const fields = elements.filter(e => e.number);
   return [
     { title: 'APOSTILLE', subtitle: apostilleConvention(doc.language),
-      table: fields.filter(e => e.key !== 'signature').map(row), widths: [3010, 6628], apostille: true },
-    { table: fields.filter(e => e.key === 'signature').map(row), widths: [3010, 6628], apostille: true, borderless: true },
+      table: fields.map(row), widths: [3010, 6628], apostille: true },
     ...elements.filter(e => e.elementType === 'stamp_text').map(e => ({ text: `${doc.language === 'zh' ? '印章文字：' : 'Seal text: '}${e.value || ''}` }))
   ];
 }

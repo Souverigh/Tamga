@@ -5,7 +5,7 @@ const numbers = ['1', '', '2', '3', '4', '', '5', '6', '7', '8', '9', '10'];
 export function apostilleSignature(value, language) {
   return localizeMarkers(value, language);
 }
-export function validateApostille(elements, language, translated = false) {
+export function validateApostille(elements, language, translated = false, { allowPendingReview = false } = {}) {
   const fail = (reason = 'Нарушена структура: нужны пункты 1–10 и два непронумерованных заголовка.') => {
     throw Object.assign(new Error(`Апостиль: ${reason}`), { status: 422, code: 'APOSTILLE_REVIEW_REQUIRED' });
   };
@@ -22,6 +22,7 @@ export function validateApostille(elements, language, translated = false) {
   elements.forEach(e => {
     if (typeOf(e) === 'stamp_text' && e.number) fail();
     if (!translated) return;
+    if (e.requiresReview && !e.reviewConfirmed && !allowPendingReview) fail(`Поле «${e.targetLabel || e.label || e.key}» требует сверки с оригиналом. Откройте сравнение и подтвердите проверку этого поля.`);
     const value = e.translated ?? e.value ?? '';
     const expected = e.sourceValue === undefined ? null : apostilleValue(e.key, e.sourceValue, language);
     if (expected && value !== expected.value) fail(`Поле «${e.targetLabel || e.label || e.key}»: перевод не соответствует оригиналу и правилам транслитерации/формата даты. Исправьте его в окне сравнения.`);

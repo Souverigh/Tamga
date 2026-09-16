@@ -26,6 +26,8 @@ export function buildExportDocs(doc, language) {
           key: e.key,
           elementType: e.type ?? e.elementType ?? e.element_type,
           sourceValue: field?.value ?? e.sourceValue ?? e.value,
+          requiresReview: field?.requiresReview ?? e.requiresReview,
+          reviewConfirmed: !!field && field.reviewedSource === field.value && field.reviewedTranslation === field.translated,
           number: e.number,
           label: field?.targetLabel || e.targetLabel || e.label,
           value: field?.translated ?? e.translated ?? ''

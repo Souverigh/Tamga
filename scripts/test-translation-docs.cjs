@@ -44,7 +44,16 @@ const geminiClientPath = path.join(ROOT, 'lib/geminiClient.js');
 require.cache[require.resolve(geminiClientPath)] = {
   id: geminiClientPath, filename: geminiClientPath, loaded: true,
   exports: {
-    callGemini: (...args) => callGeminiImpl(...args),
+    callGemini: async (...args) => {
+      const response = await callGeminiImpl(...args);
+      if (args[0].requiredFields?.includes('checks')) {
+        return { result: { checks: ['signatory_name', 'certified_date', 'apostille_number', 'signature'].map(key => {
+          const field = response.result.elements?.find(e => e.key === key) || response.result[key] || {};
+          return { key, value: field.value || '', confidence: field.confidence ?? 95 };
+        }) } };
+      }
+      return response;
+    },
     GeminiError: class GeminiError extends Error {}
   }
 };

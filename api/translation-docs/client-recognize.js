@@ -43,7 +43,8 @@ module.exports = async (req, res) => {
         raw_text: f.rawText,
         confidence: f.confidence,
         translated: f.translated,
-        translationStatus: f.translationStatus
+        translationStatus: f.translationStatus,
+        requiresReview: f.requiresReview, reviewReason: f.reviewReason, verificationCandidate: f.verificationCandidate
       })),
       ...(Array.isArray(recognition.elements) ? {
         elements: recognition.elements.map(element => ({
@@ -55,7 +56,8 @@ module.exports = async (req, res) => {
           value: element.value,
           translated: element.translated,
           raw_text: element.rawText,
-          confidence: element.confidence
+          confidence: element.confidence,
+          requiresReview: element.requiresReview, reviewReason: element.reviewReason
         }))
       } : {})
     });
