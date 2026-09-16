@@ -57,9 +57,12 @@ export function renderHeaderTable(headerTable, header) {
     if (!field) continue;
     const row = document.createElement('tr');
     const low = field.confidence != null && field.confidence < LOW_CONFIDENCE_THRESHOLD;
+    const displayValue = key.endsWith('_date') && /^\d{4}-\d{2}-\d{2}$/.test(field.value)
+      ? `${field.value.slice(8, 10)}-${field.value.slice(5, 7)}-${field.value.slice(2, 4)}`
+      : field.value;
     row.innerHTML = `
       <td class="acct-field-name">${label}</td>
-      <td class="${low ? 'acct-low-confidence' : ''}">${field.value || '—'}${low ? ` (уверенность ${field.confidence}%)` : ''}</td>
+      <td class="${low ? 'acct-low-confidence' : ''}">${displayValue || '—'}${low ? ` (уверенность ${field.confidence}%)` : ''}</td>
     `;
     headerTable.appendChild(row);
   }

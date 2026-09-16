@@ -92,7 +92,18 @@ test('items sheet: one row per line item, numeric columns typed as numbers', () 
   assert.equal(row.getCell('description').value, 'Бумага офисная А4');
   assert.equal(row.getCell('quantity').value, 100);
   assert.equal(typeof row.getCell('quantity').value, 'number');
+  assert.equal(row.getCell('unit').value, null);
   assert.equal(row.getCell('amount').value, 100000);
+});
+
+test('dates use DD-MM-YY display format and sheets are named Excel tables', () => {
+  const workbook = buildAccountingWorkbook([sampleEsfDocument()]);
+  const docsSheet = workbook.getWorksheet('Документы');
+  const date = docsSheet.getRow(2).getCell('date');
+  assert.equal(date.value instanceof Date, true);
+  assert.equal(date.numFmt, 'dd-mm-yy');
+  assert.ok(docsSheet.tables.AccountingDocuments);
+  assert.ok(workbook.getWorksheet('Строки').tables.AccountingItems);
 });
 
 test('warnings column: only non-PASS/NOT_APPLICABLE messages, joined', () => {

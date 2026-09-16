@@ -25,11 +25,11 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType, clientSlug, language } = await readRequestBody(req);
+    const { image, mimeType, clientSlug, language, pageCount } = await readRequestBody(req);
     const slug = await requirePaidTranslationClient(req, clientSlug);
     const apiKey = process.env.GEMINI_API_KEY;
 
-    const recognition = await recognizeAndTranslateDocument({ base64: image, mimeType, apiKey, language, clientSlug: slug });
+    const recognition = await recognizeAndTranslateDocument({ base64: image, mimeType, apiKey, language, clientSlug: slug, pageCount });
 
     res.status(200).json({
       doc_type: recognition.docType,

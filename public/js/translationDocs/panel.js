@@ -29,18 +29,30 @@ import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQu
 import { LOW_CONFIDENCE_THRESHOLD } from '../../admin/accounting/labels.js';
 import { LANGUAGES } from '../translation/model.mjs';
 import { exportTxt, exportDocx, printTranslation } from '../translation/export.mjs';
+import { runWithConcurrency } from '../utils/concurrencyPool.js';
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.mjs';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.worker.mjs';
 
 const DOC_TYPE_LABELS = { apostille: 'Апостиль' };
+const MAX_TRANSLATION_CONCURRENCY = 20;
 
-async function recognizeViaApi(token, slug, base64, mimeType, language) {
+async function recognizeViaApi(token, slug, base64, mimeType, language, pageCount) {
   const res = await fetch('/api/translation-docs/client-recognize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-client-token': token },
-    body: JSON.stringify({ image: base64, mimeType, clientSlug: slug, language })
+    body: JSON.stringify({ image: base64, mimeType, clientSlug: slug, language, pageCount })
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
   return data;
+}
+
+async function getPageCount(file) {
+  if (file.type !== 'application/pdf') return 1;
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+  return Math.max(1, pdf.numPages);
 }
 
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text) n.textContent = text; if (cls) n.className = cls; return n; };
@@ -257,7 +269,8 @@ export async function initTranslationDocs() {
     refreshFileList();
     try {
       const base64 = await fileToBase64(doc.file);
-      const data = await recognizeViaApi(token, slug, base64, doc.file.type, language);
+      const pageCount = await getPageCount(doc.file);
+      const data = await recognizeViaApi(token, slug, base64, doc.file.type, language, pageCount);
       doc.status = 'done';
       doc.result = data;
     } catch (err) {
@@ -276,21 +289,19 @@ export async function initTranslationDocs() {
     progressWrap.style.display = '';
     progressFill.style.width = '0%';
 
-    // Последовательно, не параллельно — тот же приём, что у бухгалтерии
-    // (Gemini free tier ~20 запросов/мин, см. ways-of-working.md).
     const pending = docs.map((doc, index) => ({ doc, index })).filter(({ doc }) => doc.status === 'pending' || doc.status === 'error');
     let firstDoneIndex = -1;
     let anyError = false;
     let done = 0;
 
-    for (const { doc, index } of pending) {
-      progressText.textContent = `Переводим ${done + 1} из ${docs.length}...`;
+    await runWithConcurrency(pending, MAX_TRANSLATION_CONCURRENCY, async ({ doc, index }) => {
+      progressText.textContent = `Переводим ${done + 1} из ${pending.length}...`;
       await translateOne(doc, language);
       done += 1;
       progressFill.style.width = `${Math.round((done / pending.length) * 100)}%`;
       if (doc.status === 'done' && firstDoneIndex === -1) firstDoneIndex = index;
       if (doc.status === 'error') anyError = true;
-    }
+    });
 
     progressWrap.style.display = 'none';
     translateBtn.disabled = false;
