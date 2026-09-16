@@ -44,7 +44,20 @@ module.exports = async (req, res) => {
         confidence: f.confidence,
         translated: f.translated,
         translationStatus: f.translationStatus
-      }))
+      })),
+      ...(Array.isArray(recognition.elements) ? {
+        elements: recognition.elements.map(element => ({
+          key: element.key,
+          type: element.elementType,
+          number: element.number || null,
+          label: element.label,
+          targetLabel: element.targetLabel,
+          value: element.value,
+          translated: element.translated,
+          raw_text: element.rawText,
+          confidence: element.confidence
+        }))
+      } : {})
     });
   } catch (error) {
     if (error instanceof TranslationDocError) {

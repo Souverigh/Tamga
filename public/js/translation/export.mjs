@@ -32,11 +32,16 @@ export function apostilleConvention(language) {
 }
 
 function apostilleBlocks(doc) {
-  const fields = doc.fields || [];
+  const elements = Array.isArray(doc.elements) && doc.elements.length
+    ? doc.elements
+    : (doc.fields || []).map((field, index) => ({ number: String(index + 1), label: field.label, value: field.value || '' }));
   return [
     { heading: 'APOSTILLE' },
     { text: apostilleConvention(doc.language) },
-    { table: fields.map((field, index) => [`${index + 1}. ${field.label}`, field.value || '']) }
+    { table: [elements.map(element => [
+      element.number ? `${element.number}. ${element.label}` : element.label,
+      element.value || ''
+    ])] }
   ];
 }
 
