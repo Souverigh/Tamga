@@ -1,13 +1,17 @@
-/* public/css/accounting.css — клиентская веб-панель модуля бухгалтерии
-   (public/js/accounting/panel.js), добавлено 15 сен 2026 (Ethan: "добавить
-   модуль бухгалтерии для платных клиентов"). НЕ линкует /admin/accounting.css
-   и /admin/admin.css напрямую в index.html — у admin.css есть `.tagline{...}`,
-   который переопределил бы стиль тега сайта (та же строка, где site's own
-   tagline уже стилизован в styles.css). Вместо этого сюда скопированы только
-   безопасные, префиксованные правила (acct-*, нужные admin-* утилиты для
-   таблиц/ошибок), без риска столкновения с существующими селекторами сайта.
-   Источник — public/admin/accounting.css + выборка из public/admin/admin.css,
-   держать в синхроне вручную, если общий вид review-экрана поменяется. */
+/* public/css/accounting.css — клиентские веб-панели премиум-модулей
+   (изначально только бухгалтерия, public/js/accounting/panel.js, 15 сен
+   2026; с 16 сен 2026 те же классы (.acct-tabs/.acct-panel-icon/
+   .admin-table и т.п.) переиспользует и public/js/translationDocs/panel.js
+   — общего вида "панель платного клиента" достаточно на оба модуля, заводить
+   вторую почти идентичную таблицу стилей не стали). НЕ линкует
+   /admin/accounting.css и /admin/admin.css напрямую в index.html — у
+   admin.css есть `.tagline{...}`, который переопределил бы стиль тега сайта
+   (та же строка, где site's own tagline уже стилизован в styles.css).
+   Вместо этого сюда скопированы только безопасные, префиксованные правила
+   (acct-*, нужные admin-* утилиты для таблиц/ошибок), без риска столкновения
+   с существующими селекторами сайта. Источник — public/admin/accounting.css
+   + выборка из public/admin/admin.css, держать в синхроне вручную, если
+   общий вид review-экрана поменяется. */
 
 :root{ --acct-ok:#2E7D46; --acct-ok-tint:#E8F3EB; }
 
@@ -35,6 +39,9 @@
   color:var(--accent-deep); display:flex; align-items:center; justify-content:center; flex-shrink:0;
 }
 .acct-wrap .dropzone{ margin-bottom:4px; }
+
+/* --- панель "Перевод" (public/js/translationDocs/panel.js, 16 сен 2026) --- */
+.acct-export-toolbar{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
 
 /* --- admin-* утилиты (только используемые здесь, скопированы из admin.css) --- */
 .admin-note{ font-size:0.8rem; color:var(--ink-soft); margin-top:6px; line-height:1.45; }

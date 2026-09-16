@@ -10,12 +10,15 @@
 // на сервере — см. lib/accounting/clientAccess.js).
 //
 // Структура страницы (16 сен 2026): #recognizeFlow в index.html оборачивает
-// ВЕСЬ поток обычного распознавания (загрузка/прогресс/результаты) — этот
-// модуль вставляет над ним переключатель табов "Распознавание"/"Бухгалтерия"
-// и показывает ровно один из двух блоков за раз. Сайт остаётся
-// однoколоночным (max-width:720px, тот же контейнер, что у results/
-// translation-panel) — Ethan подтвердил табы сверху вместо боковой вкладки,
-// т.к. настоящий боковой рельс потребовал бы отдельной мобильной раскладки.
+// ВЕСЬ поток обычного распознавания (загрузка/прогресс/результаты) —
+// переключатель табов над ним строит общий контроллер
+// public/js/contentTabs.js (registerTab), который показывает ровно одну
+// вкладку за раз и с этой же даты умеет больше двух — см. там же
+// public/js/translationDocs/panel.js, зарегистрировавший третью вкладку
+// "Перевод". Сайт остаётся однoколоночным (max-width:720px, тот же
+// контейнер, что у results/translation-panel) — Ethan подтвердил табы
+// сверху вместо боковой вкладки, т.к. настоящий боковой рельс потребовал бы
+// отдельной мобильной раскладки.
 //
 // Бухгалтерия — СВОЙ отдельный поток загрузки/распознавания, как
 // review-экран public/admin/accounting.js, поэтому здесь переиспользуются
@@ -23,6 +26,7 @@
 // элементы/данные параметрами — ничего не знают про admin-секрет), только
 // сетевой слой и гейт свои — под клиентский токен, не под x-admin-secret.
 import { getClientSlug, getClientToken } from '../branding.js';
+import { registerTab } from '../contentTabs.js';
 import { DOC_TYPE_LABELS } from '../../admin/accounting/labels.js';
 import { renderFileList, renderPreview, renderHeaderTable, renderItemsTable, renderRules } from '../../admin/accounting/render.js';
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
@@ -91,24 +95,12 @@ export async function initAccounting() {
   const slug = getClientSlug(), token = getClientToken();
   if (!slug || !token) return; // не платный клиент с паролем — вкладка не показывается, как и перевод
 
-  const recognizeFlow = document.getElementById('recognizeFlow');
-  if (!recognizeFlow) return; // защитно — без обёртки переключать нечего
-
-  // --- таб-переключатель "Распознавание" / "Бухгалтерия" ------------------
-  const tabs = el('nav', null, 'acct-tabs');
-  tabs.setAttribute('role', 'tablist');
-  const recognizeTab = button('Распознавание', 'acct-tab acct-tab-active');
-  const accountingTab = button('Бухгалтерия', 'acct-tab');
-  [recognizeTab, accountingTab].forEach(t => t.setAttribute('role', 'tab'));
-  recognizeTab.setAttribute('aria-selected', 'true');
-  accountingTab.setAttribute('aria-selected', 'false');
-  tabs.append(recognizeTab, accountingTab);
-  recognizeFlow.before(tabs);
-
-  // --- корневой блок панели ------------------------------------------------
+  // --- корневой блок панели + регистрация вкладки "Бухгалтерия" -----------
+  // (общий таб-контроллер вынесен в public/js/contentTabs.js 16 сен 2026,
+  // когда добавился модуль "Перевод" — раньше таб-бар строился прямо
+  // здесь и умел показывать только эти две вкладки.)
   const root = el('section', null, 'panel acct-wrap');
   root.id = 'accountingPanel';
-  root.style.display = 'none';
 
   const panelHeader = el('div', null, 'acct-panel-header');
   const panelTitle = el('div', null, 'acct-panel-header-title');
@@ -117,17 +109,7 @@ export async function initAccounting() {
   root.append(panelHeader);
   root.append(el('p', 'ЭСФ, товарная накладная, акт выполненных работ, платёжное поручение — распознавание и проверка по бухгалтерским правилам. Расходует тот же пакет страниц, что и обычное распознавание.', 'admin-note'));
 
-  function switchTab(target) {
-    const showAccounting = target === 'accounting';
-    recognizeFlow.style.display = showAccounting ? 'none' : '';
-    root.style.display = showAccounting ? '' : 'none';
-    recognizeTab.classList.toggle('acct-tab-active', !showAccounting);
-    accountingTab.classList.toggle('acct-tab-active', showAccounting);
-    recognizeTab.setAttribute('aria-selected', String(!showAccounting));
-    accountingTab.setAttribute('aria-selected', String(showAccounting));
-  }
-  recognizeTab.addEventListener('click', () => switchTab('recognize'));
-  accountingTab.addEventListener('click', () => switchTab('accounting'));
+  if (!registerTab('accounting', 'Бухгалтерия', root)) return; // защитно — без #recognizeFlow регистрировать нечего
 
   // --- загрузка файлов — тот же .dropzone, что на главном экране (styles.css),
   // с drag&drop, вместо голой кнопки выбора файла. -------------------------
@@ -200,8 +182,6 @@ export async function initAccounting() {
   columns.append(colOriginal, colFields);
   resultPanel.append(columns);
   root.append(resultPanel);
-
-  recognizeFlow.before(root);
 
   // --- состояние и обработчики (см. public/admin/accounting.js — тот же
   // поток, только сеть/гейт под клиентский токен, плюс drag&drop и прогресс-

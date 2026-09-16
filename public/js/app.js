@@ -18,8 +18,8 @@ import { downloadJson } from './export/jsonExport.js';
 import { downloadZip } from './export/zipExport.js';
 import { initFileList, getSelectedFiles, getSelectedDocTypes, getExtraDocTypes, setControlsDisabled, addExternalFile } from './ui/fileList.js';
 import { initFeedback } from './ui/feedback.js';
-import { initTranslation } from './translation/panel.js';
 import { initAccounting } from './accounting/panel.js';
+import { initTranslationDocs } from './translationDocs/panel.js';
 import {
   startProgress, finishProgress, setOverallProgress,
   createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError,
@@ -160,8 +160,14 @@ initFileList({
 
 initSettings();
 initResultsCollapseToggle();
-brandingReady.then(() => initTranslation({ getFileGroups }));
+// 16 сен 2026 (Ethan: "то же самое для перевода — отдельная загрузка, как
+// бухгалтерия"): initTranslation({getFileGroups}) (перевод уже извлечённых
+// полей внутри обычного потока, public/js/translation/panel.js) заменён на
+// initTranslationDocs() — собственную вкладку с собственной загрузкой файла,
+// по образцу initAccounting(). Порядок вызовов здесь = порядок вкладок в
+// таб-баре (public/js/contentTabs.js): Распознавание, Бухгалтерия, Перевод.
 brandingReady.then(() => initAccounting());
+brandingReady.then(() => initTranslationDocs());
 
 // --- Демо-документ одной кнопкой: синтетическая накладная (см. public/demo/),
 // чтобы человек мог сразу увидеть результат, не выбирая свой файл. ---
