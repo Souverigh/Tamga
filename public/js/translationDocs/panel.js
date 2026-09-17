@@ -506,6 +506,7 @@ export async function initTranslationDocs() {
     const sync = () => {
       // Hidden empty headings are part of the legal structure, not deleted rows.
       const fields = doc.result.fields.filter(field => !field.value && !field.translated && !field.requiresReview);
+      const glossaryEntries = [];
       tbody.querySelectorAll('tr').forEach(row => {
         const field = doc.result.fields.find(item => item.key === row.dataset.key);
         if (!field) return;
@@ -517,10 +518,26 @@ export async function initTranslationDocs() {
           field.reviewedSource = row.querySelector('.compare-reviewed')?.checked ? field.value : undefined;
           field.reviewedTranslation = row.querySelector('.compare-reviewed')?.checked ? field.translated : undefined;
         }
+        // Клиент подтвердил (или сам поправил) транслитерацию имени/места —
+        // отправляем в глоссарий (lib/verifiedTransliterations.js): личный
+        // выбор клиента, плюс пересчёт общего дефолта по большинству. Не
+        // блокирует сохранение — тот же fire-and-forget приём, что раньше
+        // был у public/js/translation/panel.js:confirmNameOverrides.
+        if (field.translationStatus === 'transliterated' && field.value.trim() && field.translated.trim()) {
+          glossaryEntries.push({ original: field.value, verifiedValue: field.translated });
+        }
         fields.push(field);
       });
       doc.result.fields = fields;
       renderFieldsTable(doc.result.fields);
+      if (glossaryEntries.length) {
+        const token = getClientToken();
+        fetch('/api/transliterations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { 'x-client-token': token } : {}) },
+          body: JSON.stringify({ action: 'confirm', clientSlug: getClientSlug(), entries: glossaryEntries })
+        }).catch(() => {});
+      }
     };
     save.addEventListener('click', sync);
     add.addEventListener('click', () => {

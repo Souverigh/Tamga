@@ -91,6 +91,16 @@ require.cache[require.resolve(translationPath)] = {
   }
 };
 
+let lookupTransliterationsCalls = [];
+let lookupTransliterationsImpl = async () => ({});
+const glossaryPath = path.join(ROOT, 'lib/verifiedTransliterations.js');
+require.cache[require.resolve(glossaryPath)] = {
+  id: glossaryPath, filename: glossaryPath, loaded: true,
+  exports: {
+    lookupTransliterations: async (...args) => { lookupTransliterationsCalls.push(args); return lookupTransliterationsImpl(...args); }
+  }
+};
+
 delete require.cache[require.resolve(path.join(ROOT, 'lib/translationDocs/pipeline.js'))];
 const { recognizeAndTranslateDocument, TranslationDocError } = require(path.join(ROOT, 'lib/translationDocs/pipeline.js'));
 
@@ -202,6 +212,39 @@ async function main() {
     assert.strictEqual(result.fields.find(f => f.key === 'signatory_name').translationStatus, 'transliterated');
     assert.ok(translateSegmentsCalls[0].request.segments.some(s => s.text === 'Zharandyk abaldyn aktylaryn kattoo bolumu'));
     assert.strictEqual(result.elements.find(e => e.key === 'seal_authority').translated, '[TR]Zharandyk abaldyn aktylaryn kattoo bolumu');
+  });
+  await scenario('Глоссарий (личный/общий) переопределяет авто-транслитерацию имени для клиента, но не спрашивается для кыргызского/русского языка', async () => {
+    lookupTransliterationsCalls = [];
+    lookupTransliterationsImpl = async (clientSlug, originals) => {
+      assert.strictEqual(clientSlug, 'acme');
+      assert.ok(originals.includes('Аманова Г.'));
+      return { 'Аманова Г.': 'Amanova-Custom G.' };
+    };
+    callGeminiImpl = async () => fakeApostilleResponse({
+      signatory_name: { value: 'Аманова Г.', confidence: 95 }
+    });
+    const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en', clientSlug: 'acme' });
+    assert.strictEqual(result.fields.find(f => f.key === 'signatory_name').translated, 'Amanova-Custom G.');
+    assert.strictEqual(result.fields.find(f => f.key === 'signatory_name').translationStatus, 'transliterated');
+    assert.strictEqual(lookupTransliterationsCalls.length, 1, 'глоссарий должен спрашиваться ровно один раз (батчем) для языков с латиницей');
+
+    lookupTransliterationsCalls = [];
+    lookupTransliterationsImpl = async () => { throw new Error('глоссарий не должен спрашиваться для не-латинского целевого языка'); };
+    callGeminiImpl = async () => fakeApostilleResponse({
+      signatory_name: { value: 'Аманова Г.', confidence: 95 }
+    });
+    const ruResult = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'ru', clientSlug: 'acme' });
+    assert.strictEqual(lookupTransliterationsCalls.length, 0);
+    assert.strictEqual(ruResult.fields.find(f => f.key === 'signatory_name').translated, 'Аманова Г.');
+  });
+  await scenario('Недоступность глоссария не ломает перевод — обычная транслитерация как раньше', async () => {
+    lookupTransliterationsImpl = async () => { throw new Error('Supabase недоступен'); };
+    callGeminiImpl = async () => fakeApostilleResponse({
+      signatory_name: { value: 'Аманова Г.', confidence: 95 }
+    });
+    const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en', clientSlug: 'acme' });
+    assert.strictEqual(result.fields.find(f => f.key === 'signatory_name').translated, 'Amanova G.');
+    lookupTransliterationsImpl = async () => ({});
   });
   await scenario('Apostille rejects shifted field numbers before translation', async () => {
     callGeminiImpl = async () => fakeApostilleResponse({ elements: [{ key: 'public_document', element_type: 'numbered_field', number: '2', value: '' }] });
