@@ -70,13 +70,23 @@ module.exports = async (req, res) => {
     // Settings must reflect a save handled by any server instance.
     // clearConfigCache only invalidates the current process's cache.
     const config = await getClientConfig({ clientSlug, fresh: true });
-    const auth = requireClientSettingsAuth({
+    const auth = await requireClientSettingsAuth({
       clientSlug,
       passwordHash: config ? config.passwordHash : null,
       token: req.headers['x-client-token']
     });
     if (!auth.ok) {
       res.status(auth.status).json({ error: auth.message });
+      return;
+    }
+    // Настройки клиента (поля/типы/бизнес-правила/бренд/пользователи) —
+    // только для роли 'owner' (Ethan, 17 сен 2026: у переводчика доступ
+    // только к самому инструменту перевода, не к управлению аккаунтом).
+    // Для легаси-клиентов без отдельных пользователей auth.role всегда
+    // 'owner' — ничего не меняется, пока Ethan/владелец не заведёт
+    // пользователей явно.
+    if (auth.role !== 'owner') {
+      res.status(403).json({ error: 'Настройки доступны только владельцу аккаунта.' });
       return;
     }
 

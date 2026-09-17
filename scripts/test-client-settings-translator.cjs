@@ -19,7 +19,7 @@ function settingsApi(initialFormatting = {}) {
     process: { env: { SUPABASE_URL: 'https://db.test', SUPABASE_SERVICE_ROLE_KEY: 'fake' } },
     require: name => {
       if (name.includes('customFieldsLookup')) return { getClientConfig: async () => ({ passwordHash: 'hash', formatting: row.formatting }), clearConfigCache() {} };
-      if (name.includes('clientAuth')) return { requireClientSettingsAuth: () => ({ ok: true }) };
+      if (name.includes('clientAuth')) return { requireClientSettingsAuth: async () => ({ ok: true, role: 'owner', username: '', translatorName: null }) };
       return require('../' + name.replace(/^\.\.\//, ''));
     },
     fetch: async (_url, options) => {
