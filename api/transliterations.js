@@ -1,5 +1,5 @@
 const { requirePaidTranslationClient } = require('../lib/translationAccess');
-const { lookupTransliterations, recordTransliteration } = require('../lib/verifiedTransliterations');
+const { lookupTransliterations, recordTransliteration, listGlossaryTerms } = require('../lib/verifiedTransliterations');
 
 // Тот же доступ, что и /api/translate — только платные клиенты после входа
 // (см. lib/translationAccess.js). Словарь транслитераций — часть той же
@@ -39,7 +39,15 @@ module.exports = async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    return res.status(400).json({ error: 'Укажите action: lookup или confirm.' });
+    if (req.body.action === 'list') {
+      const search = typeof req.body.search === 'string' ? req.body.search.slice(0, 200) : '';
+      const offset = Number.isInteger(req.body.offset) && req.body.offset >= 0 ? req.body.offset : 0;
+      const outcome = await listGlossaryTerms(slug, { search, limit: 50, offset });
+      if (!outcome.ok) return res.status(503).json({ error: 'Глоссарий временно недоступен.' });
+      return res.status(200).json({ items: outcome.items, total: outcome.total });
+    }
+
+    return res.status(400).json({ error: 'Укажите action: lookup, confirm или list.' });
   } catch (error) {
     const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 600 ? error.status : 503;
     return res.status(status).json({ error: error.status ? error.message : 'Словарь транслитераций временно недоступен.' });
