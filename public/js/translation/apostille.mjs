@@ -24,6 +24,13 @@ export function validateApostille(elements, language, translated = false, { allo
     if (!translated) return;
     if (e.requiresReview && !e.reviewConfirmed && !allowPendingReview) fail(`Поле «${e.targetLabel || e.label || e.key}» требует сверки с оригиналом. Откройте сравнение и подтвердите проверку этого поля.`);
     const value = e.translated ?? e.value ?? '';
+    // Значение подтверждено глоссарием (личным клиента или общим по
+    // большинству, см. lib/verifiedTransliterations.js) — оно намеренно
+    // отличается от детерминированной apostilleValue()/transliterateName(),
+    // это и есть весь смысл глоссария. Не требуем точного совпадения для
+    // таких полей — целостность имени тут гарантирует глоссарий, а не
+    // формула транслитерации.
+    if (e.fromGlossary) return;
     const expected = e.sourceValue === undefined ? null : apostilleValue(e.key, e.sourceValue, language);
     if (expected && value !== expected.value) fail(`Поле «${e.targetLabel || e.label || e.key}»: перевод не соответствует оригиналу и правилам транслитерации/формата даты. Исправьте его в окне сравнения.`);
     if (language === 'zh' && /\bpechat\b/i.test(value)) fail('Замените Pechat на китайское обозначение печати в окне сравнения.');

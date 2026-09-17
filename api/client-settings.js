@@ -70,13 +70,23 @@ module.exports = async (req, res) => {
     // Settings must reflect a save handled by any server instance.
     // clearConfigCache only invalidates the current process's cache.
     const config = await getClientConfig({ clientSlug, fresh: true });
-    const auth = requireClientSettingsAuth({
+    const auth = await requireClientSettingsAuth({
       clientSlug,
       passwordHash: config ? config.passwordHash : null,
       token: req.headers['x-client-token']
     });
     if (!auth.ok) {
       res.status(auth.status).json({ error: auth.message });
+      return;
+    }
+    // Настройки клиента (поля/типы/бизнес-правила/бренд/пользователи) —
+    // только для роли 'owner' (Ethan, 17 сен 2026: у переводчика доступ
+    // только к самому инструменту перевода, не к управлению аккаунтом).
+    // Для легаси-клиентов без отдельных пользователей auth.role всегда
+    // 'owner' — ничего не меняется, пока Ethan/владелец не заведёт
+    // пользователей явно.
+    if (auth.role !== 'owner') {
+      res.status(403).json({ error: 'Настройки доступны только владельцу аккаунта.' });
       return;
     }
 
@@ -86,6 +96,7 @@ module.exports = async (req, res) => {
         customDocTypes: config.customDocTypes || null,
         businessRules: config.businessRules || [],
         includeText: config.formatting?.includeText === true,
+        translatorName: config.formatting?.translatorName || null,
         displayName: config.displayName || null,
         logoUrl: config.logoUrl || null,
         accentColor: config.accentColor || null
@@ -138,6 +149,14 @@ module.exports = async (req, res) => {
       res.status(400).json({ error: 'include_text должен быть true или false' });
       return;
     }
+    let translatorName = null;
+    if ('translator_name' in body) {
+      if (typeof body.translator_name !== 'string' || body.translator_name.length > 200) {
+        res.status(400).json({ error: 'translator_name должен быть строкой не длиннее 200 символов' });
+        return;
+      }
+      translatorName = body.translator_name.trim(); // пустая строка — сознательная очистка (ФИО переводчика больше не задано)
+    }
 
     if ('field_overrides' in body) {
       const { error, value } = validateFieldOverrides(body.field_overrides);
@@ -171,7 +190,7 @@ module.exports = async (req, res) => {
 
     // formatting.businessRules — read-modify-write НАПРЯМУЮ из Supabase (не из
     // кэша getClientConfig), см. комментарий в начале файла.
-    if (newBusinessRules !== null || 'include_text' in body) {
+    if (newBusinessRules !== null || 'include_text' in body || translatorName !== null) {
       const rawRow = await fetchRawRow(supabaseUrl, serviceKey, clientSlug);
       const currentFormatting = (rawRow && rawRow.formatting && typeof rawRow.formatting === 'object') ? { ...rawRow.formatting } : {};
       if (newBusinessRules !== null) {
@@ -179,6 +198,10 @@ module.exports = async (req, res) => {
         else delete currentFormatting.businessRules;
       }
       if ('include_text' in body) currentFormatting.includeText = body.include_text;
+      if (translatorName !== null) {
+        if (translatorName) currentFormatting.translatorName = translatorName;
+        else delete currentFormatting.translatorName; // пустая строка — очистка
+      }
       updates.formatting = Object.keys(currentFormatting).length ? currentFormatting : null;
     }
 
@@ -207,6 +230,7 @@ module.exports = async (req, res) => {
       customDocTypes: saved.custom_doc_types || null,
       businessRules: (saved.formatting && Array.isArray(saved.formatting.businessRules)) ? saved.formatting.businessRules : [],
       includeText: saved.formatting?.includeText === true,
+      translatorName: saved.formatting?.translatorName || null,
       displayName: saved.display_name || null,
       logoUrl: saved.logo_url || null,
       accentColor: saved.accent_color || null

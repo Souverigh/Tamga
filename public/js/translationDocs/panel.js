@@ -24,7 +24,7 @@ import { TRANSLATION_STATUSES } from '../translation/field-rules.mjs';
 // public/admin/accounting/ (тот же список файлов, что уже показал, что
 // хорошо переиспользуется между панелями — ничего в них не знает про
 // бухгалтерию конкретно, только про форму {file, status, result, error}).
-import { getClientSlug, getClientToken } from '../branding.js';
+import { getClientSlug, getClientToken, getClientBranding } from '../branding.js';
 import { registerTab } from '../contentTabs.js';
 import { renderFileList, renderPreview } from '../../admin/accounting/render.js';
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
@@ -129,6 +129,94 @@ export async function initTranslationDocs() {
   root.append(langRow);
   let selectedLanguage = langSelect.value;
 
+  // --- удостоверение переводчика ("под нотариальное заверение", Ethan,
+  // 17 сен 2026) — необязательный блок: без ФИО переводчика футер вообще не
+  // добавляется в экспорт (см. certificationBlocks в translation/export.mjs).
+  // С 17 сен 2026 (мультипользовательские аккаунты, lib/clientAuth.js): если
+  // залогинен персональный пользователь с ролью 'translator' — его ФИО
+  // берётся из ЕГО СОБСТВЕННОЙ учётной записи (currentUser.translatorName,
+  // см. branding.js) и подставляется сразу, без обращения к
+  // /api/client-settings (туда у переводчика всё равно нет доступа — 403).
+  // Для owner/легаси-клиентов без отдельных пользователей — как раньше,
+  // общий на клиента formatting.translatorName, который можно поправить
+  // прямо здесь.
+  // Ethan, 17 сен 2026: "включать по умолчанию, а не по чекбоксу" — чекбокс
+  // теперь ВКЛЮЧЁН с самого начала (не требует явного действия клиента).
+  // Блок в экспорте всё равно не появится без заполненного ФИО переводчика
+  // (см. certificationBlocks выше) — включённый по умолчанию чекбокс просто
+  // означает "добавь блок, как только у тебя будет ФИО", а не "добавь пустой
+  // блок". Клиент по-прежнему может снять галочку, если блок не нужен вовсе.
+  const certDetails = el('details', null, 'translation-info');
+  certDetails.open = true;
+  certDetails.style.marginBottom = '12px';
+  const certSummary = el('summary', 'Формулировка для нотариального заверения');
+  certDetails.append(certSummary);
+  const certBody = el('div'); certBody.style.marginTop = '10px';
+  const certToggleRow = el('label'); certToggleRow.style.display = 'flex'; certToggleRow.style.alignItems = 'center'; certToggleRow.style.gap = '8px';
+  const certToggle = document.createElement('input'); certToggle.type = 'checkbox'; certToggle.checked = true;
+  certToggleRow.append(certToggle, el('span', 'Добавлять в конец экспорта: язык оригинала/перевода, ФИО переводчика, место для подписи, ссылку на статью закона о нотариате и место под печать нотариуса — документ можно сразу нести к нотариусу.'));
+  certBody.append(certToggleRow);
+
+  const certFieldsRow = el('div', null, 'translation-setup-row');
+  certFieldsRow.style.marginTop = '10px'; certFieldsRow.style.display = '';
+  const sourceLangField = el('div', null, 'translation-field');
+  sourceLangField.append(el('span', 'Язык оригинала', 'translation-field-label'));
+  const sourceLangSelect = el('select');
+  Object.entries(LANGUAGES).forEach(([value, label]) => { const o = el('option', label); o.value = value; sourceLangSelect.append(o); });
+  sourceLangSelect.value = 'ru';
+  sourceLangField.append(sourceLangSelect);
+  const translatorField = el('div', null, 'translation-field');
+  translatorField.append(el('span', 'ФИО переводчика', 'translation-field-label'));
+  const translatorInput = document.createElement('input');
+  translatorInput.type = 'text'; translatorInput.placeholder = 'Иванова Айгуль Бакытовна';
+  translatorField.append(translatorInput);
+  certFieldsRow.append(sourceLangField, translatorField);
+  certBody.append(certFieldsRow);
+  certDetails.append(certBody);
+  root.append(certDetails);
+
+  certToggle.addEventListener('change', () => { certFieldsRow.style.display = certToggle.checked ? '' : 'none'; });
+
+  const currentUser = getClientBranding()?.currentUser;
+  const isPersonalTranslator = currentUser?.role === 'translator';
+
+  if (isPersonalTranslator && currentUser.translatorName) {
+    translatorInput.value = currentUser.translatorName;
+    certToggle.checked = true;
+    certFieldsRow.style.display = '';
+  } else if (!isPersonalTranslator) {
+    // Загружаем сохранённое общее ФИО переводчика один раз при открытии
+    // вкладки; сбой не должен мешать работе панели — поле просто останется
+    // пустым.
+    fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, { headers: { 'x-client-token': token } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.translatorName) { translatorInput.value = data.translatorName; certToggle.checked = true; certFieldsRow.style.display = ''; } })
+      .catch(() => {});
+  }
+
+  // Сохраняем ФИО при уходе с поля (не при каждой букве) — тот же
+  // fire-and-forget принцип, что у остальных необязательных настроек здесь.
+  // У персонального переводчика своё ФИО правится в «Пользователи» (только
+  // владельцем) — здесь для него это просто разовая правка для конкретного
+  // экспорта, никуда не сохраняется, чтобы не давать 403 от /api/client-settings.
+  let lastSavedTranslatorName = '';
+  translatorInput.addEventListener('blur', () => {
+    if (isPersonalTranslator) return;
+    const value = translatorInput.value.trim();
+    if (value === lastSavedTranslatorName) return;
+    lastSavedTranslatorName = value;
+    fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-client-token': token },
+      body: JSON.stringify({ translator_name: value })
+    }).catch(() => {});
+  });
+
+  function currentCertification() {
+    if (!certToggle.checked || !translatorInput.value.trim()) return undefined;
+    return { translatorName: translatorInput.value.trim(), sourceLanguage: sourceLangSelect.value };
+  }
+
   // --- загрузка файлов — тот же .dropzone, что у главного экрана и у
   // модуля бухгалтерии, с drag&drop. -----------------------------------------
   const dropzone = el('label', null, 'dropzone');
@@ -192,6 +280,15 @@ export async function initTranslationDocs() {
 
   const fieldsTable = el('table', null, 'admin-table acct-header-table');
   colFields.append(fieldsTable);
+
+  // "Другое"/клиентские типы несут структуру документа в data.paragraphs
+  // (см. lib/translationDocs/pipeline.js, 17 сен 2026), не в fields —
+  // отдельная таблица для сверки, стандартные типы её просто не покажут
+  // (paragraphs пуст).
+  const paragraphsHeading = el('div', 'Полный текст документа', 'step-label');
+  paragraphsHeading.style.margin = '16px 0 6px'; paragraphsHeading.style.display = 'none';
+  const paragraphsTable = el('table', null, 'admin-table acct-header-table');
+  colFields.append(paragraphsHeading, paragraphsTable);
 
   columns.append(colFields);
   resultPanel.append(columns);
@@ -303,11 +400,34 @@ export async function initTranslationDocs() {
     fieldsTable.append(thead, tbody);
   }
 
-  // Форма {name, fields:[{label,value}], columns:[], items:[], keys:[],
-  // paragraphs:[]}, которую понимает public/js/translation/export.mjs
-  // (pairedLayoutBlocks и производные exportDocx/exportTxt/printTranslation)
-  // — переиспользуется как есть, только вместо документов из обычного
-  // потока сюда попадают поля апостиля.
+  // Read-only предпросмотр абзацев (data.paragraphs) — есть только у
+  // "Другое"/клиентских типов (см. lib/translationDocs/pipeline.js,
+  // 17 сен 2026); у табличных типов paragraphs пуст, секция просто скрыта.
+  // Полноценное редактирование — в модалке "Сравнить оригинал и перевод"
+  // ниже (compareBtn), эта таблица только для быстрого взгляда без открытия
+  // модалки.
+  function renderParagraphsTable(paragraphs) {
+    paragraphsTable.innerHTML = '';
+    const visible = (paragraphs || []).filter(p => p.text && p.text.trim());
+    if (!visible.length) {
+      paragraphsHeading.style.display = 'none';
+      return;
+    }
+    paragraphsHeading.style.display = '';
+    const thead = el('thead');
+    const headRow = el('tr');
+    ['Оригинал', 'Перевод'].forEach(t => headRow.append(el('th', t)));
+    thead.append(headRow);
+    const tbody = el('tbody');
+    visible.forEach(p => {
+      const row = el('tr');
+      const original = el('td', p.text || '—'); original.dataset.label = 'Оригинал';
+      const translated = el('td', p.translated || '—'); translated.dataset.label = 'Перевод';
+      row.append(original, translated);
+      tbody.append(row);
+    });
+    paragraphsTable.append(thead, tbody);
+  }
 
   async function selectDoc(index) {
     const doc = docs[index];
@@ -350,6 +470,7 @@ export async function initTranslationDocs() {
     ].forEach(item => regulationList.append(el('li', item)));
     regulationNote.append(el('strong', 'Важная информация'), regulationList);
     renderFieldsTable(data.fields);
+    renderParagraphsTable(data.paragraphs);
     resultPanel.style.display = '';
     [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = false);
   }
@@ -414,7 +535,7 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
-      await exportDocx(original, translation, false);
+      await exportDocx(original, translation, false, currentCertification());
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .docx';
       exportError.style.display = '';
@@ -427,7 +548,7 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
-      exportTxt(original, translation, false);
+      exportTxt(original, translation, false, currentCertification());
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .txt';
       exportError.style.display = '';
@@ -440,7 +561,7 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
-      await downloadTranslationPdf(translation);
+      await downloadTranslationPdf(translation, currentCertification());
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось скачать PDF';
       exportError.style.display = '';
@@ -503,9 +624,38 @@ export async function initTranslationDocs() {
       return row;
     };
     doc.result.fields.filter(field => field.value || field.translated || field.requiresReview).forEach(field => tbody.append(makeRow(field)));
+
+    // "Другое"/клиентские типы несут остальную структуру документа в
+    // paragraphs, не в fields (см. lib/translationDocs/pipeline.js,
+    // 17 сен 2026) — отдельная редактируемая таблица ниже; у табличных
+    // типов paragraphs пуст, секция просто не создаётся. Пустой textarea
+    // "Оригинал" исключает абзац из парного экспорта (pairedLayoutBlocks
+    // фильтрует по непустому original) — так клиент может убрать лишний
+    // абзац, не трогая остальные и не нужен отдельный "Удалить".
+    let paraTable = null;
+    let paraHeading = null;
+    if (Array.isArray(doc.result.paragraphs) && doc.result.paragraphs.length) {
+      paraHeading = el('h4', 'Полный текст документа'); paraHeading.style.margin = '18px 0 8px';
+      paraTable = el('table', null, 'admin-table translation-compare-table');
+      paraTable.innerHTML = '<thead><tr><th>Оригинал</th><th>Перевод</th></tr></thead>';
+      const paraBody = el('tbody');
+      doc.result.paragraphs.forEach((p, i) => {
+        const row = el('tr'); row.dataset.index = String(i);
+        const original = document.createElement('textarea'); original.className = 'compare-original'; original.value = p.text || '';
+        const translated = document.createElement('textarea'); translated.className = 'compare-translated'; translated.value = p.translated || '';
+        original.setAttribute('aria-label', `Оригинал, абзац ${i + 1}`);
+        translated.setAttribute('aria-label', `Перевод, абзац ${i + 1}`);
+        const sourceCell = el('td'); sourceCell.append(original); sourceCell.dataset.label = 'Оригинал';
+        const translatedCell = el('td'); translatedCell.append(translated); translatedCell.dataset.label = 'Перевод';
+        row.append(sourceCell, translatedCell);
+        paraBody.append(row);
+      });
+      paraTable.append(paraBody);
+    }
     const sync = () => {
       // Hidden empty headings are part of the legal structure, not deleted rows.
       const fields = doc.result.fields.filter(field => !field.value && !field.translated && !field.requiresReview);
+      const glossaryEntries = [];
       tbody.querySelectorAll('tr').forEach(row => {
         const field = doc.result.fields.find(item => item.key === row.dataset.key);
         if (!field) return;
@@ -517,10 +667,35 @@ export async function initTranslationDocs() {
           field.reviewedSource = row.querySelector('.compare-reviewed')?.checked ? field.value : undefined;
           field.reviewedTranslation = row.querySelector('.compare-reviewed')?.checked ? field.translated : undefined;
         }
+        // Клиент подтвердил (или сам поправил) транслитерацию имени/места —
+        // отправляем в глоссарий (lib/verifiedTransliterations.js): личный
+        // выбор клиента, плюс пересчёт общего дефолта по большинству. Не
+        // блокирует сохранение — тот же fire-and-forget приём, что раньше
+        // был у public/js/translation/panel.js:confirmNameOverrides.
+        if (field.translationStatus === 'transliterated' && field.value.trim() && field.translated.trim()) {
+          glossaryEntries.push({ original: field.value, verifiedValue: field.translated });
+        }
         fields.push(field);
       });
       doc.result.fields = fields;
       renderFieldsTable(doc.result.fields);
+      if (paraTable) {
+        paraTable.querySelectorAll('tbody tr').forEach(row => {
+          const p = doc.result.paragraphs[Number(row.dataset.index)];
+          if (!p) return;
+          p.text = row.querySelector('.compare-original').value;
+          p.translated = row.querySelector('.compare-translated').value;
+        });
+        renderParagraphsTable(doc.result.paragraphs);
+      }
+      if (glossaryEntries.length) {
+        const token = getClientToken();
+        fetch('/api/transliterations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { 'x-client-token': token } : {}) },
+          body: JSON.stringify({ action: 'confirm', clientSlug: getClientSlug(), entries: glossaryEntries })
+        }).catch(() => {});
+      }
     };
     save.addEventListener('click', sync);
     add.addEventListener('click', () => {
@@ -533,7 +708,7 @@ export async function initTranslationDocs() {
     });
     close.addEventListener('click', () => modal.remove());
     modal.addEventListener('click', event => { if (event.target === modal) modal.remove(); });
-    dialog.append(header, toolbar, table);
+    dialog.append(header, toolbar, table, ...(paraTable ? [paraHeading, paraTable] : []));
     modal.append(dialog);
     root.append(modal);
   });

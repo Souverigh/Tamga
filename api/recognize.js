@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
       // только для clientSlug-запросов, не для обычных посетителей сайта.
       const config = await getClientConfig({ clientSlug, fresh: true });
       if (config) resolvedClientSlug = clientSlug;
-      const gate = checkClientGate({ clientSlug, passwordHash: config ? config.passwordHash : null, token: req.headers['x-client-token'] });
+      const gate = await checkClientGate({ clientSlug, passwordHash: config ? config.passwordHash : null, token: req.headers['x-client-token'] });
       if (!gate.ok) {
         res.status(gate.status).json({ error: gate.message });
         return;

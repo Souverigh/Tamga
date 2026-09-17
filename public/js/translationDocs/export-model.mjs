@@ -2,6 +2,13 @@ export function buildExportDocs(doc, language) {
   const visible = doc.result.doc_type === 'apostille'
     ? doc.result.fields
     : doc.result.fields.filter(f => f.value && f.value.trim());
+  // "Другое" и клиентские типы без предопределённых полей несут структуру
+  // документа в doc.result.paragraphs (см. lib/translationDocs/pipeline.js,
+  // 17 сен 2026 — "максимально сохранить структуру, ничего не менять, но
+  // переводить всё"), а не в одном поле-заглушке. pairedLayoutBlocks в
+  // export.mjs уже умеет рендерить original/translation.paragraphs бок о
+  // бок — просто раньше сюда всегда попадал пустой массив.
+  const paragraphs = Array.isArray(doc.result.paragraphs) ? doc.result.paragraphs : [];
   const name = doc.file.name;
   const original = {
     name,
@@ -12,7 +19,7 @@ export function buildExportDocs(doc, language) {
         return { number: e.number, label: e.label, value: field?.value ?? e.value ?? '' };
       })
       : undefined,
-    columns: [], items: [], keys: [], paragraphs: []
+    columns: [], items: [], keys: [], paragraphs: paragraphs.map(p => ({ text: p.text }))
   };
   const translation = {
     name,
@@ -34,7 +41,7 @@ export function buildExportDocs(doc, language) {
         };
       })
       : undefined,
-    columns: [], items: [], keys: [], paragraphs: []
+    columns: [], items: [], keys: [], paragraphs: paragraphs.map(p => ({ text: p.translated || '' }))
   };
   return { original, translation };
 }

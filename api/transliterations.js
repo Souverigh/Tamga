@@ -1,5 +1,5 @@
 const { requirePaidTranslationClient } = require('../lib/translationAccess');
-const { lookupTransliterations, recordTransliteration } = require('../lib/verifiedTransliterations');
+const { lookupTransliterations, recordTransliteration, listGlossaryTerms } = require('../lib/verifiedTransliterations');
 
 // Тот же доступ, что и /api/translate — только платные клиенты после входа
 // (см. lib/translationAccess.js). Словарь транслитераций — часть той же
@@ -11,14 +11,14 @@ module.exports = async (req, res) => {
     if (!req.body || typeof req.body !== 'object' || JSON.stringify(req.body).length > 20000) {
       return res.status(413).json({ error: 'Слишком большой запрос.' });
     }
-    await requirePaidTranslationClient(req, req.body.clientSlug);
+    const slug = await requirePaidTranslationClient(req, req.body.clientSlug);
 
     if (req.body.action === 'lookup') {
       const originals = req.body.originals;
       if (!Array.isArray(originals) || !originals.length || originals.length > 50 || originals.some(o => typeof o !== 'string')) {
         return res.status(400).json({ error: 'Некорректный список значений (до 50 строк).' });
       }
-      const values = await lookupTransliterations(originals);
+      const values = await lookupTransliterations(slug, originals);
       return res.status(200).json({ values });
     }
 
@@ -35,11 +35,19 @@ module.exports = async (req, res) => {
       // Не критично для ответа клиенту — сбой записи в словарь не должен
       // мешать скачиванию уже готового перевода (см. panel.js:ready — это
       // отдельный fire-and-forget вызов, ответ на него никто не ждёт).
-      await Promise.all(entries.map(e => recordTransliteration(e.original, e.verifiedValue)));
+      await Promise.all(entries.map(e => recordTransliteration(slug, e.original, e.verifiedValue)));
       return res.status(200).json({ ok: true });
     }
 
-    return res.status(400).json({ error: 'Укажите action: lookup или confirm.' });
+    if (req.body.action === 'list') {
+      const search = typeof req.body.search === 'string' ? req.body.search.slice(0, 200) : '';
+      const offset = Number.isInteger(req.body.offset) && req.body.offset >= 0 ? req.body.offset : 0;
+      const outcome = await listGlossaryTerms(slug, { search, limit: 50, offset });
+      if (!outcome.ok) return res.status(503).json({ error: 'Глоссарий временно недоступен.' });
+      return res.status(200).json({ items: outcome.items, total: outcome.total });
+    }
+
+    return res.status(400).json({ error: 'Укажите action: lookup, confirm или list.' });
   } catch (error) {
     const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 600 ? error.status : 503;
     return res.status(status).json({ error: error.status ? error.message : 'Словарь транслитераций временно недоступен.' });

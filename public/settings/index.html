@@ -31,9 +31,9 @@
     <p>Не удалось загрузить настройки. Проверьте соединение и обновите страницу.</p>
   </section>
 
-  <!-- Пароль вообще не задан для этого клиента — самообслуживание не включено -->
+  <!-- Пароль вообще не задан для этого клиента, ИЛИ роль пользователя не позволяет открыть настройки — текст берётся из ответа сервера -->
   <section id="noPassword" class="panel" style="display:none;">
-    <p>Настройки станут доступны, как только для вашего сайта будет задан пароль — обратитесь к вашему менеджеру.</p>
+    <p id="noPasswordText">Настройки станут доступны, как только для вашего сайта будет задан пароль — обратитесь к вашему менеджеру.</p>
   </section>
 
   <!-- Основной экран — скрыт до входа -->
@@ -45,6 +45,7 @@
       <button type="button" role="tab" id="tab-rules" aria-controls="panel-rules" aria-selected="false" tabindex="-1">Правила</button>
       <button type="button" role="tab" id="tab-appearance" aria-controls="panel-appearance" aria-selected="false" tabindex="-1">Оформление</button>
       <button type="button" role="tab" id="tab-password" aria-controls="panel-password" aria-selected="false" tabindex="-1">Пароль</button>
+      <button type="button" role="tab" id="tab-users" aria-controls="panel-users" aria-selected="false" tabindex="-1">Пользователи</button>
     </div>
     <section class="panel settings-tab-panel" role="tabpanel" id="panel-recognition" aria-labelledby="tab-recognition" tabindex="0">
       <h3 class="admin-section-title" style="margin-top:0;">Распознавание</h3>
@@ -261,6 +262,39 @@
         <span id="passwordChangeStatus" class="admin-note"></span>
       </div>
       <div id="passwordChangeError" class="admin-error" style="display:none;"></div>
+    </section>
+    <section class="panel settings-tab-panel" role="tabpanel" id="panel-users" aria-labelledby="tab-users" tabindex="0" hidden>
+      <h3 class="admin-section-title">Пользователи <span class="admin-hint">— отдельный логин и пароль для каждого сотрудника</span></h3>
+      <p class="admin-note">Роль «Владелец» — полный доступ, включая эти настройки и управление пользователями. Роль «Переводчик» — только распознавание, перевод и экспорт; своё ФИО подставляется автоматически в удостоверение переводчика.</p>
+      <table class="admin-table" id="usersTable" style="margin:14px 0;">
+        <thead><tr><th>Логин</th><th>Роль</th><th>ФИО переводчика</th><th></th></tr></thead>
+        <tbody id="usersTableBody"></tbody>
+      </table>
+      <div id="usersError" class="admin-error" style="display:none;"></div>
+      <h4 class="admin-section-title" style="font-size:0.95rem;">Добавить пользователя</h4>
+      <div class="admin-field-group">
+        <label class="admin-label">Логин <span class="admin-hint">латиница/цифры/_/- </span></label>
+        <input type="text" id="newUserUsername" class="admin-input" autocomplete="off">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Пароль <span class="admin-hint">не короче 8 символов</span></label>
+        <input type="password" id="newUserPassword" class="admin-input" autocomplete="new-password">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Роль</label>
+        <select id="newUserRole" class="admin-input">
+          <option value="translator">Переводчик</option>
+          <option value="owner">Владелец</option>
+        </select>
+      </div>
+      <div class="admin-field-group" id="newUserTranslatorNameGroup">
+        <label class="admin-label">ФИО переводчика <span class="admin-hint">необязательно</span></label>
+        <input type="text" id="newUserTranslatorName" class="admin-input" placeholder="Иванова Айгуль Бакытовна">
+      </div>
+      <div class="admin-form-actions">
+        <button class="btn-secondary" id="addUserBtn" type="button">Добавить</button>
+        <span id="addUserStatus" class="admin-note"></span>
+      </div>
     </section>
     <div id="settingsSaveBar" class="settings-save-bar">
       <div class="admin-form-actions">

@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const gate = checkClientGate({ clientSlug: slug, passwordHash: config.passwordHash, token: req.headers['x-client-token'] });
+    const gate = await checkClientGate({ clientSlug: slug, passwordHash: config.passwordHash, token: req.headers['x-client-token'] });
     if (!gate.ok) {
       res.status(gate.status).json({ gateRequired: true, error: gate.message });
       return;
@@ -67,7 +67,13 @@ module.exports = async (req, res) => {
       // Настраиваемые бизнес-правила (Ethan, 7 сен 2026) — тоже безопасно
       // отдавать целиком, см. комментарий в customFieldsLookup.js:getClientConfig.
       businessRules: config.businessRules,
-      includeText: config.formatting?.includeText === true
+      includeText: config.formatting?.includeText === true,
+      // Кто именно сейчас залогинен (lib/clientAuth.js:resolveIdentity) —
+      // для легаси-клиентов без отдельных пользователей role всегда 'owner',
+      // username пустой (никакой персонализации, как и раньше). translatorName
+      // здесь — только у пользователей с ролью 'translator'; используется
+      // панелью перевода для автоподстановки в удостоверение переводчика.
+      currentUser: { username: gate.username || '', role: gate.role || 'owner', translatorName: gate.translatorName || null }
     });
   } catch (err) {
     // Fail-open — как и вся остальная кастомизация: сбой не должен мешать

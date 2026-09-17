@@ -1,5 +1,55 @@
 import { validateApostille } from './apostille.mjs';
+import { LANGUAGES } from './model.mjs';
 export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
+
+// Стандартная концовка "под нотариальное заверение" (Ethan, 17 сен 2026 —
+// со скриншота идеи "автоформирование концовки для переводчиков: ФИО
+// переводчика, языковая пара, место для подписи"). Опциональна — блоков нет
+// вообще, если ФИО переводчика не задано (нет смысла печатать пустую
+// формулировку). ФИО хранится в client-settings (formatting.translatorName,
+// см. api/client-settings.js) и подставляется панелью автоматически, но
+// клиент может переопределить его перед конкретным экспортом.
+// Родительный падеж "с ... на ..." по-русски зависит от языка (из
+// латиницы/кириллицы то и дело меняется склонение) — вместо конструирования
+// грамматически верной фразы на 8 языков просто указываем два языка отдельными
+// строками, это однозначно и не требует словаря склонений.
+//
+// Ethan, 17 сен 2026: "сделать блок печатным по стандарту КР (место под
+// печать нотариуса, ссылка на конкретную статью закона о нотариате)".
+// Добавлено:
+//  1) ссылка на статью 87 Закона Кыргызской Республики «О нотариате»
+//     («Свидетельствование верности перевода») — статья, по которой нотариус
+//     либо сам свидетельствует верность перевода (если владеет языком), либо
+//     свидетельствует подлинность подписи переводчика (если не владеет).
+//     Номер статьи сверен по действующей редакции закона (структура глав
+//     совпадает с найденной в базе cbd.minjust.gov.kg — после ст. 83-86 об
+//     электронной подписи), НО закон менялся (например, закон КР №171 от
+//     30 июля 2025 г. вносил правки) — при появлении расхождений с реальной
+//     практикой нотариусов КР сверить ещё раз и поправить здесь.
+//  2) размеченное пустое место для удостоверительной надписи и печати
+//     нотариуса — САМ текст удостоверительной надписи мы не генерируем: это
+//     собственное нотариальное действие нотариуса (со своим реестровым
+//     номером и формулировкой по форме Минюста КР), подделывать или
+//     предугадывать его нельзя. Мы только оставляем видимое размеченное
+//     место (рамка на всю ширину) — как это принято при оформлении документов
+//     под нотариальное заверение в КР.
+export function certificationBlocks({ translatorName, sourceLanguage } = {}, targetLanguage) {
+  const name = String(translatorName || '').trim();
+  if (!name) return [];
+  const sourceLabel = LANGUAGES[sourceLanguage] || sourceLanguage || '—';
+  const targetLabel = LANGUAGES[targetLanguage] || targetLanguage || '—';
+  const today = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
+  return [
+    { heading: 'Удостоверение переводчика' },
+    { text: `Язык оригинала: ${sourceLabel}. Язык перевода: ${targetLabel}.` },
+    { text: `Переводчик: ${name}` },
+    { text: `Дата: ${today}` },
+    { text: 'Подпись переводчика: _______________________' },
+    { text: 'Основание: статья 87 Закона Кыргызской Республики «О нотариате» (свидетельствование верности перевода).' },
+    { heading: 'Место для удостоверительной надписи и печати нотариуса' },
+    { table: [['\n\n\n\n']], borderless: false }
+  ];
+}
 
 export function documentBlocks(doc) {
   const blocks = [];
@@ -91,17 +141,18 @@ function buildBlocks(original,translation,paired) {
   return paired ? pairedLayoutBlocks(original,translation) : layoutBlocks(translation);
 }
 const txtCell = c => (c && c.__bi) ? `${c.a} → ${c.b}` : String(c);
-export function buildTranslationTxt(original,translation,paired) {
+export function buildTranslationTxt(original,translation,paired,certification) {
   const title = paired ? original.name : (translation.template === 'apostille' ? 'APOSTILLE' : translation.name);
-  return `${title}\n\n`+buildBlocks(original,translation,paired).map(b=>(b.subtitle ? b.subtitle+'\n' : '')+(b.table?b.table.map(row=>row.map(txtCell).join('\t')).join('\n'):(b.heading||b.text))).join('\n');
+  const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
+  return `${title}\n\n`+blocks.map(b=>(b.subtitle ? b.subtitle+'\n' : '')+(b.table?b.table.map(row=>row.map(txtCell).join('\t')).join('\n'):(b.heading||b.text))).join('\n');
 }
 export function downloadBlob(blob,name) {
   const url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
 function safeName(name) {return name.replace(/[\\/:*?"<>|\u0000-\u001F]/g,'_').slice(0,100)||'document';}
-export function exportTxt(original,translation,paired) {
-  downloadBlob(new Blob([buildTranslationTxt(original,translation,paired)],{type:'text/plain;charset=utf-8'}),safeName(original.name)+'-translation.txt');
+export function exportTxt(original,translation,paired,certification) {
+  downloadBlob(new Blob([buildTranslationTxt(original,translation,paired,certification)],{type:'text/plain;charset=utf-8'}),safeName(original.name)+'-translation.txt');
 }
 const paragraph = (text,heading=false) => '<w:p><w:pPr><w:spacing w:before="'+(heading?'180':'0')+'" w:after="80" w:line="260" w:lineRule="auto"/><w:widowControl/>'+(heading?'<w:keepNext/>':'')+'</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:eastAsia="SimSun"/><w:sz w:val="'+(heading?'24':'22')+'"/>'+(heading?'<w:b/>':'')+'</w:rPr><w:t xml:space="preserve">'+escapeXml(text).replace(/\r?\n/g,'</w:t><w:br/><w:t xml:space="preserve">')+'</w:t></w:r></w:p>';
 // A bilingual cell renders as two stacked paragraphs in the same table cell:
@@ -121,43 +172,45 @@ const table = (rows, widths, options = {}) => {
   const body = rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row.map((cell,index)=>'<w:tc><w:tcPr>'+(widths ? `<w:tcW w:w="${widths[index]}" w:type="dxa"/>` : '<w:tcW w:w="0" w:type="auto"/>')+'<w:vAlign w:val="center"/></w:tcPr>'+(options.apostille ? alignedParagraph(cell, false, index === 1) : cellXml(cell))+'</w:tc>').join('')+'</w:tr>').join('');
   return '<w:tbl><w:tblPr>'+properties+'<w:tblBorders>'+borders+'</w:tblBorders><w:tblCellMar><w:top w:w="100" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>'+grid+header+body+'</w:tbl>';
 };
-export function buildDocumentXml(original,translation,paired) {
+export function buildDocumentXml(original,translation,paired,certification) {
   const title = paired ? original.name : (translation.template === 'apostille' ? 'APOSTILLE' : translation.name);
   let body=!paired && translation.template === 'apostille' ? '' : paragraph(title,true);
-  for (const b of buildBlocks(original,translation,paired)) body+=b.table?table(b.table,b.widths,b):paragraph(b.heading||b.text,!!b.heading);
+  const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
+  for (const b of blocks) body+=b.table?table(b.table,b.widths,b):paragraph(b.heading||b.text,!!b.heading);
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
 }
-export async function exportDocx(original,translation,paired) {
+export async function exportDocx(original,translation,paired,certification) {
   if (!globalThis.JSZip) throw new Error('Модуль DOCX не загрузился. Обновите страницу.');
   const zip=new globalThis.JSZip();
   zip.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
   zip.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
-  zip.file('word/document.xml',buildDocumentXml(original,translation,paired));
+  zip.file('word/document.xml',buildDocumentXml(original,translation,paired,certification));
   downloadBlob(await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}),safeName(original.name)+'-translation.docx');
 }
 const cellHtml = cell => (cell && cell.__bi)
   ? escapeXml(cell.a)+'<br><span class="tr">→ '+escapeXml(cell.b)+'</span>'
   : escapeXml(cell);
-export function buildTranslationHtmlBody(original, translation, paired) {
+export function buildTranslationHtmlBody(original, translation, paired, certification) {
   const title = !paired && translation.template === 'apostille' ? '' : '<h1>'+escapeXml(original.name)+'</h1>';
-  return title+buildBlocks(original,translation,paired).map(b => {
+  const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
+  return title+blocks.map(b => {
     if (!b.table) return b.heading ? '<h3>'+escapeXml(b.heading)+'</h3>' : '<p>'+escapeXml(b.text)+'</p>';
     const header = b.title ? '<tr><td colspan="2" style="text-align:center;font-size:16pt;font-weight:bold">'+escapeXml(b.title)+'<br>'+escapeXml(b.subtitle)+'</td></tr>' : '';
     const cols = b.widths ? '<colgroup>'+b.widths.map(w=>`<col style="width:${w/9638*100}%">`).join('')+'</colgroup>' : '';
     return (b.apostille ? '<table style="width:100%;border-collapse:collapse;table-layout:fixed">' : '<table>')+cols+header+b.table.map(row=>'<tr>'+row.map((cell,i)=>'<td style="border:'+(b.borderless?'0':'1px solid #111')+';padding:7px;vertical-align:middle;white-space:pre-wrap;overflow-wrap:anywhere;text-align:'+(b.apostille && i === 1?'center':'left')+'">'+cellHtml(cell)+'</td>').join('')+'</tr>').join('')+'</table>';
   }).join('');
 }
-export function buildPrintHtml(original,translation,paired) {
-  return '<!doctype html><html lang="'+escapeXml(translation.language || 'ru')+'"><meta charset="utf-8"><title>Translation</title><style>body{font:11pt Arial,sans-serif;line-height:1.3;margin:24px;color:#111}p{white-space:pre-wrap;overflow-wrap:anywhere;margin:6pt 0}h1{font-size:18pt}h3{font-size:11pt;margin:14pt 0 6pt}table{width:100%;border-collapse:collapse;table-layout:fixed}td{border:1px solid #111;padding:7px}.tr{color:#555;font-style:italic}tr{break-inside:avoid}@page{size:A4;margin:18mm}</style>'+buildTranslationHtmlBody(original,translation,paired)+'</html>';
+export function buildPrintHtml(original,translation,paired,certification) {
+  return '<!doctype html><html lang="'+escapeXml(translation.language || 'ru')+'"><meta charset="utf-8"><title>Translation</title><style>body{font:11pt Arial,sans-serif;line-height:1.3;margin:24px;color:#111}p{white-space:pre-wrap;overflow-wrap:anywhere;margin:6pt 0}h1{font-size:18pt}h3{font-size:11pt;margin:14pt 0 6pt}table{width:100%;border-collapse:collapse;table-layout:fixed}td{border:1px solid #111;padding:7px}.tr{color:#555;font-style:italic}tr{break-inside:avoid}@page{size:A4;margin:18mm}</style>'+buildTranslationHtmlBody(original,translation,paired,certification)+'</html>';
 }
-export function printTranslation(original,translation,paired) {
+export function printTranslation(original,translation,paired,certification) {
   const win=window.open('','_blank');
   if(!win)throw new Error('Разрешите открытие окна печати.');
-  win.opener=null;win.document.write(buildPrintHtml(original,translation,paired));win.document.close();
+  win.opener=null;win.document.write(buildPrintHtml(original,translation,paired,certification));win.document.close();
   const button=win.document.createElement('button');button.textContent='Печать / сохранить PDF';button.onclick=()=>win.print();win.document.body.prepend(button);
 }
 
-export async function downloadTranslationPdf(translation) {
+export async function downloadTranslationPdf(translation,certification) {
   if (translation.template === 'apostille') validateApostille(translation.elements, translation.language, true);
   if (!globalThis.html2canvas || !globalThis.jspdf?.jsPDF) {
     throw new Error('Модуль PDF не загрузился. Обновите страницу и повторите попытку.');
@@ -165,7 +218,7 @@ export async function downloadTranslationPdf(translation) {
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed;left:-9999px;top:0;width:720px;padding:44px;background:#fff;color:#111;font:16px Arial,sans-serif;line-height:1.35;';
   if (translation.template === 'apostille') {
-    container.innerHTML = buildTranslationHtmlBody(translation, translation, false);
+    container.innerHTML = buildTranslationHtmlBody(translation, translation, false, certification);
   } else {
     const title = document.createElement('h1');
     title.textContent = translation.name;
@@ -183,6 +236,13 @@ export async function downloadTranslationPdf(translation) {
       tableEl.append(row);
     });
     container.append(tableEl);
+    const footer = document.createElement('div');
+    footer.innerHTML = certificationBlocks(certification, translation.language)
+      .map(b => b.heading ? `<h3 style="font-size:14px;margin:18px 0 6px">${escapeXml(b.heading)}</h3>`
+        : b.table ? `<table style="width:100%;border-collapse:collapse;margin:4px 0"><tr><td style="border:1px solid #777;padding:10px;min-height:70px;white-space:pre-wrap">${b.table.map(row => row.map(escapeXml).join('')).join('')}</td></tr></table>`
+        : `<p style="margin:4px 0">${escapeXml(b.text)}</p>`)
+      .join('');
+    container.append(footer);
   }
   document.body.append(container);
   try {

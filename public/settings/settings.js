@@ -575,7 +575,7 @@ function collectBusinessRule(draft) {
 }
 
 // Tabs keep their DOM mounted, so switching sections preserves unsaved inputs.
-const settingsTabIds = ['recognition', 'fields', 'rules', 'appearance', 'password'];
+const settingsTabIds = ['recognition', 'fields', 'rules', 'appearance', 'password', 'users'];
 function activateSettingsTab(id, focus = false) {
   settingsTabIds.forEach(key => {
     const button = document.getElementById(`tab-${key}`);
@@ -585,7 +585,7 @@ function activateSettingsTab(id, focus = false) {
     document.getElementById(`panel-${key}`).hidden = !selected;
     if (selected && focus) button.focus();
   });
-  document.getElementById('settingsSaveBar').hidden = id === 'password';
+  document.getElementById('settingsSaveBar').hidden = id === 'password' || id === 'users';
 }
 settingsTabIds.forEach((id, index) => {
   const button = document.getElementById(`tab-${id}`);
@@ -734,6 +734,152 @@ changePasswordBtn.addEventListener('click', async () => {
   }
 });
 
+// --- Пользователи (Ethan, 17 сен 2026: "внутри клиента можно создать
+// пользователей с разными ролями") — отдельная вкладка, свой набор
+// запросов к /api/client-users. Загружается лениво при первом открытии
+// вкладки — большинство владельцев её вообще не откроют.
+const usersTableBody = document.getElementById('usersTableBody');
+const usersError = document.getElementById('usersError');
+const newUserUsername = document.getElementById('newUserUsername');
+const newUserPassword = document.getElementById('newUserPassword');
+const newUserRole = document.getElementById('newUserRole');
+const newUserTranslatorNameGroup = document.getElementById('newUserTranslatorNameGroup');
+const newUserTranslatorName = document.getElementById('newUserTranslatorName');
+const addUserBtn = document.getElementById('addUserBtn');
+const addUserStatus = document.getElementById('addUserStatus');
+let usersLoaded = false;
+
+function showUsersError(message) {
+  usersError.textContent = message || '';
+  usersError.style.display = message ? 'block' : 'none';
+}
+
+function makeUserRow(user) {
+  const row = document.createElement('tr');
+
+  const loginCell = document.createElement('td');
+  loginCell.textContent = user.username;
+  row.append(loginCell);
+
+  const roleCell = document.createElement('td');
+  const roleSelect = document.createElement('select');
+  roleSelect.className = 'admin-input';
+  [['translator', 'Переводчик'], ['owner', 'Владелец']].forEach(([value, label]) => {
+    const o = document.createElement('option'); o.value = value; o.textContent = label; o.selected = user.role === value; roleSelect.append(o);
+  });
+  roleCell.append(roleSelect);
+  row.append(roleCell);
+
+  const nameCell = document.createElement('td');
+  const nameInput = document.createElement('input');
+  nameInput.className = 'admin-input'; nameInput.type = 'text'; nameInput.value = user.translatorName || '';
+  nameCell.append(nameInput);
+  row.append(nameCell);
+
+  const actionsCell = document.createElement('td');
+  const saveBtn = document.createElement('button'); saveBtn.type = 'button'; saveBtn.className = 'btn-secondary'; saveBtn.textContent = 'Сохранить';
+  const deleteBtn = document.createElement('button'); deleteBtn.type = 'button'; deleteBtn.className = 'btn-secondary'; deleteBtn.textContent = 'Удалить'; deleteBtn.style.marginLeft = '6px';
+  const status = document.createElement('span'); status.className = 'admin-note'; status.style.marginLeft = '8px';
+  saveBtn.addEventListener('click', async () => {
+    showUsersError('');
+    saveBtn.disabled = true; status.textContent = 'Сохраняем…';
+    try {
+      const res = await fetch(`/api/client-users?slug=${encodeURIComponent(slug)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-client-token': getToken() },
+        body: JSON.stringify({ username: user.username, role: roleSelect.value, translatorName: nameInput.value.trim() })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { status.textContent = ''; showUsersError(body.error || 'Не удалось сохранить'); return; }
+      user.role = body.role; user.translatorName = body.translatorName;
+      status.textContent = 'Сохранено ✓';
+      setTimeout(() => { status.textContent = ''; }, 2000);
+    } catch (_) {
+      status.textContent = ''; showUsersError('Не удалось связаться с сервером');
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+  deleteBtn.addEventListener('click', async () => {
+    if (!window.confirm(`Удалить пользователя «${user.username}»?`)) return;
+    showUsersError('');
+    deleteBtn.disabled = true;
+    try {
+      const res = await fetch(`/api/client-users?slug=${encodeURIComponent(slug)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-client-token': getToken() },
+        body: JSON.stringify({ username: user.username })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { showUsersError(body.error || 'Не удалось удалить'); deleteBtn.disabled = false; return; }
+      row.remove();
+    } catch (_) {
+      showUsersError('Не удалось связаться с сервером'); deleteBtn.disabled = false;
+    }
+  });
+  actionsCell.append(saveBtn, deleteBtn, status);
+  row.append(actionsCell);
+  return row;
+}
+
+async function loadUsers() {
+  showUsersError('');
+  try {
+    const res = await fetch(`/api/client-users?slug=${encodeURIComponent(slug)}`, { headers: { 'x-client-token': getToken() } });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { showUsersError(body.error || 'Не удалось загрузить список'); return; }
+    usersTableBody.innerHTML = '';
+    (body.users || []).forEach(user => usersTableBody.append(makeUserRow(user)));
+  } catch (_) {
+    showUsersError('Не удалось связаться с сервером');
+  }
+}
+
+document.getElementById('tab-users').addEventListener('click', () => {
+  if (usersLoaded) return;
+  usersLoaded = true;
+  loadUsers();
+});
+
+newUserRole.addEventListener('change', () => {
+  newUserTranslatorNameGroup.style.display = newUserRole.value === 'translator' ? '' : 'none';
+});
+
+addUserBtn.addEventListener('click', async () => {
+  showUsersError('');
+  const username = newUserUsername.value.trim();
+  const password = newUserPassword.value;
+  if (!username || !password) {
+    addUserStatus.textContent = '';
+    showUsersError('Укажите логин и пароль');
+    return;
+  }
+  addUserBtn.disabled = true;
+  addUserStatus.textContent = 'Добавляем…';
+  try {
+    const res = await fetch(`/api/client-users?slug=${encodeURIComponent(slug)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-client-token': getToken() },
+      body: JSON.stringify({ username, password, role: newUserRole.value, translatorName: newUserTranslatorName.value.trim() || undefined })
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      addUserStatus.textContent = '';
+      showUsersError(body.error || 'Не удалось добавить пользователя');
+      return;
+    }
+    usersTableBody.append(makeUserRow({ username: body.username, role: body.role, translatorName: body.translatorName }));
+    newUserUsername.value = ''; newUserPassword.value = ''; newUserTranslatorName.value = '';
+    addUserStatus.textContent = 'Добавлено ✓';
+    setTimeout(() => { addUserStatus.textContent = ''; }, 2000);
+  } catch (_) {
+    addUserStatus.textContent = '';
+    showUsersError('Не удалось связаться с сервером');
+  } finally {
+    addUserBtn.disabled = false;
+  }
+});
+
 // --- Вход и первичная загрузка ---
 
 function returnToClient() {
@@ -753,9 +899,10 @@ async function loadAndShow(token) {
   }
   mainSection.style.display = 'none';
   if (status === 403) {
-    // Пароль для этого клиента вообще не задан — самообслуживание недоступно
-    // (см. lib/clientAuth.js:requireClientSettingsAuth — сознательно строже
-    // обычного гейта сайта).
+    // Пароль вообще не задан ИЛИ роль не 'owner' (переводчик пытается
+    // открыть настройки, см. api/client-settings.js) — текст в обоих
+    // случаях приходит от сервера, см. lib/clientAuth.js.
+    document.getElementById('noPasswordText').textContent = body.error || 'Настройки недоступны.';
     noPasswordSection.style.display = 'block';
     return;
   }

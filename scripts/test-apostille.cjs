@@ -55,6 +55,54 @@ test('PDF rejects invalid numbering before creating a canvas', async () => {
   const doc = document(); doc.elements[10].number = '11';
   await assert.rejects(downloadTranslationPdf(doc), /apostille|\u0430\u043f\u043e\u0441\u0442\u0438\u043b/i);
 });
+test('certification footer (translator name/language pair/signature line, legal basis, notary stamp box) is absent by default and appears across all export formats when a translator name is given', async () => {
+  const { buildTranslationTxt, buildDocumentXml, buildTranslationHtmlBody, certificationBlocks } = await import('../public/js/translation/export.mjs');
+  const doc = document();
+  assert.deepEqual(certificationBlocks(undefined, 'zh'), [], 'no translator name → no footer at all');
+  assert.deepEqual(certificationBlocks({ translatorName: '  ' }, 'zh'), [], 'whitespace-only name is treated as absent');
+  for (const render of [buildTranslationTxt, buildDocumentXml, buildTranslationHtmlBody]) {
+    const withoutFooter = render(doc, doc, false);
+    assert.doesNotMatch(withoutFooter, /Удостоверение переводчика/);
+    const withFooter = render(doc, doc, false, { translatorName: 'Иванова А.Б.', sourceLanguage: 'ky' });
+    assert.match(withFooter, /Удостоверение переводчика/);
+    assert.match(withFooter, /Иванова А\.Б\./);
+    assert.match(withFooter, /Кыргызский/); // язык оригинала
+    assert.match(withFooter, /Китайский/); // язык перевода (doc.language === 'zh')
+    assert.match(withFooter, /Подпись/);
+    // Печатный формат под стандарт КР: ссылка на статью закона о нотариате
+    // + размеченное (но не сфабрикованное) место для печати нотариуса.
+    assert.match(withFooter, /статья 87 Закона Кыргызской Республики.*«О нотариате»/);
+    assert.match(withFooter, /Место для удостоверительной надписи и печати нотариуса/);
+  }
+});
+
+test('buildExportDocs threads doc.result.paragraphs through to original/translation.paragraphs, in order, and the paired bilingual export renders them side by side', async () => {
+  const { buildExportDocs } = await import('../public/js/translationDocs/export-model.mjs');
+  const { buildTranslationTxt, pairedLayoutBlocks } = await import('../public/js/translation/export.mjs');
+  const doc = {
+    file: { name: 'contract.png' },
+    result: {
+      doc_type: 'Другое',
+      fields: [{ label: 'Номер', value: '', targetLabel: 'Номер', translated: '' }],
+      paragraphs: [
+        { text: 'Первый абзац договора.', translated: 'First paragraph of the contract.' },
+        { text: 'Второй абзац, со ссылкой на приложение.', translated: 'Second paragraph, referencing the annex.' }
+      ]
+    }
+  };
+  const { original, translation } = buildExportDocs(doc, 'en');
+  assert.deepEqual(original.paragraphs, [{ text: 'Первый абзац договора.' }, { text: 'Второй абзац, со ссылкой на приложение.' }]);
+  assert.deepEqual(translation.paragraphs, [{ text: 'First paragraph of the contract.' }, { text: 'Second paragraph, referencing the annex.' }]);
+  const blocks = pairedLayoutBlocks(original, translation);
+  const textBlock = blocks.find(b => b.table && b.table[0][0] === 'Оригинал');
+  assert.equal(textBlock.table.length, 3); // header + 2 paragraphs, same order, nothing dropped
+  assert.deepEqual(textBlock.table[1], ['Первый абзац договора.', 'First paragraph of the contract.']);
+  assert.deepEqual(textBlock.table[2], ['Второй абзац, со ссылкой на приложение.', 'Second paragraph, referencing the annex.']);
+  const txt = buildTranslationTxt(original, translation, true);
+  assert.ok(txt.includes('Первый абзац договора.'));
+  assert.ok(txt.includes('First paragraph of the contract.'));
+});
+
 test('signature marker localization preserves every character of the name', async () => {
   const { apostilleSignature, validateApostille } = await import('../public/js/translation/apostille.mjs');
   const doc = document();

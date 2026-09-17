@@ -43,11 +43,21 @@ test('A03 protection: analytics failures never log credentials', async () => {
   assert.ok(!messages.some(message => message.includes('FAKE_AUDIT_API_KEY')));
 });
 
-test('A04 protection: password replacement invalidates existing tokens', () => {
-  const auth = cjs('lib/clientAuth.js', { Buffer, process: { env: { TAMGA_CLIENT_AUTH_SECRET: 'fake-audit-only-secret' } } });
+// Стаб lib/clientUsers.js — реальный `require` из cjs() резолвит относительные
+// пути от scripts/, не от lib/, поэтому './clientUsers' нужно подменять явно.
+// hasClientUsers всегда false здесь — эти тесты проверяют ЛЕГАСИ-путь
+// (клиент без отдельных пользователей, единый пароль), тот же, что был до
+// 17 сен 2026.
+const noClientUsers = { hasClientUsers: async () => false, getClientUser: async () => null };
+
+test('A04 protection: password replacement invalidates existing tokens', async () => {
+  const auth = cjs('lib/clientAuth.js', {
+    Buffer, process: { env: { TAMGA_CLIENT_AUTH_SECRET: 'fake-audit-only-secret' } },
+    require: name => name === './clientUsers' ? noClientUsers : require(name)
+  });
   const token = auth.signToken('synthetic-client', auth.hashPassword('old-password'));
   const changedPasswordHash = auth.hashPassword('new-synthetic-password');
-  assert.equal(auth.requireClientSettingsAuth({ clientSlug: 'synthetic-client', passwordHash: changedPasswordHash, token }).ok, false);
+  assert.equal((await auth.requireClientSettingsAuth({ clientSlug: 'synthetic-client', passwordHash: changedPasswordHash, token })).ok, false);
   assert.equal(auth.verifyToken(token, 'another-client'), false);
 });
 
@@ -107,7 +117,10 @@ test('A07 Gemini budget fails closed and distinguishes exhaustion', async () => 
 });
 
 test('A04 current password token works and extra token components fail', () => {
-  const auth = cjs('lib/clientAuth.js', { Buffer, process: { env: { TAMGA_CLIENT_AUTH_SECRET: 'test-secret' } } });
+  const auth = cjs('lib/clientAuth.js', {
+    Buffer, process: { env: { TAMGA_CLIENT_AUTH_SECRET: 'test-secret' } },
+    require: name => name === './clientUsers' ? noClientUsers : require(name)
+  });
   const hash = auth.hashPassword('synthetic-password');
   const token = auth.signToken('client', hash);
   assert.equal(auth.verifyToken(token, 'client', hash), true);
