@@ -49,7 +49,7 @@ function resolveClientSlug() {
   return (params.get('client') || '').trim() || null;
 }
 
-async export async function refreshClientToken(slug, token) {
+export async function refreshClientToken(slug, token) {
   const lastRefresh = lastTokenRefresh.get(slug) || 0;
   if (Date.now() - lastRefresh < TOKEN_REFRESH_INTERVAL_MS) return null;
   lastTokenRefresh.set(slug, Date.now());
