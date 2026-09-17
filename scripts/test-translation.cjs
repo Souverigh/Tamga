@@ -211,3 +211,48 @@ test('names and place names are transliterated per notarial-translation rules, n
   assert.equal(toKyrgyz.fields[0].value,'Иванов Иван');
 });
 
+test('translateSegments: an exact legal-phrase glossary match is substituted directly, Gemini is never called', async () => {
+  let geminiCalled = 0;
+  const { translateSegments } = loadCommonJs('lib/translation.js', {
+    './geminiClient': { callGemini: async () => { geminiCalled++; return { result: { segments: [] }, usage: null }; }, GEMINI_MODEL: 'test' },
+    './usageAnalytics': { recordUsageEvent: async () => ({ ok: true }) },
+    './legalPhrases': { lookupLegalPhrases: async () => ({
+      exact: { 'Нотариально удостоверено': { translatedValue: 'Нотариалдык жактан күбөлөндүрүлгөн', needsReview: true } },
+      hints: []
+    }) }
+  });
+  const result = await translateSegments({ language: 'ky', segments: [{ id: 'a', text: 'Нотариально удостоверено' }] }, 'client-a');
+  assert.equal(geminiCalled, 0);
+  assert.equal(result.usage, null);
+  // JSON round-trip: objects built inside the vm-loaded module belong to a
+  // different realm, so deepEqual would fail on prototype identity alone.
+  assert.deepEqual(JSON.parse(JSON.stringify(result.segments)), [{ id: 'a', text: 'Нотариалдык жактан күбөлөндүрүлгөн', fromLegalPhrase: true, needsReview: true }]);
+});
+
+test('translateSegments: partial glossary hints reach the Gemini instruction, and only unmatched segments are sent', async () => {
+  let sentInstruction, sentSource;
+  const { translateSegments } = loadCommonJs('lib/translation.js', {
+    './geminiClient': { callGemini: async (args) => {
+      sentInstruction = args.instruction; sentSource = JSON.parse(args.sourceText);
+      return { result: { segments: sentSource.map(s => ({ id: s.id, text: 'ky:' + s.text })) }, usage: { totalTokenCount: 5 } };
+    }, GEMINI_MODEL: 'test' },
+    './usageAnalytics': { recordUsageEvent: async () => ({ ok: true }) },
+    './legalPhrases': { lookupLegalPhrases: async () => ({
+      exact: { 'Нотариально удостоверено': { translatedValue: 'Нотариалдык жактан күбөлөндүрүлгөн', needsReview: false } },
+      hints: [{ source: 'Вступает в силу с момента подписания', translated: 'Кол коюлган күндөн тартып күчүнө кирет', needsReview: true }]
+    }) }
+  });
+  const result = await translateSegments({ language: 'ky', segments: [
+    { id: 'a', text: 'Нотариально удостоверено' },
+    { id: 'b', text: 'Договор вступает в силу с момента подписания сторонами.' }
+  ] }, 'client-a');
+  // Only the unmatched segment reaches Gemini — the exact match is never sent.
+  assert.deepEqual(sentSource, [{ id: 'b', text: 'Договор вступает в силу с момента подписания сторонами.' }]);
+  assert.ok(sentInstruction.includes('Вступает в силу с момента подписания'));
+  assert.ok(sentInstruction.includes('Кол коюлган күндөн тартып күчүнө кирет'));
+  assert.deepEqual(JSON.parse(JSON.stringify(result.segments)), [
+    { id: 'a', text: 'Нотариалдык жактан күбөлөндүрүлгөн', fromLegalPhrase: true, needsReview: false },
+    { id: 'b', text: 'ky:Договор вступает в силу с момента подписания сторонами.' }
+  ]);
+});
+
