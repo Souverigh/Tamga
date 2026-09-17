@@ -13,6 +13,26 @@ export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;
 // латиницы/кириллицы то и дело меняется склонение) — вместо конструирования
 // грамматически верной фразы на 8 языков просто указываем два языка отдельными
 // строками, это однозначно и не требует словаря склонений.
+//
+// Ethan, 17 сен 2026: "сделать блок печатным по стандарту КР (место под
+// печать нотариуса, ссылка на конкретную статью закона о нотариате)".
+// Добавлено:
+//  1) ссылка на статью 87 Закона Кыргызской Республики «О нотариате»
+//     («Свидетельствование верности перевода») — статья, по которой нотариус
+//     либо сам свидетельствует верность перевода (если владеет языком), либо
+//     свидетельствует подлинность подписи переводчика (если не владеет).
+//     Номер статьи сверен по действующей редакции закона (структура глав
+//     совпадает с найденной в базе cbd.minjust.gov.kg — после ст. 83-86 об
+//     электронной подписи), НО закон менялся (например, закон КР №171 от
+//     30 июля 2025 г. вносил правки) — при появлении расхождений с реальной
+//     практикой нотариусов КР сверить ещё раз и поправить здесь.
+//  2) размеченное пустое место для удостоверительной надписи и печати
+//     нотариуса — САМ текст удостоверительной надписи мы не генерируем: это
+//     собственное нотариальное действие нотариуса (со своим реестровым
+//     номером и формулировкой по форме Минюста КР), подделывать или
+//     предугадывать его нельзя. Мы только оставляем видимое размеченное
+//     место (рамка на всю ширину) — как это принято при оформлении документов
+//     под нотариальное заверение в КР.
 export function certificationBlocks({ translatorName, sourceLanguage } = {}, targetLanguage) {
   const name = String(translatorName || '').trim();
   if (!name) return [];
@@ -24,7 +44,10 @@ export function certificationBlocks({ translatorName, sourceLanguage } = {}, tar
     { text: `Язык оригинала: ${sourceLabel}. Язык перевода: ${targetLabel}.` },
     { text: `Переводчик: ${name}` },
     { text: `Дата: ${today}` },
-    { text: 'Подпись: _______________________' }
+    { text: 'Подпись переводчика: _______________________' },
+    { text: 'Основание: статья 87 Закона Кыргызской Республики «О нотариате» (свидетельствование верности перевода).' },
+    { heading: 'Место для удостоверительной надписи и печати нотариуса' },
+    { table: [['\n\n\n\n']], borderless: false }
   ];
 }
 
@@ -215,7 +238,9 @@ export async function downloadTranslationPdf(translation,certification) {
     container.append(tableEl);
     const footer = document.createElement('div');
     footer.innerHTML = certificationBlocks(certification, translation.language)
-      .map(b => b.heading ? `<h3 style="font-size:14px;margin:18px 0 6px">${escapeXml(b.heading)}</h3>` : `<p style="margin:4px 0">${escapeXml(b.text)}</p>`)
+      .map(b => b.heading ? `<h3 style="font-size:14px;margin:18px 0 6px">${escapeXml(b.heading)}</h3>`
+        : b.table ? `<table style="width:100%;border-collapse:collapse;margin:4px 0"><tr><td style="border:1px solid #777;padding:10px;min-height:70px;white-space:pre-wrap">${b.table.map(row => row.map(escapeXml).join('')).join('')}</td></tr></table>`
+        : `<p style="margin:4px 0">${escapeXml(b.text)}</p>`)
       .join('');
     container.append(footer);
   }

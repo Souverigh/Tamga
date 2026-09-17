@@ -140,18 +140,25 @@ export async function initTranslationDocs() {
   // Для owner/легаси-клиентов без отдельных пользователей — как раньше,
   // общий на клиента formatting.translatorName, который можно поправить
   // прямо здесь.
+  // Ethan, 17 сен 2026: "включать по умолчанию, а не по чекбоксу" — чекбокс
+  // теперь ВКЛЮЧЁН с самого начала (не требует явного действия клиента).
+  // Блок в экспорте всё равно не появится без заполненного ФИО переводчика
+  // (см. certificationBlocks выше) — включённый по умолчанию чекбокс просто
+  // означает "добавь блок, как только у тебя будет ФИО", а не "добавь пустой
+  // блок". Клиент по-прежнему может снять галочку, если блок не нужен вовсе.
   const certDetails = el('details', null, 'translation-info');
+  certDetails.open = true;
   certDetails.style.marginBottom = '12px';
   const certSummary = el('summary', 'Формулировка для нотариального заверения');
   certDetails.append(certSummary);
   const certBody = el('div'); certBody.style.marginTop = '10px';
   const certToggleRow = el('label'); certToggleRow.style.display = 'flex'; certToggleRow.style.alignItems = 'center'; certToggleRow.style.gap = '8px';
-  const certToggle = document.createElement('input'); certToggle.type = 'checkbox';
-  certToggleRow.append(certToggle, el('span', 'Добавлять в конец экспорта: язык оригинала/перевода, ФИО переводчика, место для подписи — документ можно сразу нести к нотариусу.'));
+  const certToggle = document.createElement('input'); certToggle.type = 'checkbox'; certToggle.checked = true;
+  certToggleRow.append(certToggle, el('span', 'Добавлять в конец экспорта: язык оригинала/перевода, ФИО переводчика, место для подписи, ссылку на статью закона о нотариате и место под печать нотариуса — документ можно сразу нести к нотариусу.'));
   certBody.append(certToggleRow);
 
   const certFieldsRow = el('div', null, 'translation-setup-row');
-  certFieldsRow.style.marginTop = '10px'; certFieldsRow.style.display = 'none';
+  certFieldsRow.style.marginTop = '10px'; certFieldsRow.style.display = '';
   const sourceLangField = el('div', null, 'translation-field');
   sourceLangField.append(el('span', 'Язык оригинала', 'translation-field-label'));
   const sourceLangSelect = el('select');

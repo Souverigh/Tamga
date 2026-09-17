@@ -55,7 +55,7 @@ test('PDF rejects invalid numbering before creating a canvas', async () => {
   const doc = document(); doc.elements[10].number = '11';
   await assert.rejects(downloadTranslationPdf(doc), /apostille|\u0430\u043f\u043e\u0441\u0442\u0438\u043b/i);
 });
-test('certification footer (translator name/language pair/signature line) is absent by default and appears across all export formats when a translator name is given', async () => {
+test('certification footer (translator name/language pair/signature line, legal basis, notary stamp box) is absent by default and appears across all export formats when a translator name is given', async () => {
   const { buildTranslationTxt, buildDocumentXml, buildTranslationHtmlBody, certificationBlocks } = await import('../public/js/translation/export.mjs');
   const doc = document();
   assert.deepEqual(certificationBlocks(undefined, 'zh'), [], 'no translator name → no footer at all');
@@ -69,6 +69,10 @@ test('certification footer (translator name/language pair/signature line) is abs
     assert.match(withFooter, /Кыргызский/); // язык оригинала
     assert.match(withFooter, /Китайский/); // язык перевода (doc.language === 'zh')
     assert.match(withFooter, /Подпись/);
+    // Печатный формат под стандарт КР: ссылка на статью закона о нотариате
+    // + размеченное (но не сфабрикованное) место для печати нотариуса.
+    assert.match(withFooter, /статья 87 Закона Кыргызской Республики.*«О нотариате»/);
+    assert.match(withFooter, /Место для удостоверительной надписи и печати нотариуса/);
   }
 });
 
