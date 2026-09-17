@@ -24,7 +24,7 @@ import { TRANSLATION_STATUSES } from '../translation/field-rules.mjs';
 // public/admin/accounting/ (тот же список файлов, что уже показал, что
 // хорошо переиспользуется между панелями — ничего в них не знает про
 // бухгалтерию конкретно, только про форму {file, status, result, error}).
-import { getClientSlug, getClientToken } from '../branding.js';
+import { getClientSlug, getClientToken, getClientBranding } from '../branding.js';
 import { registerTab } from '../contentTabs.js';
 import { renderFileList, renderPreview } from '../../admin/accounting/render.js';
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
@@ -132,9 +132,14 @@ export async function initTranslationDocs() {
   // --- удостоверение переводчика ("под нотариальное заверение", Ethan,
   // 17 сен 2026) — необязательный блок: без ФИО переводчика футер вообще не
   // добавляется в экспорт (см. certificationBlocks в translation/export.mjs).
-  // ФИО хранится в настройках клиента (formatting.translatorName,
-  // /api/client-settings) и подхватывается автоматически при следующем
-  // визите — не нужно вводить его для каждого документа заново.
+  // С 17 сен 2026 (мультипользовательские аккаунты, lib/clientAuth.js): если
+  // залогинен персональный пользователь с ролью 'translator' — его ФИО
+  // берётся из ЕГО СОБСТВЕННОЙ учётной записи (currentUser.translatorName,
+  // см. branding.js) и подставляется сразу, без обращения к
+  // /api/client-settings (туда у переводчика всё равно нет доступа — 403).
+  // Для owner/легаси-клиентов без отдельных пользователей — как раньше,
+  // общий на клиента formatting.translatorName, который можно поправить
+  // прямо здесь.
   const certDetails = el('details', null, 'translation-info');
   certDetails.style.marginBottom = '12px';
   const certSummary = el('summary', 'Формулировка для нотариального заверения');
@@ -165,17 +170,31 @@ export async function initTranslationDocs() {
 
   certToggle.addEventListener('change', () => { certFieldsRow.style.display = certToggle.checked ? '' : 'none'; });
 
-  // Загружаем сохранённое ФИО переводчика один раз при открытии вкладки;
-  // сбой не должен мешать работе панели — поле просто останется пустым.
-  fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, { headers: { 'x-client-token': token } })
-    .then(r => r.ok ? r.json() : null)
-    .then(data => { if (data?.translatorName) { translatorInput.value = data.translatorName; certToggle.checked = true; certFieldsRow.style.display = ''; } })
-    .catch(() => {});
+  const currentUser = getClientBranding()?.currentUser;
+  const isPersonalTranslator = currentUser?.role === 'translator';
+
+  if (isPersonalTranslator && currentUser.translatorName) {
+    translatorInput.value = currentUser.translatorName;
+    certToggle.checked = true;
+    certFieldsRow.style.display = '';
+  } else if (!isPersonalTranslator) {
+    // Загружаем сохранённое общее ФИО переводчика один раз при открытии
+    // вкладки; сбой не должен мешать работе панели — поле просто останется
+    // пустым.
+    fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, { headers: { 'x-client-token': token } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.translatorName) { translatorInput.value = data.translatorName; certToggle.checked = true; certFieldsRow.style.display = ''; } })
+      .catch(() => {});
+  }
 
   // Сохраняем ФИО при уходе с поля (не при каждой букве) — тот же
   // fire-and-forget принцип, что у остальных необязательных настроек здесь.
+  // У персонального переводчика своё ФИО правится в «Пользователи» (только
+  // владельцем) — здесь для него это просто разовая правка для конкретного
+  // экспорта, никуда не сохраняется, чтобы не давать 403 от /api/client-settings.
   let lastSavedTranslatorName = '';
   translatorInput.addEventListener('blur', () => {
+    if (isPersonalTranslator) return;
     const value = translatorInput.value.trim();
     if (value === lastSavedTranslatorName) return;
     lastSavedTranslatorName = value;

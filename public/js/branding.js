@@ -198,8 +198,16 @@ function applyCustomDocTypes(config) {
 
 // Показывает оверлей пароля и ждёт успешного входа — оборачивает обработчики
 // формы в промис, чтобы initBranding мог просто await'нуть результат.
+//
+// Поле логина (17 сен 2026, мультипользовательские аккаунты клиента, см.
+// lib/clientAuth.js) скрыто по умолчанию — большинство клиентов ещё без
+// отдельных пользователей, им нужен только пароль, как раньше. Если сервер
+// отвечает code:'USERNAME_REQUIRED' (у клиента уже есть пользователи, но
+// логин не был передан) — показываем поле логина и просим повторить попытку,
+// не пугая обычным "неверный пароль".
 function showGate(slug) {
   const gate = document.getElementById('clientGate');
+  const usernameInput = document.getElementById('clientGateUsername');
   const input = document.getElementById('clientGatePassword');
   const btn = document.getElementById('clientGateBtn');
   const errorEl = document.getElementById('clientGateError');
@@ -217,17 +225,23 @@ function showGate(slug) {
         const res = await fetch('/api/client-auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientSlug: slug, password })
+          body: JSON.stringify({ clientSlug: slug, password, username: usernameInput.value.trim() || undefined })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.token) {
+          if (data.code === 'USERNAME_REQUIRED' && usernameInput.style.display === 'none') {
+            usernameInput.style.display = '';
+            usernameInput.focus();
+            btn.disabled = false;
+            return;
+          }
           errorEl.textContent = data.error || 'Неверный пароль';
           errorEl.style.display = 'block';
           btn.disabled = false;
           return;
         }
         createIdleSession(TOKEN_KEY_PREFIX + slug).set(data.token);
-        input.value = '';
+        input.value = ''; usernameInput.value = '';
         gate.style.display = 'none';
         resolve(data.token);
       } catch (err) {
@@ -238,6 +252,7 @@ function showGate(slug) {
     }
     btn.addEventListener('click', trySubmit);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') trySubmit(); });
+    usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') trySubmit(); });
   });
 }
 
@@ -285,7 +300,13 @@ export async function initBranding() {
         maxConcurrency: typeof config.maxConcurrency === 'number' ? config.maxConcurrency : null,
         // Настраиваемые бизнес-правила (Ethan, 7 сен 2026) — используются
         // в public/js/ui/results.js:checkBusinessRules, см. комментарий там.
-        businessRules: Array.isArray(config.businessRules) ? config.businessRules : []
+        businessRules: Array.isArray(config.businessRules) ? config.businessRules : [],
+        // Кто залогинен (мультипользовательские аккаунты, 17 сен 2026, см.
+        // lib/clientAuth.js) — role всегда 'owner' для клиентов без отдельных
+        // пользователей (легаси, ничего не меняется). translatorName — только
+        // у роли 'translator', используется панелью перевода для
+        // автоподстановки в удостоверение переводчика без ручного ввода.
+        currentUser: config.currentUser || { username: '', role: 'owner', translatorName: null }
       };
     }
   } catch (err) {
