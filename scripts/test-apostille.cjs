@@ -55,6 +55,23 @@ test('PDF rejects invalid numbering before creating a canvas', async () => {
   const doc = document(); doc.elements[10].number = '11';
   await assert.rejects(downloadTranslationPdf(doc), /apostille|\u0430\u043f\u043e\u0441\u0442\u0438\u043b/i);
 });
+test('certification footer (translator name/language pair/signature line) is absent by default and appears across all export formats when a translator name is given', async () => {
+  const { buildTranslationTxt, buildDocumentXml, buildTranslationHtmlBody, certificationBlocks } = await import('../public/js/translation/export.mjs');
+  const doc = document();
+  assert.deepEqual(certificationBlocks(undefined, 'zh'), [], 'no translator name → no footer at all');
+  assert.deepEqual(certificationBlocks({ translatorName: '  ' }, 'zh'), [], 'whitespace-only name is treated as absent');
+  for (const render of [buildTranslationTxt, buildDocumentXml, buildTranslationHtmlBody]) {
+    const withoutFooter = render(doc, doc, false);
+    assert.doesNotMatch(withoutFooter, /Удостоверение переводчика/);
+    const withFooter = render(doc, doc, false, { translatorName: 'Иванова А.Б.', sourceLanguage: 'ky' });
+    assert.match(withFooter, /Удостоверение переводчика/);
+    assert.match(withFooter, /Иванова А\.Б\./);
+    assert.match(withFooter, /Кыргызский/); // язык оригинала
+    assert.match(withFooter, /Китайский/); // язык перевода (doc.language === 'zh')
+    assert.match(withFooter, /Подпись/);
+  }
+});
+
 test('signature marker localization preserves every character of the name', async () => {
   const { apostilleSignature, validateApostille } = await import('../public/js/translation/apostille.mjs');
   const doc = document();

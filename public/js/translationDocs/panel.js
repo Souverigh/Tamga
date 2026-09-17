@@ -129,6 +129,68 @@ export async function initTranslationDocs() {
   root.append(langRow);
   let selectedLanguage = langSelect.value;
 
+  // --- удостоверение переводчика ("под нотариальное заверение", Ethan,
+  // 17 сен 2026) — необязательный блок: без ФИО переводчика футер вообще не
+  // добавляется в экспорт (см. certificationBlocks в translation/export.mjs).
+  // ФИО хранится в настройках клиента (formatting.translatorName,
+  // /api/client-settings) и подхватывается автоматически при следующем
+  // визите — не нужно вводить его для каждого документа заново.
+  const certDetails = el('details', null, 'translation-info');
+  certDetails.style.marginBottom = '12px';
+  const certSummary = el('summary', 'Формулировка для нотариального заверения');
+  certDetails.append(certSummary);
+  const certBody = el('div'); certBody.style.marginTop = '10px';
+  const certToggleRow = el('label'); certToggleRow.style.display = 'flex'; certToggleRow.style.alignItems = 'center'; certToggleRow.style.gap = '8px';
+  const certToggle = document.createElement('input'); certToggle.type = 'checkbox';
+  certToggleRow.append(certToggle, el('span', 'Добавлять в конец экспорта: язык оригинала/перевода, ФИО переводчика, место для подписи — документ можно сразу нести к нотариусу.'));
+  certBody.append(certToggleRow);
+
+  const certFieldsRow = el('div', null, 'translation-setup-row');
+  certFieldsRow.style.marginTop = '10px'; certFieldsRow.style.display = 'none';
+  const sourceLangField = el('div', null, 'translation-field');
+  sourceLangField.append(el('span', 'Язык оригинала', 'translation-field-label'));
+  const sourceLangSelect = el('select');
+  Object.entries(LANGUAGES).forEach(([value, label]) => { const o = el('option', label); o.value = value; sourceLangSelect.append(o); });
+  sourceLangSelect.value = 'ru';
+  sourceLangField.append(sourceLangSelect);
+  const translatorField = el('div', null, 'translation-field');
+  translatorField.append(el('span', 'ФИО переводчика', 'translation-field-label'));
+  const translatorInput = document.createElement('input');
+  translatorInput.type = 'text'; translatorInput.placeholder = 'Иванова Айгуль Бакытовна';
+  translatorField.append(translatorInput);
+  certFieldsRow.append(sourceLangField, translatorField);
+  certBody.append(certFieldsRow);
+  certDetails.append(certBody);
+  root.append(certDetails);
+
+  certToggle.addEventListener('change', () => { certFieldsRow.style.display = certToggle.checked ? '' : 'none'; });
+
+  // Загружаем сохранённое ФИО переводчика один раз при открытии вкладки;
+  // сбой не должен мешать работе панели — поле просто останется пустым.
+  fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, { headers: { 'x-client-token': token } })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => { if (data?.translatorName) { translatorInput.value = data.translatorName; certToggle.checked = true; certFieldsRow.style.display = ''; } })
+    .catch(() => {});
+
+  // Сохраняем ФИО при уходе с поля (не при каждой букве) — тот же
+  // fire-and-forget принцип, что у остальных необязательных настроек здесь.
+  let lastSavedTranslatorName = '';
+  translatorInput.addEventListener('blur', () => {
+    const value = translatorInput.value.trim();
+    if (value === lastSavedTranslatorName) return;
+    lastSavedTranslatorName = value;
+    fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-client-token': token },
+      body: JSON.stringify({ translator_name: value })
+    }).catch(() => {});
+  });
+
+  function currentCertification() {
+    if (!certToggle.checked || !translatorInput.value.trim()) return undefined;
+    return { translatorName: translatorInput.value.trim(), sourceLanguage: sourceLangSelect.value };
+  }
+
   // --- загрузка файлов — тот же .dropzone, что у главного экрана и у
   // модуля бухгалтерии, с drag&drop. -----------------------------------------
   const dropzone = el('label', null, 'dropzone');
@@ -414,7 +476,7 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
-      await exportDocx(original, translation, false);
+      await exportDocx(original, translation, false, currentCertification());
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .docx';
       exportError.style.display = '';
@@ -427,7 +489,7 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
-      exportTxt(original, translation, false);
+      exportTxt(original, translation, false, currentCertification());
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .txt';
       exportError.style.display = '';
@@ -440,7 +502,7 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
-      await downloadTranslationPdf(translation);
+      await downloadTranslationPdf(translation, currentCertification());
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось скачать PDF';
       exportError.style.display = '';
