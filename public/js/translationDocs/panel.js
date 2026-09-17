@@ -577,10 +577,6 @@ export async function initTranslationDocs() {
     header.append(el('h3', `Сравнение: ${doc.file.name}`));
     const close = button('Закрыть');
     header.append(close);
-    const toolbar = el('div', null, 'translation-compare-toolbar');
-    const add = button('Добавить поле');
-    const save = button('Сохранить изменения', 'btn-primary');
-    toolbar.append(add, save);
     const table = el('table', null, 'admin-table translation-compare-table');
     table.innerHTML = '<thead><tr><th>Что за поле</th><th>Оригинал</th><th>Перевод</th><th>Тип</th></tr></thead>';
     const tbody = el('tbody');
@@ -652,7 +648,15 @@ export async function initTranslationDocs() {
       });
       paraTable.append(paraBody);
     }
-    const sync = () => {
+    const saveStatus = el('div', null, 'translation-compare-save-status');
+    saveStatus.setAttribute('role', 'status');
+    saveStatus.setAttribute('aria-live', 'polite');
+    const toolbar = el('div', null, 'translation-compare-toolbar translation-compare-toolbar-bottom');
+    const add = button('Добавить поле');
+    const save = button('Сохранить изменения', 'btn-primary');
+    toolbar.append(add, save, saveStatus);
+
+    const sync = async () => {
       // Hidden empty headings are part of the legal structure, not deleted rows.
       const fields = doc.result.fields.filter(field => !field.value && !field.translated && !field.requiresReview);
       const glossaryEntries = [];
@@ -688,16 +692,33 @@ export async function initTranslationDocs() {
         });
         renderParagraphsTable(doc.result.paragraphs);
       }
+      let glossarySaved = true;
       if (glossaryEntries.length) {
         const token = getClientToken();
-        fetch('/api/transliterations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(token ? { 'x-client-token': token } : {}) },
-          body: JSON.stringify({ action: 'confirm', clientSlug: getClientSlug(), entries: glossaryEntries })
-        }).catch(() => {});
+        try {
+          const response = await fetch('/api/transliterations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { 'x-client-token': token } : {}) },
+            body: JSON.stringify({ action: 'confirm', clientSlug: getClientSlug(), entries: glossaryEntries })
+          });
+          glossarySaved = response.ok;
+        } catch (_) {
+          glossarySaved = false;
+        }
       }
+      saveStatus.textContent = glossarySaved ? 'Изменения сохранены' : 'Изменения сохранены, но глоссарий не обновился';
+      saveStatus.classList.toggle('is-error', !glossarySaved);
     };
-    save.addEventListener('click', sync);
+    save.addEventListener('click', async () => {
+      save.disabled = true;
+      saveStatus.textContent = 'Сохраняем…';
+      saveStatus.classList.remove('is-error');
+      try {
+        await sync();
+      } finally {
+        save.disabled = false;
+      }
+    });
     add.addEventListener('click', () => {
       const key = `custom_${Date.now()}`;
       const field = { key, label: 'Новое поле', targetLabel: 'Новое поле', value: '', translated: '', translationStatus: 'translated', confidence: 100 };
@@ -708,7 +729,7 @@ export async function initTranslationDocs() {
     });
     close.addEventListener('click', () => modal.remove());
     modal.addEventListener('click', event => { if (event.target === modal) modal.remove(); });
-    dialog.append(header, toolbar, table, ...(paraTable ? [paraHeading, paraTable] : []));
+    dialog.append(header, table, ...(paraTable ? [paraHeading, paraTable] : []), toolbar);
     modal.append(dialog);
     root.append(modal);
   });

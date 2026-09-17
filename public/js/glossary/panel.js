@@ -39,23 +39,21 @@ async function callApi(payload) {
   return data;
 }
 
-export async function initGlossaryPanel() {
+export function mountGlossaryEditor(container) {
+  if (!container) return;
   const slug = getClientSlug(), token = getClientToken();
-  if (!slug || !token) return; // не платный клиент с паролем — вкладка не показывается
+  if (!slug || !token) return;
 
-  const root = el('section', null, 'panel acct-wrap');
-  root.id = 'glossaryPanel';
+  container.innerHTML = '';
 
   const panelHeader = el('div', null, 'acct-panel-header');
   const panelTitle = el('div', null, 'acct-panel-header-title');
   panelTitle.append(panelIcon(), el('h2', 'Глоссарий'));
   panelHeader.append(panelTitle);
-  root.append(panelHeader);
-  root.append(el('p',
+  container.append(panelHeader);
+  container.append(el('p',
     'Как переводятся ФИО и топонимы в ваших документах. У каждого термина — общее значение (его видят все новые клиенты) и, если вы его правили, ваш личный вариант — он важнее общего именно в ваших переводах. Если ваш вариант позже выберет большинство клиентов, он сам станет общим.',
     'admin-note'));
-
-  if (!registerTab('glossary', 'Глоссарий', root)) return;
 
   const toolbar = el('div', null, 'acct-export-toolbar');
   toolbar.style.alignItems = 'flex-end';
@@ -68,25 +66,25 @@ export async function initGlossaryPanel() {
   searchField.append(searchInput);
   const addBtn = button('Добавить термин', 'btn-secondary');
   toolbar.append(searchField, addBtn);
-  root.append(toolbar);
+  container.append(toolbar);
 
   const errorBox = el('div', null, 'admin-error'); errorBox.style.display = 'none';
-  root.append(errorBox);
+  container.append(errorBox);
 
   const table = el('table', null, 'admin-table');
   table.innerHTML = '<thead><tr><th>Оригинал</th><th>Мой вариант</th><th>Общий (по умолчанию)</th><th></th></tr></thead>';
   const tbody = el('tbody');
   table.append(tbody);
-  root.append(table);
+  container.append(table);
 
   const emptyNote = el('p', 'Пока пусто — термины появятся здесь после первого перевода документа с именами/топонимами, либо добавьте нужный термин вручную кнопкой выше.', 'admin-note');
   emptyNote.style.display = 'none';
-  root.append(emptyNote);
+  container.append(emptyNote);
 
   const loadMoreWrap = el('div'); loadMoreWrap.style.marginTop = '10px'; loadMoreWrap.style.display = 'none';
   const loadMoreBtn = button('Показать ещё', 'btn-secondary');
   loadMoreWrap.append(loadMoreBtn);
-  root.append(loadMoreWrap);
+  container.append(loadMoreWrap);
 
   let offset = 0;
   let currentSearch = '';
@@ -142,7 +140,7 @@ export async function initGlossaryPanel() {
     loadMoreBtn.disabled = true;
     try {
       const data = await callApi({ action: 'list', search: currentSearch, offset });
-      if (token !== loadToken) return; // устаревший ответ — искали/грузили заново
+      if (token !== loadToken) return;
       const items = Array.isArray(data.items) ? data.items : [];
       items.forEach(item => tbody.append(makeRow(item)));
       offset += items.length;
@@ -179,4 +177,16 @@ export async function initGlossaryPanel() {
   });
 
   load({ reset: true });
+}
+
+export async function initGlossaryPanel() {
+  const slug = getClientSlug(), token = getClientToken();
+  if (!slug || !token) return;
+
+  const root = el('section', null, 'panel acct-wrap');
+  root.id = 'glossaryPanel';
+
+  if (!registerTab('glossary', 'Глоссарий', root)) return;
+
+  mountGlossaryEditor(root);
 }

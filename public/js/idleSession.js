@@ -3,7 +3,7 @@
 const IDLE_MS = 60 * 60 * 1000;
 const sessions = new Map();
 
-export function createIdleSession(key) {
+export function createIdleSession(key, { onActivity } = {}) {
   if (sessions.has(key)) return sessions.get(key);
   const activityKey = key + ':lastActivity';
   let expired = false;
@@ -44,8 +44,18 @@ export function createIdleSession(key) {
   const check = () => { get(); };
   const activity = event => {
     // Check BEFORE renewing: the first click after an hour must not revive login.
-    if (get() && event.isTrusted && document.visibilityState === 'visible') {
+    const credential = get();
+    if (credential && event.isTrusted && document.visibilityState === 'visible') {
       sessionStorage.setItem(activityKey, String(Date.now()));
+      if (typeof onActivity === 'function') {
+        Promise.resolve(onActivity(credential)).then(nextCredential => {
+          if (typeof nextCredential === 'string' && nextCredential) {
+            sessionStorage.setItem(key, nextCredential);
+          }
+        }).catch(error => {
+          console.error('idleSession: не удалось продлить токен:', error);
+        });
+      }
     }
   };
   for (const name of ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart']) {

@@ -12,14 +12,14 @@
 // См. api/client-settings.js — тот же backend, что здесь дёргается.
 
 import { DOC_TYPES, DOC_FIELDS } from '../js/config/docSchema.js';
-import { createIdleSession } from '../js/idleSession.js';
+import { getClientSession } from '../js/branding.js';
+import { mountGlossaryEditor } from '../js/glossary/panel.js';
 
 const params = new URLSearchParams(window.location.search);
 const slug = (params.get('client') || '').trim();
 document.getElementById('backToApp').href = slug ? `/?client=${encodeURIComponent(slug)}` : '/';
 
-const TOKEN_KEY_PREFIX = 'tamga_client_token:';
-const session = slug ? createIdleSession(TOKEN_KEY_PREFIX + slug) : null;
+const session = slug ? getClientSession(slug) : null;
 function getToken() { return session ? session.get() : null; }
 const logoutBtn = document.getElementById('logoutBtn');
 logoutBtn.style.display = getToken() ? 'inline-flex' : 'none';
@@ -575,7 +575,7 @@ function collectBusinessRule(draft) {
 }
 
 // Tabs keep their DOM mounted, so switching sections preserves unsaved inputs.
-const settingsTabIds = ['recognition', 'fields', 'rules', 'appearance', 'password', 'users'];
+const settingsTabIds = ['recognition', 'fields', 'rules', 'appearance', 'glossary', 'password', 'users'];
 function activateSettingsTab(id, focus = false) {
   settingsTabIds.forEach(key => {
     const button = document.getElementById(`tab-${key}`);
@@ -585,7 +585,7 @@ function activateSettingsTab(id, focus = false) {
     document.getElementById(`panel-${key}`).hidden = !selected;
     if (selected && focus) button.focus();
   });
-  document.getElementById('settingsSaveBar').hidden = id === 'password' || id === 'users';
+  document.getElementById('settingsSaveBar').hidden = id === 'password' || id === 'users' || id === 'glossary';
 }
 settingsTabIds.forEach((id, index) => {
   const button = document.getElementById(`tab-${id}`);
@@ -894,6 +894,7 @@ async function loadAndShow(token) {
     noPasswordSection.style.display = 'none';
     mainSection.style.display = 'block';
     applyLoadedConfig(body);
+    mountGlossaryEditor(document.getElementById('glossarySettingsPanel'));
     [fieldOverrideEditor, customTypeEditor, businessRuleEditor].forEach(editor => { editor.style.display = 'none'; });
     return;
   }

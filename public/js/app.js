@@ -20,7 +20,6 @@ import { initFileList, getSelectedFiles, getSelectedDocTypes, getExtraDocTypes, 
 import { initFeedback } from './ui/feedback.js';
 import { initAccounting } from './accounting/panel.js';
 import { initTranslationDocs } from './translationDocs/panel.js';
-import { initGlossaryPanel } from './glossary/panel.js';
 import {
   startProgress, finishProgress, setOverallProgress,
   createFileProgressGroup, addPageRows, showFileOpenError, setPageStatus, markPageDone, markPageError,
@@ -169,7 +168,6 @@ initResultsCollapseToggle();
 // таб-баре (public/js/contentTabs.js): Распознавание, Бухгалтерия, Перевод.
 brandingReady.then(() => initAccounting());
 brandingReady.then(() => initTranslationDocs());
-brandingReady.then(() => initGlossaryPanel());
 
 // --- Демо-документ одной кнопкой: синтетическая накладная (см. public/demo/),
 // чтобы человек мог сразу увидеть результат, не выбирая свой файл. ---

@@ -1,5 +1,5 @@
 const { getClientConfig } = require('../lib/customFieldsLookup');
-const { verifyPassword, signToken } = require('../lib/clientAuth');
+const { verifyPassword, signToken, refreshClientToken } = require('../lib/clientAuth');
 const { hasClientUsers, getClientUser } = require('../lib/clientUsers');
 const { checkClientAuthRateLimit, recordClientAuthFailure } = require('../lib/authRateLimit');
 const { extractClientIp } = require('../lib/anonymousUsage');
@@ -36,7 +36,30 @@ module.exports = async (req, res) => {
   const { clientSlug, password, username } = req.body || {};
   const genericError = { error: 'Неверный логин или пароль' };
 
-  if (!clientSlug || typeof clientSlug !== 'string' || !password || typeof password !== 'string') {
+  if (!clientSlug || typeof clientSlug !== 'string') {
+    res.status(400).json({ error: 'Нужны clientSlug и password' });
+    return;
+  }
+  if (req.body?.action === 'refresh') {
+    try {
+      const config = await getClientConfig({ clientSlug, fresh: true });
+      const token = await refreshClientToken({
+        clientSlug,
+        passwordHash: config?.passwordHash,
+        token: req.body.token
+      });
+      if (!token) {
+        res.status(401).json({ error: 'Требуется повторный вход' });
+        return;
+      }
+      res.status(200).json({ token });
+    } catch (err) {
+      console.error('client-auth refresh error:', err);
+      res.status(503).json({ error: 'Не удалось продлить сессию' });
+    }
+    return;
+  }
+  if (!password || typeof password !== 'string') {
     res.status(400).json({ error: 'Нужны clientSlug и password' });
     return;
   }

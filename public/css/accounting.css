@@ -90,6 +90,19 @@
   display:flex;align-items:center;justify-content:space-between;gap:10px;
   flex-wrap:wrap;margin-bottom:14px;
 }
+.translation-compare-header{
+  padding-bottom:14px;border-bottom:1px solid var(--line);
+}
+.translation-compare-toolbar-bottom{
+  position:sticky;bottom:-20px;z-index:2;
+  margin:18px -20px -20px;padding:14px 20px;
+  background:var(--surface);border-top:1px solid var(--line);
+}
+.translation-compare-toolbar-bottom .btn-primary{min-width:190px;}
+.translation-compare-save-status{
+  flex:1 1 220px;text-align:right;color:#177245;font-size:.88rem;
+}
+.translation-compare-save-status.is-error{color:#a33b2b;}
 .translation-compare-header h3{margin:0;font-size:1.05rem}
 .translation-compare-table{table-layout:fixed}
 .translation-compare-table th:first-child,.translation-compare-table td:first-child{width:23%}
@@ -238,6 +251,7 @@
   }
   #translationDocsPanel .translation-compare-header h3{flex:1;min-width:0;overflow-wrap:anywhere;}
   #translationDocsPanel .translation-compare-toolbar{display:grid;grid-template-columns:1fr;}
+  #translationDocsPanel .translation-compare-toolbar-bottom .translation-compare-save-status{text-align:left;}
   #translationDocsPanel .translation-compare-table tr{
     display:block;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;
   }

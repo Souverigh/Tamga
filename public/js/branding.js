@@ -20,6 +20,8 @@ import { setExtraDocTypes } from './ui/fileList.js';
 import { createIdleSession } from './idleSession.js';
 
 const TOKEN_KEY_PREFIX = 'tamga_client_token:';
+const TOKEN_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const lastTokenRefresh = new Map();
 
 // Кэш последнего успешно загруженного конфига клиента — визуальный фасад
 // (displayName/logoUrl/accentColor, нужен export/pdfExport.js и export/xlsxExport.js
@@ -47,13 +49,36 @@ function resolveClientSlug() {
   return (params.get('client') || '').trim() || null;
 }
 
+async export async function refreshClientToken(slug, token) {
+  const lastRefresh = lastTokenRefresh.get(slug) || 0;
+  if (Date.now() - lastRefresh < TOKEN_REFRESH_INTERVAL_MS) return null;
+  lastTokenRefresh.set(slug, Date.now());
+  const res = await fetch('/api/client-auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'refresh', clientSlug: slug, token })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.token) {
+    if (res.status === 401) createIdleSession(TOKEN_KEY_PREFIX + slug).clear();
+    return null;
+  }
+  return data.token;
+}
+
+export function getClientSession(slug) {
+  return createIdleSession(TOKEN_KEY_PREFIX + slug, {
+    onActivity: token => refreshClientToken(slug, token)
+  });
+}
+
 function renderClientPlan(slug, config) {
   const logout = document.getElementById('logoutBtn');
   if (logout) {
     logout.style.display = slug && getClientToken() ? 'inline-flex' : 'none';
     logout.onclick = () => {
       if (!slug) return;
-      createIdleSession(TOKEN_KEY_PREFIX + slug).clear();
+      getClientSession(slug).clear();
       document.documentElement.style.visibility = 'hidden';
       window.location.replace(`/?client=${encodeURIComponent(slug)}`);
     };
@@ -137,7 +162,7 @@ export function getClientSlug() {
 // как-то обошли (см. api/recognize.js:checkClientGate).
 export function getClientToken() {
   const slug = resolveClientSlug();
-  return slug ? createIdleSession(TOKEN_KEY_PREFIX + slug).get() : null;
+  return slug ? getClientSession(slug).get() : null;
 }
 
 function applyFacade(config) {
@@ -240,7 +265,7 @@ function showGate(slug) {
           btn.disabled = false;
           return;
         }
-        createIdleSession(TOKEN_KEY_PREFIX + slug).set(data.token);
+        getClientSession(slug).set(data.token);
         input.value = ''; usernameInput.value = '';
         gate.style.display = 'none';
         resolve(data.token);
