@@ -60,11 +60,13 @@ require.cache[require.resolve(geminiClientPath)] = {
 
 let consumeUsageImpl = async () => ({ allowed: true, pagesUsed: 1, pageLimit: 1000 });
 let consumeUsageCalls = [];
+let getClientConfigImpl = async () => null;
 const cflPath = path.join(ROOT, 'lib/customFieldsLookup.js');
 require.cache[require.resolve(cflPath)] = {
   id: cflPath, filename: cflPath, loaded: true,
   exports: {
-    consumeUsage: (...args) => { consumeUsageCalls.push(args[0]); return consumeUsageImpl(...args); }
+    consumeUsage: (...args) => { consumeUsageCalls.push(args[0]); return consumeUsageImpl(...args); },
+    getClientConfig: (...args) => getClientConfigImpl(...args)
   }
 };
 
@@ -133,6 +135,16 @@ function fakeEmptyApostilleResponse() {
     r.result[key] = { value: '', raw_text: '', page: 1, confidence: 0 };
   }
   return r;
+}
+
+// "Другое"/клиентские типы — структура документа (см. lib/translationDocs/
+// pipeline.js, 17 сен 2026): fields по-прежнему {label,value,raw_text,page,
+// confidence}, а весь свободный текст идёт отдельным массивом paragraphs.
+function fakeGenericResponse({ docType = 'Другое', fields = [], paragraphs = [] } = {}) {
+  return {
+    result: { doc_type: docType, fields, paragraphs },
+    usage: { promptTokenCount: 15, candidatesTokenCount: 8, totalTokenCount: 23 }
+  };
 }
 
 async function main() {
@@ -356,6 +368,77 @@ async function main() {
     const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', apiKey: 'fake', language: 'en', clientSlug: 'acme' });
     assert.strictEqual(translateSegmentsCalls.length, 0, 'нечего переводить — Gemini не дёргается зря');
     assert.ok(result.fields.every(f => f.value === '' && f.translated === ''));
+  });
+
+  await scenario('"Другое": структура документа переводится абзацами (без поля-заглушки "Прочий текст"), порядок сохраняется, пустые абзацы пропускаются', async () => {
+    consumeUsageImpl = async () => ({ allowed: true, pagesUsed: 1, pageLimit: 1000 });
+    translateSegmentsCalls = []; translateText = text => `[TR]${text}`;
+    const stdFields = ['Название документа', 'Номер', 'Дата', 'Организация', 'Стороны', 'Предмет', 'Суммы'];
+    callGeminiImpl = async () => fakeGenericResponse({
+      docType: 'Другое',
+      fields: stdFields.map(label => ({ label, value: '', raw_text: '', page: 1, confidence: 80 })),
+      paragraphs: [
+        { text: 'Первый абзац документа.', page: 1 },
+        { text: '', page: 1 },
+        { text: 'Второй абзац, идущий следом.', page: 1 }
+      ]
+    });
+    const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', apiKey: 'fake', language: 'en', clientSlug: 'acme' });
+    assert.ok(!result.fields.some(f => f.label === 'Прочий текст'), 'поле-заглушка больше не используется для "Другое"');
+    assert.strictEqual(result.paragraphs.length, 2, 'пустой абзац пропущен, остальные два сохранены в порядке документа');
+    assert.deepStrictEqual(result.paragraphs.map(p => p.text), ['Первый абзац документа.', 'Второй абзац, идущий следом.']);
+    assert.deepStrictEqual(result.paragraphs.map(p => p.translated), ['[TR]Первый абзац документа.', '[TR]Второй абзац, идущий следом.']);
+    const paraSegmentIds = translateSegmentsCalls.flatMap(c => c.request.segments.map(s => s.id));
+    assert.ok(paraSegmentIds.includes('para_0_0') && paraSegmentIds.includes('para_2_0'), 'id сегмента несёт исходный индекс абзаца в rawResult.paragraphs (до фильтрации пустых)');
+  });
+
+  await scenario('Клиентский тип без предопределённых полей — весь текст идёт в paragraphs, fields пуст', async () => {
+    consumeUsageImpl = async () => ({ allowed: true, pagesUsed: 1, pageLimit: 1000 });
+    translateSegmentsCalls = []; translateText = text => `[TR]${text}`;
+    getClientConfigImpl = async () => ({ customDocTypes: { 'Заявление на визу': { hint: 'a visa application letter' } } });
+    callGeminiImpl = async () => fakeGenericResponse({
+      docType: 'Заявление на визу',
+      fields: [],
+      paragraphs: [{ text: 'Прошу выдать визу.', page: 1 }, { text: 'С уважением, заявитель.', page: 1 }]
+    });
+    try {
+      const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', apiKey: 'fake', language: 'en', clientSlug: 'acme' });
+      assert.strictEqual(result.docType, 'Заявление на визу');
+      assert.strictEqual(result.fields.length, 0, 'клиент не описал полей для своего типа — фиксированных полей нет вообще');
+      assert.deepStrictEqual(result.paragraphs.map(p => p.translated), ['[TR]Прошу выдать визу.', '[TR]С уважением, заявитель.']);
+    } finally {
+      getClientConfigImpl = async () => null;
+    }
+  });
+
+  await scenario('Длинный абзац режется на сегменты (лимит 1800 симв.) и склеивается обратно по индексу чанка, даже если Gemini вернул чанки в другом порядке', async () => {
+    consumeUsageImpl = async () => ({ allowed: true, pagesUsed: 1, pageLimit: 1000 });
+    translateSegmentsCalls = [];
+    const longText = 'Раз два три четыре пять шесть семь восемь. '.repeat(60); // > 1800 символов
+    translateText = text => `[TR:${text.length}]`;
+    callGeminiImpl = async () => fakeGenericResponse({ docType: 'Другое', fields: [], paragraphs: [{ text: longText, page: 1 }] });
+    // Подменяем translateSegments на один запуск, чтобы вернуть чанки В
+    // ОБРАТНОМ порядке — translateSegments не гарантирует порядок ответа,
+    // только соответствие id (см. lib/translation.js), поэтому склейка
+    // должна опираться на chunkIndex, а не на порядок массива.
+    const translationExports = require.cache[require.resolve(translationPath)].exports;
+    const originalTranslateSegments = translationExports.translateSegments;
+    translationExports.translateSegments = async (request, clientRef) => {
+      translateSegmentsCalls.push({ request, clientRef });
+      const segs = request.segments.map(s => ({ id: s.id, text: translateText(s.text) }));
+      return { segments: segs.reverse() };
+    };
+    try {
+      const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', apiKey: 'fake', language: 'en', clientSlug: 'acme' });
+      const paraSegments = translateSegmentsCalls.flatMap(c => c.request.segments).filter(s => s.id.startsWith('para_0_'));
+      assert.ok(paraSegments.length > 1, 'длинный абзац должен был разбиться на несколько сегментов');
+      assert.ok(paraSegments.every(s => s.text.length <= 1800));
+      assert.strictEqual(paraSegments.map(s => s.text).join(''), longText, 'чанки покрывают исходный текст без потерь и без наложений');
+      assert.strictEqual(result.paragraphs[0].translated, paraSegments.map(s => translateText(s.text)).join(''), 'склейка идёт по chunkIndex, а не по порядку прихода ответов от Gemini');
+    } finally {
+      translationExports.translateSegments = originalTranslateSegments;
+      translateText = text => `[TR]${text}`;
+    }
   });
 
   console.log('\n=== Регрессия модуля "Перевод" (recognizeAndTranslateDocument) ===');

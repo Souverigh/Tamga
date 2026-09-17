@@ -76,6 +76,33 @@ test('certification footer (translator name/language pair/signature line, legal 
   }
 });
 
+test('buildExportDocs threads doc.result.paragraphs through to original/translation.paragraphs, in order, and the paired bilingual export renders them side by side', async () => {
+  const { buildExportDocs } = await import('../public/js/translationDocs/export-model.mjs');
+  const { buildTranslationTxt, pairedLayoutBlocks } = await import('../public/js/translation/export.mjs');
+  const doc = {
+    file: { name: 'contract.png' },
+    result: {
+      doc_type: 'Другое',
+      fields: [{ label: 'Номер', value: '', targetLabel: 'Номер', translated: '' }],
+      paragraphs: [
+        { text: 'Первый абзац договора.', translated: 'First paragraph of the contract.' },
+        { text: 'Второй абзац, со ссылкой на приложение.', translated: 'Second paragraph, referencing the annex.' }
+      ]
+    }
+  };
+  const { original, translation } = buildExportDocs(doc, 'en');
+  assert.deepEqual(original.paragraphs, [{ text: 'Первый абзац договора.' }, { text: 'Второй абзац, со ссылкой на приложение.' }]);
+  assert.deepEqual(translation.paragraphs, [{ text: 'First paragraph of the contract.' }, { text: 'Second paragraph, referencing the annex.' }]);
+  const blocks = pairedLayoutBlocks(original, translation);
+  const textBlock = blocks.find(b => b.table && b.table[0][0] === 'Оригинал');
+  assert.equal(textBlock.table.length, 3); // header + 2 paragraphs, same order, nothing dropped
+  assert.deepEqual(textBlock.table[1], ['Первый абзац договора.', 'First paragraph of the contract.']);
+  assert.deepEqual(textBlock.table[2], ['Второй абзац, со ссылкой на приложение.', 'Second paragraph, referencing the annex.']);
+  const txt = buildTranslationTxt(original, translation, true);
+  assert.ok(txt.includes('Первый абзац договора.'));
+  assert.ok(txt.includes('First paragraph of the contract.'));
+});
+
 test('signature marker localization preserves every character of the name', async () => {
   const { apostilleSignature, validateApostille } = await import('../public/js/translation/apostille.mjs');
   const doc = document();
