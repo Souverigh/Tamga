@@ -134,13 +134,15 @@
 .acct-file-label:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 .acct-file-list{ display:flex; flex-direction:column; gap:6px; margin-top:12px; }
 .acct-file-item{
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  display:flex; flex-direction:column; gap:4px;
   padding:8px 12px; border:1px solid var(--line); border-radius:6px;
   cursor:pointer; font-size:0.85rem; background:var(--surface);
 }
 .acct-file-item.acct-file-active{ border-color:var(--accent); }
+.acct-file-main{ display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
 .acct-file-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .acct-file-status{ flex-shrink:0; font-size:0.75rem; font-weight:600; padding:2px 8px; border-radius:20px; }
+.acct-file-error{ color:var(--danger); font-size:0.78rem; line-height:1.35; overflow-wrap:anywhere; }
 .acct-file-status-pending{ color:var(--ink-soft); background:var(--line); }
 .acct-file-status-recognizing{ color:var(--accent); background:var(--line); }
 .acct-file-status-done{ color:var(--acct-ok); background:var(--acct-ok-tint); }
@@ -164,24 +166,26 @@
 .acct-rule-INSUFFICIENT_DATA{ color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); }
 .acct-rule-id{ font-weight:600; }
 .acct-table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
-.acct-table-scroll table{ min-width:520px; }
+.acct-table-scroll table{ min-width:650px; }
+.acct-table-scroll th,
+.acct-table-scroll td{ white-space:nowrap; }
+.acct-table-scroll th:first-child,
+.acct-table-scroll td:first-child{ min-width:190px; white-space:normal; }
 
 @media (max-width: 760px){
   .acct-accounting-wrap .acct-accounting-workspace{ grid-template-columns:1fr; }
   .acct-accounting-wrap .acct-col-original{ width:fit-content; }
   .acct-columns{ flex-direction:column; }
   .acct-col-original{ position:static; flex:none; width:100%; }
-  .acct-table-scroll{ overflow-x:visible; }
+  .acct-table-scroll{ margin-right:-4px; padding-bottom:6px; }
   .translation-compare-modal{padding:8px}
   .translation-compare-dialog{padding:12px}
   .translation-compare-table th,.translation-compare-table td{padding:8px 6px}
-  #acctItemsTable{ min-width:0; width:100%; }
-  #acctItemsTable thead{ display:none; }
-  #acctItemsTable, #acctItemsTable tbody, #acctItemsTable tr, #acctItemsTable td{ display:block; width:100%; }
-  #acctItemsTable tr{ border:1px solid var(--line); border-radius:8px; padding:4px 12px; margin-bottom:10px; }
-  #acctItemsTable td{ display:flex; justify-content:space-between; align-items:baseline; gap:12px;
-    padding:6px 0; border:none; text-align:right; }
-  #acctItemsTable td::before{ content:attr(data-label); color:var(--ink-soft); font-weight:600; text-align:left; flex-shrink:0; }
+  .acct-table-scroll table{ min-width:650px; }
+  .acct-table-scroll th,
+  .acct-table-scroll td{ padding-left:10px; padding-right:10px; }
+  .acct-table-scroll th:first-child,
+  .acct-table-scroll td:first-child{ min-width:180px; }
 }
 
 /* Translation keeps full-width, labelled values on phones instead of four

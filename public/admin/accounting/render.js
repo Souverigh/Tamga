@@ -29,11 +29,23 @@ export function renderFileList(fileListEl, docs, activeIndex, onSelect) {
   docs.forEach((doc, index) => {
     const row = document.createElement('div');
     row.className = `acct-file-item${index === activeIndex ? ' acct-file-active' : ''}`;
-    row.innerHTML = `
-      <span class="acct-file-name">${doc.file.name}</span>
-      <span class="acct-file-status acct-file-status-${doc.status}">${FILE_STATUS_LABELS[doc.status]}</span>
-    `;
-    if (doc.error) row.title = doc.error;
+    const main = document.createElement('div');
+    main.className = 'acct-file-main';
+    const name = document.createElement('span');
+    name.className = 'acct-file-name';
+    name.textContent = doc.file.name;
+    const status = document.createElement('span');
+    status.className = `acct-file-status acct-file-status-${doc.status}`;
+    status.textContent = FILE_STATUS_LABELS[doc.status];
+    main.append(name, status);
+    row.append(main);
+    if (doc.error) {
+      const error = document.createElement('div');
+      error.className = 'acct-file-error';
+      error.textContent = doc.error;
+      row.title = doc.error;
+      row.append(error);
+    }
     row.addEventListener('click', () => onSelect(index));
     fileListEl.appendChild(row);
   });

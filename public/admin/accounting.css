@@ -33,13 +33,15 @@
    показан в правой колонке (см. renderActiveDocument в accounting.js). */
 .acct-file-list{ display:flex; flex-direction:column; gap:6px; margin-top:12px; }
 .acct-file-item{
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  display:flex; flex-direction:column; gap:4px;
   padding:8px 12px; border:1px solid var(--line); border-radius:6px;
   cursor:pointer; font-size:0.85rem; background:var(--surface);
 }
 .acct-file-item.acct-file-active{ border-color:var(--accent); }
+.acct-file-main{ display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
 .acct-file-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .acct-file-status{ flex-shrink:0; font-size:0.75rem; font-weight:600; padding:2px 8px; border-radius:20px; }
+.acct-file-error{ color:var(--danger); font-size:0.78rem; line-height:1.35; overflow-wrap:anywhere; }
 .acct-file-status-pending{ color:var(--ink-soft); background:var(--line); }
 .acct-file-status-recognizing{ color:var(--accent); background:var(--line); }
 .acct-file-status-done{ color:var(--acct-ok); background:var(--acct-ok-tint); }
@@ -71,24 +73,22 @@
    .admin-table растягивала body, из-за чего остальной контент — например,
    .acct-rules-list — обрезался справа, см. скриншот Ethan, 14 сен 2026). */
 .acct-table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
-.acct-table-scroll table{ min-width:520px; }
+.acct-table-scroll table{ min-width:650px; }
+.acct-table-scroll th,
+.acct-table-scroll td{ white-space:nowrap; }
+.acct-table-scroll th:first-child,
+.acct-table-scroll td:first-child{ min-width:190px; white-space:normal; }
 
 @media (max-width: 760px){
   .acct-columns{ flex-direction:column; }
   .acct-col-original{ position:static; flex:none; width:100%; }
 
-  /* Таблица «Строки» (6 колонок) физически не помещается на мобильный экран
-     даже после переноса в скроллящийся контейнер — горизонтальный скролл
-     обрезал текст визуально (Ethan, 14 сен 2026, "входила в мобильный
-     экран"). На мобильном превращаем строки таблицы в карточки:
-     заголовок скрываем, каждая ячейка — своя строка с подписью поля через
-     data-label (см. renderItemsTable в accounting.js) вместо колонки. */
-  .acct-table-scroll{ overflow-x:visible; }
-  #itemsTable{ min-width:0; width:100%; }
-  #itemsTable thead{ display:none; }
-  #itemsTable, #itemsTable tbody, #itemsTable tr, #itemsTable td{ display:block; width:100%; }
-  #itemsTable tr{ border:1px solid var(--line); border-radius:8px; padding:4px 12px; margin-bottom:10px; }
-  #itemsTable td{ display:flex; justify-content:space-between; align-items:baseline; gap:12px;
-    padding:6px 0; border:none; text-align:right; }
-  #itemsTable td::before{ content:attr(data-label); color:var(--ink-soft); font-weight:600; text-align:left; flex-shrink:0; }
+  /* На мобильном строки остаются горизонтальными: пользователь может
+     прокрутить только список, не растягивая всю страницу. */
+  .acct-table-scroll{ margin-right:-4px; padding-bottom:6px; }
+  .acct-table-scroll table{ min-width:650px; }
+  .acct-table-scroll th,
+  .acct-table-scroll td{ padding-left:10px; padding-right:10px; }
+  .acct-table-scroll th:first-child,
+  .acct-table-scroll td:first-child{ min-width:180px; }
 }
