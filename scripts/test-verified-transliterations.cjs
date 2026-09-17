@@ -8,23 +8,31 @@ test('normalizeKey trims and lowercases', () => {
 });
 
 test('lookup/record are fail-safe when Supabase is not configured (no env vars in this test run)', async () => {
-  assert.deepEqual(await lookupTransliterations(['Бишкек', 'Ош']), {});
-  assert.deepEqual(await recordTransliteration('Бишкек', 'Bishkek'), { ok: false });
+  assert.deepEqual(await lookupTransliterations('client-a', ['Бишкек', 'Ош']), {});
+  assert.deepEqual(await recordTransliteration('client-a', 'Бишкек', 'Bishkek'), { ok: false });
 });
 
-test('lookup returns only originals that were actually found, mapped back to the caller\'s original casing', async () => {
+test('lookup merges global default with the client\'s own overrides, client wins on overlap', async () => {
   process.env.SUPABASE_URL = 'https://example.test';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
   const realFetch = global.fetch;
   global.fetch = async (url, opts) => {
     const body = JSON.parse(opts.body);
     assert.deepEqual(body.p_original_keys, ['бишкек', 'ош']); // deduped + normalized
-    return { ok: true, json: async () => ([{ original_key: 'бишкек', verified_value: 'Bishkek' }]) };
+    if (String(url).includes('get_client_glossary_terms')) {
+      assert.equal(body.p_client_slug, 'client-a');
+      // Client has their own spelling for "Бишкек" only.
+      return { ok: true, json: async () => ([{ original_key: 'бишкек', verified_value: 'Bishkek-City' }]) };
+    }
+    // Global default has both, but "бишкек" is overridden above.
+    return { ok: true, json: async () => ([
+      { original_key: 'бишкек', verified_value: 'Bishkek' },
+      { original_key: 'ош', verified_value: 'Osh' }
+    ]) };
   };
   try {
-    const result = await lookupTransliterations(['Бишкек', 'бишкек', 'Ош']);
-    assert.deepEqual(result, { 'Бишкек': 'Bishkek', 'бишкек': 'Bishkek' });
-    assert.equal('Ош' in result, false);
+    const result = await lookupTransliterations('client-a', ['Бишкек', 'бишкек', 'Ош']);
+    assert.deepEqual(result, { 'Бишкек': 'Bishkek-City', 'бишкек': 'Bishkek-City', 'Ош': 'Osh' });
   } finally {
     global.fetch = realFetch;
     delete process.env.SUPABASE_URL;
@@ -32,18 +40,39 @@ test('lookup returns only originals that were actually found, mapped back to the
   }
 });
 
-test('recordTransliteration sends the normalized key alongside the original sample', async () => {
+test('lookup falls back to the global default when the client has no override of their own', async () => {
+  process.env.SUPABASE_URL = 'https://example.test';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  const realFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (String(url).includes('get_client_glossary_terms')) return { ok: true, json: async () => ([]) };
+    return { ok: true, json: async () => ([{ original_key: 'бишкек', verified_value: 'Bishkek' }]) };
+  };
+  try {
+    const result = await lookupTransliterations('client-b', ['Бишкек']);
+    assert.deepEqual(result, { 'Бишкек': 'Bishkek' });
+  } finally {
+    global.fetch = realFetch;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  }
+});
+
+test('recordTransliteration sends the client slug, normalized key and original sample, and surfaces global-change info', async () => {
   process.env.SUPABASE_URL = 'https://example.test';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
   const realFetch = global.fetch;
   let sentBody;
   global.fetch = async (url, opts) => {
     sentBody = JSON.parse(opts.body);
-    return { ok: true, json: async () => ([{ out_verified_value: 'Bishkek', out_confirmed_count: 1 }]) };
+    return { ok: true, json: async () => ([{ out_client_value: 'Bishkek', out_global_value: 'Bishkek', out_global_changed: true }]) };
   };
   try {
-    const outcome = await recordTransliteration('  Бишкек  ', 'Bishkek');
+    const outcome = await recordTransliteration('client-a', '  Бишкек  ', 'Bishkek');
     assert.equal(outcome.ok, true);
+    assert.equal(outcome.globalChanged, true);
+    assert.equal(outcome.globalValue, 'Bishkek');
+    assert.equal(sentBody.p_client_slug, 'client-a');
     assert.equal(sentBody.p_original_key, 'бишкек');
     assert.equal(sentBody.p_original_sample, 'Бишкек');
     assert.equal(sentBody.p_verified_value, 'Bishkek');
@@ -55,8 +84,9 @@ test('recordTransliteration sends the normalized key alongside the original samp
 });
 
 test('empty inputs never throw', async () => {
-  assert.deepEqual(await lookupTransliterations([]), {});
-  assert.deepEqual(await lookupTransliterations(undefined), {});
-  assert.deepEqual(await recordTransliteration('', 'x'), { ok: false, reason: 'empty' });
-  assert.deepEqual(await recordTransliteration('x', ''), { ok: false, reason: 'empty' });
+  assert.deepEqual(await lookupTransliterations('client-a', []), {});
+  assert.deepEqual(await lookupTransliterations('client-a', undefined), {});
+  assert.deepEqual(await recordTransliteration('client-a', '', 'x'), { ok: false, reason: 'empty' });
+  assert.deepEqual(await recordTransliteration('client-a', 'x', ''), { ok: false, reason: 'empty' });
+  assert.deepEqual(await recordTransliteration('', 'x', 'y'), { ok: false, reason: 'empty' });
 });

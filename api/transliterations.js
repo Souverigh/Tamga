@@ -11,14 +11,14 @@ module.exports = async (req, res) => {
     if (!req.body || typeof req.body !== 'object' || JSON.stringify(req.body).length > 20000) {
       return res.status(413).json({ error: 'Слишком большой запрос.' });
     }
-    await requirePaidTranslationClient(req, req.body.clientSlug);
+    const slug = await requirePaidTranslationClient(req, req.body.clientSlug);
 
     if (req.body.action === 'lookup') {
       const originals = req.body.originals;
       if (!Array.isArray(originals) || !originals.length || originals.length > 50 || originals.some(o => typeof o !== 'string')) {
         return res.status(400).json({ error: 'Некорректный список значений (до 50 строк).' });
       }
-      const values = await lookupTransliterations(originals);
+      const values = await lookupTransliterations(slug, originals);
       return res.status(200).json({ values });
     }
 
@@ -35,7 +35,7 @@ module.exports = async (req, res) => {
       // Не критично для ответа клиенту — сбой записи в словарь не должен
       // мешать скачиванию уже готового перевода (см. panel.js:ready — это
       // отдельный fire-and-forget вызов, ответ на него никто не ждёт).
-      await Promise.all(entries.map(e => recordTransliteration(e.original, e.verifiedValue)));
+      await Promise.all(entries.map(e => recordTransliteration(slug, e.original, e.verifiedValue)));
       return res.status(200).json({ ok: true });
     }
 
