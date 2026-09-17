@@ -281,6 +281,15 @@ export async function initTranslationDocs() {
   const fieldsTable = el('table', null, 'admin-table acct-header-table');
   colFields.append(fieldsTable);
 
+  // "Другое"/клиентские типы несут структуру документа в data.paragraphs
+  // (см. lib/translationDocs/pipeline.js, 17 сен 2026), не в fields —
+  // отдельная таблица для сверки, стандартные типы её просто не покажут
+  // (paragraphs пуст).
+  const paragraphsHeading = el('div', 'Полный текст документа', 'step-label');
+  paragraphsHeading.style.margin = '16px 0 6px'; paragraphsHeading.style.display = 'none';
+  const paragraphsTable = el('table', null, 'admin-table acct-header-table');
+  colFields.append(paragraphsHeading, paragraphsTable);
+
   columns.append(colFields);
   resultPanel.append(columns);
   root.append(resultPanel);
@@ -391,11 +400,34 @@ export async function initTranslationDocs() {
     fieldsTable.append(thead, tbody);
   }
 
-  // Форма {name, fields:[{label,value}], columns:[], items:[], keys:[],
-  // paragraphs:[]}, которую понимает public/js/translation/export.mjs
-  // (pairedLayoutBlocks и производные exportDocx/exportTxt/printTranslation)
-  // — переиспользуется как есть, только вместо документов из обычного
-  // потока сюда попадают поля апостиля.
+  // Read-only предпросмотр абзацев (data.paragraphs) — есть только у
+  // "Другое"/клиентских типов (см. lib/translationDocs/pipeline.js,
+  // 17 сен 2026); у табличных типов paragraphs пуст, секция просто скрыта.
+  // Полноценное редактирование — в модалке "Сравнить оригинал и перевод"
+  // ниже (compareBtn), эта таблица только для быстрого взгляда без открытия
+  // модалки.
+  function renderParagraphsTable(paragraphs) {
+    paragraphsTable.innerHTML = '';
+    const visible = (paragraphs || []).filter(p => p.text && p.text.trim());
+    if (!visible.length) {
+      paragraphsHeading.style.display = 'none';
+      return;
+    }
+    paragraphsHeading.style.display = '';
+    const thead = el('thead');
+    const headRow = el('tr');
+    ['Оригинал', 'Перевод'].forEach(t => headRow.append(el('th', t)));
+    thead.append(headRow);
+    const tbody = el('tbody');
+    visible.forEach(p => {
+      const row = el('tr');
+      const original = el('td', p.text || '—'); original.dataset.label = 'Оригинал';
+      const translated = el('td', p.translated || '—'); translated.dataset.label = 'Перевод';
+      row.append(original, translated);
+      tbody.append(row);
+    });
+    paragraphsTable.append(thead, tbody);
+  }
 
   async function selectDoc(index) {
     const doc = docs[index];
@@ -438,6 +470,7 @@ export async function initTranslationDocs() {
     ].forEach(item => regulationList.append(el('li', item)));
     regulationNote.append(el('strong', 'Важная информация'), regulationList);
     renderFieldsTable(data.fields);
+    renderParagraphsTable(data.paragraphs);
     resultPanel.style.display = '';
     [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = false);
   }
@@ -591,6 +624,34 @@ export async function initTranslationDocs() {
       return row;
     };
     doc.result.fields.filter(field => field.value || field.translated || field.requiresReview).forEach(field => tbody.append(makeRow(field)));
+
+    // "Другое"/клиентские типы несут остальную структуру документа в
+    // paragraphs, не в fields (см. lib/translationDocs/pipeline.js,
+    // 17 сен 2026) — отдельная редактируемая таблица ниже; у табличных
+    // типов paragraphs пуст, секция просто не создаётся. Пустой textarea
+    // "Оригинал" исключает абзац из парного экспорта (pairedLayoutBlocks
+    // фильтрует по непустому original) — так клиент может убрать лишний
+    // абзац, не трогая остальные и не нужен отдельный "Удалить".
+    let paraTable = null;
+    let paraHeading = null;
+    if (Array.isArray(doc.result.paragraphs) && doc.result.paragraphs.length) {
+      paraHeading = el('h4', 'Полный текст документа'); paraHeading.style.margin = '18px 0 8px';
+      paraTable = el('table', null, 'admin-table translation-compare-table');
+      paraTable.innerHTML = '<thead><tr><th>Оригинал</th><th>Перевод</th></tr></thead>';
+      const paraBody = el('tbody');
+      doc.result.paragraphs.forEach((p, i) => {
+        const row = el('tr'); row.dataset.index = String(i);
+        const original = document.createElement('textarea'); original.className = 'compare-original'; original.value = p.text || '';
+        const translated = document.createElement('textarea'); translated.className = 'compare-translated'; translated.value = p.translated || '';
+        original.setAttribute('aria-label', `Оригинал, абзац ${i + 1}`);
+        translated.setAttribute('aria-label', `Перевод, абзац ${i + 1}`);
+        const sourceCell = el('td'); sourceCell.append(original); sourceCell.dataset.label = 'Оригинал';
+        const translatedCell = el('td'); translatedCell.append(translated); translatedCell.dataset.label = 'Перевод';
+        row.append(sourceCell, translatedCell);
+        paraBody.append(row);
+      });
+      paraTable.append(paraBody);
+    }
     const sync = () => {
       // Hidden empty headings are part of the legal structure, not deleted rows.
       const fields = doc.result.fields.filter(field => !field.value && !field.translated && !field.requiresReview);
@@ -618,6 +679,15 @@ export async function initTranslationDocs() {
       });
       doc.result.fields = fields;
       renderFieldsTable(doc.result.fields);
+      if (paraTable) {
+        paraTable.querySelectorAll('tbody tr').forEach(row => {
+          const p = doc.result.paragraphs[Number(row.dataset.index)];
+          if (!p) return;
+          p.text = row.querySelector('.compare-original').value;
+          p.translated = row.querySelector('.compare-translated').value;
+        });
+        renderParagraphsTable(doc.result.paragraphs);
+      }
       if (glossaryEntries.length) {
         const token = getClientToken();
         fetch('/api/transliterations', {
@@ -638,7 +708,7 @@ export async function initTranslationDocs() {
     });
     close.addEventListener('click', () => modal.remove());
     modal.addEventListener('click', event => { if (event.target === modal) modal.remove(); });
-    dialog.append(header, toolbar, table);
+    dialog.append(header, toolbar, table, ...(paraTable ? [paraHeading, paraTable] : []));
     modal.append(dialog);
     root.append(modal);
   });
