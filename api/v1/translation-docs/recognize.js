@@ -43,11 +43,11 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType, language } = await readRequestBody(req);
+    const { image, mimeType, sourceText, language } = await readRequestBody(req);
     const clientApiKey = req.headers['x-api-key'];
     const apiKey = process.env.GEMINI_API_KEY;
 
-    const recognition = await recognizeAndTranslateDocument({ base64: image, mimeType, apiKey, language, clientApiKey });
+    const recognition = await recognizeAndTranslateDocument({ base64: image, mimeType, sourceText, apiKey, language, clientApiKey });
 
     res.status(200).json({
       doc_type: recognition.docType,

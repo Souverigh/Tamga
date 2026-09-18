@@ -35,7 +35,7 @@
 //    шрифтом (Garamond, ~9pt) — здесь оставлен Times New Roman чуть мельче,
 //    чтобы не заводить третий шрифт ради одной детали; можно поправить
 //    отдельно, если понадобится точь-в-точь.
-import { escapeXml, certificationBlocks, ATTESTAT_LABELS, TABLE_LABELS } from './export.mjs';
+import { escapeXml, certificationBlocks, ATTESTAT_LABELS, TABLE_LABELS, isFinalsSection } from './export.mjs';
 
 const FONT = '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman" w:eastAsia="SimSun"/>';
 const COL1 = 5055, COL2 = 3810, TOTAL = COL1 + COL2;
@@ -128,8 +128,17 @@ export function buildAttestatDocumentXml(translation, certification) {
   // --- предметы и итоговые экзамены — переменное число строк, не
   // фиксированное количество из образца (Ethan, 18 сен 2026: "если там
   // будет больше предметов, то нужно будет больше добавить").
-  const subjectsData = (translation.tables || []).find(t => t.section === 'Предметы и оценки');
-  const finalsData = (translation.tables || []).find(t => t.section === 'Итоговые экзамены и оценки');
+  // Раньше здесь было точное сравнение со строкой ('Предметы и оценки' /
+  // 'Итоговые экзамены и оценки'), но у Gemini section раньше не был
+  // ограничен схемой (enum) и мог вернуть любую формулировку — из-за этого
+  // вся таблица с предметами могла молча пропасть из перевода (баг,
+  // обнаруженный Ethan 18 сен 2026 по скриншоту). Теперь section
+  // ограничен схемой на будущее (pipeline.js), а здесь — на случай уже
+  // распознанных документов со старым, неограниченным section — тот же
+  // устойчивый классификатор по ключевым словам, что и в export.mjs.
+  const tablesWithRows = (translation.tables || []).filter(t => t.rows?.length);
+  const finalsData = tablesWithRows.find(t => isFinalsSection(t.section));
+  const subjectsData = tablesWithRows.find(t => t !== finalsData) || tablesWithRows[0];
   body += dataSection(subjectsData, TL);
   if (finalsData?.rows?.length) {
     body += spacerRow();

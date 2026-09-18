@@ -182,7 +182,15 @@ export const TABLE_LABELS = {
 // лейблов полей (см. lib/translationDocs/documentStructures.js) независимо
 // от языка экспорта — переводим по этому же принципу, что и лейблы полей
 // выше, а не оставляем как есть.
-const SECTION_TITLE_KEY = { 'Предметы и оценки': 'subjects', 'Итоговые экзамены и оценки': 'finals' };
+// Gemini присылает table.section свободным текстом (теперь схема сама
+// требует ровно одно из двух канонических значений — см.
+// lib/translationDocs/pipeline.js, — но уже распознанные/закешированные
+// документы могли прийти ДО этого ограничения). Классифицируем по
+// ключевому слову, а не строгим совпадением: малейшее расхождение в
+// формулировке иначе молча прячет всю таблицу предметов из перевода
+// (живой баг, Ethan, 18 сен 2026 — распознанный аттестат, таблица
+// предметов пропала из .docx целиком).
+export const isFinalsSection = section => /итог|final|экзам/i.test(String(section || ''));
 // Presentation only: retain every text fragment; remove redundant empty OCR
 // lines from layout rather than treating them as Word line breaks plus margins.
 export function layoutBlocks(doc) {
@@ -196,8 +204,7 @@ export function layoutBlocks(doc) {
   const TL = TABLE_LABELS[doc.language] || TABLE_LABELS.en;
   (doc.tables || []).forEach(table => {
     if (!table.rows?.length) return;
-    const sectionKey = SECTION_TITLE_KEY[table.section];
-    const heading = sectionKey ? TL[sectionKey] : (table.section || TL.subjects);
+    const heading = isFinalsSection(table.section) ? TL.finals : TL.subjects;
     blocks.push({heading}, {table: [[TL.subject, TL.grade], ...table.rows.map(row => [row.subject, row.grade])]});
   });
   // Для Аттестата поля+таблицы (предметы/оценки) уже полностью описывают

@@ -28,6 +28,7 @@ import { getClientSlug, getClientToken, getClientBranding } from '../branding.js
 import { registerTab } from '../contentTabs.js';
 import { renderFileList, renderPreview } from '../../admin/accounting/render.js';
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
+import { extractDocxContent } from '../ocr/docxLoader.js';
 import { LOW_CONFIDENCE_THRESHOLD } from '../../admin/accounting/labels.js';
 import { LANGUAGES } from '../translation/model.mjs';
 import { exportTxt, exportDocx, downloadTranslationPdf, apostilleConvention } from '../translation/export.mjs';
@@ -39,11 +40,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dis
 const DOC_TYPE_LABELS = { apostille: 'Апостиль' };
 const MAX_TRANSLATION_CONCURRENCY = 20;
 
-async function recognizeViaApi(token, slug, base64, mimeType, language, pageCount) {
+// content — { base64, mimeType } (фото/PDF/скан из .docx) ИЛИ { sourceText }
+// (настоящий текст .docx, извлечённый docxLoader.js на клиенте) — ровно одно
+// из двух, см. translateOne ниже.
+async function recognizeViaApi(token, slug, content, language, pageCount) {
   const res = await fetch('/api/translation-docs/client-recognize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-client-token': token },
-    body: JSON.stringify({ image: base64, mimeType, clientSlug: slug, language, pageCount })
+    body: JSON.stringify({
+      ...('sourceText' in content ? { sourceText: content.sourceText } : { image: content.base64, mimeType: content.mimeType }),
+      clientSlug: slug, language, pageCount
+    })
   });
   const data = await res.json();
   if (!res.ok) {
@@ -231,7 +238,13 @@ export async function initTranslationDocs() {
   const dropzone = el('label', null, 'dropzone');
   dropzone.append(el('div', '📄', 'icon'), el('div', 'Нажмите здесь или перетащите файл', 'main'), el('div', 'Фото, скан или PDF — можно сразу несколько', 'sub'));
   const fileInput = el('input'); fileInput.type = 'file';
-  fileInput.accept = 'image/png,image/jpeg,image/webp,application/pdf'; fileInput.multiple = true;
+  // .docx — Ethan, 18 сен 2026: "чтобы человек тоже мог скидывать формат".
+  // Настоящий текст из .docx идёт в Gemini напрямую, без OCR (см. docxLoader.js
+  // и sourceText-ветку в lib/translationDocs/pipeline.js) — точнее и дешевле,
+  // чем распознавание по картинке; отдельного выбора типа документа при
+  // загрузке нет, поэтому ограничить приём файла только Аттестатом на этом
+  // шаге нельзя — тип определяется тем же вызовом Gemini, что и извлечение.
+  fileInput.accept = 'image/png,image/jpeg,image/webp,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document'; fileInput.multiple = true;
   dropzone.append(fileInput);
   root.append(dropzone);
 
@@ -539,9 +552,15 @@ export async function initTranslationDocs() {
     doc.error = null;
     refreshFileList();
     try {
-      const base64 = await fileToBase64(doc.file);
+      const isDocx = doc.file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        || /\.docx$/i.test(doc.file.name);
+      // .docx идёт своим путём (текст или встроенный скан, см. docxLoader.js)
+      // — обычные фото/PDF, как и раньше, base64 самого файла.
+      const content = isDocx
+        ? await extractDocxContent(doc.file)
+        : { base64: await fileToBase64(doc.file), mimeType: doc.file.type };
       const pageCount = await getPageCount(doc.file);
-      const data = await recognizeViaApi(token, slug, base64, doc.file.type, language, pageCount);
+      const data = await recognizeViaApi(token, slug, content, language, pageCount);
       doc.status = 'done';
       doc.result = data;
     } catch (err) {

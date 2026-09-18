@@ -60,6 +60,15 @@ export function renderPreview(previewBox, mimeType, base64) {
     previewBox.innerHTML = `<a href="${previewBlobUrl}" target="_blank" rel="noopener" class="btn-secondary">Открыть PDF</a>`;
     return;
   }
+  // .docx (модуль "Перевод", Ethan, 18 сен 2026) — браузер не умеет
+  // показывать Word-документ инлайн, как картинку; даём ссылку скачать, тем
+  // же приёмом, что и для PDF выше.
+  if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    previewBlobUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+    previewBox.innerHTML = `<a href="${previewBlobUrl}" download class="btn-secondary">Скачать исходный .docx</a>`;
+    return;
+  }
   previewBox.innerHTML = `<img src="data:${mimeType};base64,${base64}" class="acct-preview" alt="Загруженный документ">`;
 }
 
