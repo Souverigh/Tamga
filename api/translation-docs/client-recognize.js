@@ -35,6 +35,7 @@ module.exports = async (req, res) => {
       doc_type: recognition.docType,
       language: recognition.language,
       structure: recognition.structure,
+      quality: recognition.quality,
       regulation: recognition.regulation,
       fields: recognition.fields.map(f => ({
         key: f.key,
@@ -49,6 +50,18 @@ module.exports = async (req, res) => {
       })),
       paragraphs: Array.isArray(recognition.paragraphs)
         ? recognition.paragraphs.map(paragraph => ({ text: paragraph.text, translated: paragraph.translated }))
+        : [],
+      tables: Array.isArray(recognition.tables)
+        ? recognition.tables.map(table => ({
+          section: table.section,
+          rows: table.rows.map(row => ({
+            subject: row.subject,
+            grade: row.grade,
+            translatedSubject: row.translatedSubject,
+            translatedGrade: row.translatedGrade,
+            confidence: row.confidence
+          }))
+        }))
         : [],
       ...(Array.isArray(recognition.elements) ? {
         elements: recognition.elements.map(element => ({

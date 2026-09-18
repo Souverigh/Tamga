@@ -174,6 +174,9 @@ export async function initTranslationDocs() {
   certBody.append(certFieldsRow);
   certDetails.append(certBody);
   root.append(certDetails);
+  // These options are managed centrally in Settings > Recognition > Translation.
+  // Keep the existing export state wired below, but do not duplicate the controls here.
+  certDetails.hidden = true;
 
   certToggle.addEventListener('change', () => { certFieldsRow.style.display = certToggle.checked ? '' : 'none'; });
 
@@ -196,7 +199,9 @@ export async function initTranslationDocs() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         clientCertification = { ...(data?.certification || {}), companyName: data?.displayName || data?.certification?.companyName || '' };
-        if (data?.translatorName) { translatorInput.value = data.translatorName; certToggle.checked = true; certFieldsRow.style.display = ''; }
+        certToggle.checked = data?.certificationEnabled !== false;
+        sourceLangSelect.value = data?.sourceLanguage || 'ru';
+        if (data?.translatorName) { translatorInput.value = data.translatorName; certFieldsRow.style.display = ''; }
       })
       .catch(() => {});
   }
@@ -275,6 +280,8 @@ export async function initTranslationDocs() {
   const docTypeLabel = el('div', 'Документ', 'step-label'); docTypeLabel.style.margin = '0';
   statusRow.append(docTypeLabel);
   colFields.append(statusRow);
+  const qualitySummary = el('div', null, 'translation-quality-summary');
+  colFields.append(qualitySummary);
   const regulationNote = el('div', null, 'admin-note');
   regulationNote.style.marginTop = '8px';
   colFields.append(regulationNote);
@@ -300,6 +307,10 @@ export async function initTranslationDocs() {
   paragraphsHeading.style.margin = '16px 0 6px'; paragraphsHeading.style.display = 'none';
   const paragraphsTable = el('table', null, 'admin-table acct-header-table');
   colFields.append(paragraphsHeading, paragraphsTable);
+  const tablesHeading = el('div', 'Предметы и оценки', 'step-label');
+  tablesHeading.style.margin = '16px 0 6px'; tablesHeading.style.display = 'none';
+  const tablesContainer = el('div');
+  colFields.append(tablesHeading, tablesContainer);
 
   columns.append(colFields);
   resultPanel.append(columns);
@@ -424,6 +435,29 @@ export async function initTranslationDocs() {
       paragraphsHeading.style.display = 'none';
       return;
     }
+
+    function renderSubjectTables(tables) {
+      tablesContainer.replaceChildren();
+      const visible = Array.isArray(tables) ? tables.filter(table => table.rows?.length) : [];
+      tablesHeading.style.display = visible.length ? '' : 'none';
+      visible.forEach(table => {
+        const heading = el('div', table.section || 'Предметы и оценки', 'admin-section-title');
+        const tableEl = el('table', null, 'admin-table acct-header-table');
+        tableEl.innerHTML = '<thead><tr><th>Предмет</th><th>Оценка</th><th>Перевод предмета</th><th>Перевод оценки</th></tr></thead>';
+        const body = el('tbody');
+        table.rows.forEach(row => {
+          const tr = el('tr');
+          [row.subject, row.grade, row.translatedSubject, row.translatedGrade].forEach((value, index) => {
+            const td = el('td', value || '—');
+            td.dataset.label = ['Предмет', 'Оценка', 'Перевод предмета', 'Перевод оценки'][index];
+            tr.append(td);
+          });
+          body.append(tr);
+        });
+        tableEl.append(body);
+        tablesContainer.append(heading, tableEl);
+      });
+    }
     paragraphsHeading.style.display = '';
     const thead = el('thead');
     const headRow = el('tr');
@@ -463,6 +497,21 @@ export async function initTranslationDocs() {
     const data = doc.result;
     exportError.style.display = 'none';
     docTypeLabel.textContent = DOC_TYPE_LABELS[data.doc_type] || data.doc_type;
+    qualitySummary.replaceChildren();
+    if (data.quality) {
+      const recognition = data.quality.recognition;
+      const translation = data.quality.translation;
+      const score = (value, label, detail) => {
+        const item = el('div', null, 'translation-quality-item');
+        item.append(el('strong', `${label}: ${value}%`), el('span', detail, 'admin-note'));
+        return item;
+      };
+      qualitySummary.append(
+        score(recognition.score, 'Уверенность распознавания', `${recognition.populatedFields}/${recognition.totalFields} полей заполнено`),
+        score(translation.score, 'Качество перевода', `${translation.translatedItems}/${translation.totalItems} элементов переведено`)
+      );
+      qualitySummary.title = data.quality.disclaimer || '';
+    }
     regulationNote.replaceChildren();
     const regulationTitle = data.doc_type === 'apostille'
       ? apostilleConvention(selectedLanguage).replace(/^\(|\)$/g, '')
@@ -481,6 +530,7 @@ export async function initTranslationDocs() {
     ].forEach(item => regulationList.append(el('li', item)));
     regulationNote.append(el('strong', 'Важная информация'), regulationList);
     renderFieldsTable(data.fields);
+    renderSubjectTables(data.tables);
     renderParagraphsTable(data.paragraphs);
     resultPanel.style.display = '';
     [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = false);

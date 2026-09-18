@@ -37,6 +37,9 @@ const mainSection = document.getElementById('settingsMain');
 
 const fDisplayName = document.getElementById('fDisplayName');
 const fIncludeText = document.getElementById('fIncludeText');
+const fCertificationEnabled = document.getElementById('fCertificationEnabled');
+const fSourceLanguage = document.getElementById('fSourceLanguage');
+const fTranslatorName = document.getElementById('fTranslatorName');
 const fLogoUrl = document.getElementById('fLogoUrl');
 const fAccentColor = document.getElementById('fAccentColor');
 const fCertificationTaxId = document.getElementById('fCertificationTaxId');
@@ -45,6 +48,21 @@ const fCertificationAddress = document.getElementById('fCertificationAddress');
 const fCertificationPhone = document.getElementById('fCertificationPhone');
 const fCertificationEmail = document.getElementById('fCertificationEmail');
 const colorSwatch = document.getElementById('colorSwatch');
+
+const SETTINGS_LANGUAGES = { ru: 'Русский', ky: 'Кыргызский', en: 'Английский', kk: 'Казахский', uz: 'Узбекский', tr: 'Турецкий', zh: 'Китайский', de: 'Немецкий' };
+Object.entries(SETTINGS_LANGUAGES).forEach(([value, label]) => {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = label;
+  fSourceLanguage.appendChild(option);
+});
+document.querySelectorAll('#panel-recognition .settings-subtabs [role="tab"]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('#panel-recognition .settings-subtabs [role="tab"]').forEach(item => item.setAttribute('aria-selected', String(item === tab)));
+    document.getElementById('recognition-general').hidden = tab.id !== 'subtab-recognition';
+    document.getElementById('recognition-translation').hidden = tab.id !== 'subtab-translation';
+  });
+});
 
 const fieldOverridesList = document.getElementById('fieldOverridesList');
 const addFieldOverrideBtn = document.getElementById('addFieldOverrideBtn');
@@ -627,6 +645,9 @@ function collectSettingsDraft() {
 
 function applyLoadedConfig(data) {
   fIncludeText.checked = data.includeText === true;
+  fCertificationEnabled.checked = data.certificationEnabled !== false;
+  fSourceLanguage.value = data.sourceLanguage || 'ru';
+  fTranslatorName.value = data.translatorName || '';
   state = {
     fieldOverrides: data.fieldOverrides ? JSON.parse(JSON.stringify(data.fieldOverrides)) : {},
     customDocTypes: data.customDocTypes ? JSON.parse(JSON.stringify(data.customDocTypes)) : {},
@@ -671,6 +692,9 @@ async function saveSettings() {
   try {
     const payload = {
       include_text: fIncludeText.checked,
+      certification_enabled: fCertificationEnabled.checked,
+      source_language: fSourceLanguage.value,
+      translator_name: fTranslatorName.value.trim(),
       field_overrides: Object.keys(draft.fieldOverrides).length ? draft.fieldOverrides : null,
       custom_doc_types: Object.keys(draft.customDocTypes).length ? draft.customDocTypes : null,
       business_rules: draft.businessRules,

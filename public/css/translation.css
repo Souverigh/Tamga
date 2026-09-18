@@ -138,3 +138,21 @@
   .translation-grid-cell{padding:4px 12px}
   .translation-grid-cell::before{content:attr(data-label);display:block;font-size:0.68rem;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:2px}
 }
+.translation-quality-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.translation-quality-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+  background: var(--panel, #fff);
+}
+@media (max-width: 640px) {
+  .translation-quality-summary { grid-template-columns: 1fr; }
+}

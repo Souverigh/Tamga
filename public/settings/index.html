@@ -49,14 +49,36 @@
       <button type="button" role="tab" id="tab-users" aria-controls="panel-users" aria-selected="false" tabindex="-1">Пользователи</button>
     </div>
     <section class="panel settings-tab-panel" role="tabpanel" id="panel-recognition" aria-labelledby="tab-recognition" tabindex="0">
-      <h3 class="admin-section-title" style="margin-top:0;">Распознавание</h3>
-      <label class="text-extraction-option" for="fIncludeText">
-        <input type="checkbox" role="switch" id="fIncludeText" aria-describedby="includeTextHelp">
-        <span class="text-extraction-track" aria-hidden="true"></span>
-        <span>Извлекать полный текст документа</span>
-      </label>
-      <p class="admin-note" id="includeTextHelp">Выключите, если нужны только поля и таблицы. Полный текст для копирования и скачивания в .txt не будет извлекаться. Настройка применяется для вашей компании.</p>
-
+      <div class="settings-subtabs" role="tablist" aria-label="Настройки распознавания">
+        <button type="button" role="tab" id="subtab-recognition" aria-controls="recognition-general" aria-selected="true">Распознавание</button>
+        <button type="button" role="tab" id="subtab-translation" aria-controls="recognition-translation" aria-selected="false">Переводческое</button>
+      </div>
+      <div id="recognition-general" role="tabpanel" aria-labelledby="subtab-recognition">
+        <h3 class="admin-section-title" style="margin-top:0;">Распознавание</h3>
+        <label class="text-extraction-option" for="fIncludeText">
+          <input type="checkbox" role="switch" id="fIncludeText" aria-describedby="includeTextHelp">
+          <span class="text-extraction-track" aria-hidden="true"></span>
+          <span>Извлекать полный текст документа</span>
+        </label>
+        <p class="admin-note" id="includeTextHelp">Выключите, если нужны только поля и таблицы. Полный текст для копирования и скачивания в .txt не будет извлекаться. Настройка применяется для вашей компании.</p>
+      </div>
+      <div id="recognition-translation" role="tabpanel" aria-labelledby="subtab-translation" hidden>
+        <h3 class="admin-section-title" style="margin-top:0;">Переводческое</h3>
+        <label class="text-extraction-option" for="fCertificationEnabled">
+          <input type="checkbox" role="switch" id="fCertificationEnabled">
+          <span class="text-extraction-track" aria-hidden="true"></span>
+          <span>Добавлять приписку переводчика в конец документа</span>
+        </label>
+        <div class="admin-field-group">
+          <label class="admin-label">Язык оригинала</label>
+          <select id="fSourceLanguage" class="admin-input"></select>
+        </div>
+        <div class="admin-field-group">
+          <label class="admin-label">ФИО переводчика</label>
+          <input type="text" id="fTranslatorName" class="admin-input" placeholder="Иванова Айгуль Бакытовна">
+        </div>
+        <p class="admin-note">Реквизиты компании для приписки находятся во вкладке «Оформление».</p>
+      </div>
     </section>
     <section class="panel settings-tab-panel" role="tabpanel" id="panel-fields" aria-labelledby="tab-fields" tabindex="0" hidden>
       <h3 class="admin-section-title">Переопределение полей <span class="admin-hint">— свой список полей для стандартного типа документа</span></h3>

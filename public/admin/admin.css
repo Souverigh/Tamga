@@ -126,6 +126,10 @@
 .settings-tabs [role="tab"] { flex:1 1 auto; padding:10px 14px; border:0; border-radius:8px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
 .settings-tabs [aria-selected="true"] { background:var(--ink, #18191c); color:#fff; }
 .settings-tabs [role="tab"]:focus-visible { outline:2px solid var(--accent, #2525de); outline-offset:2px; }
+.settings-subtabs { display:flex; gap:6px; margin:0 0 18px; padding:4px; border-bottom:1px solid var(--border, #ddd); }
+.settings-subtabs [role="tab"] { padding:8px 12px; border:0; border-bottom:2px solid transparent; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.settings-subtabs [aria-selected="true"] { border-bottom-color:var(--accent, #2525de); color:var(--accent, #2525de); font-weight:600; }
+.settings-subtabs [role="tab"]:focus-visible { outline:2px solid var(--accent, #2525de); outline-offset:2px; }
 .settings-tab-panel[hidden], .settings-save-bar[hidden] { display:none; }
 .settings-tab-panel > .admin-section-title:first-child { margin-top:0; padding-top:0; border-top:0; }
 .settings-tab-panel .admin-editor-box { margin-top:14px; padding:16px; }

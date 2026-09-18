@@ -9,6 +9,7 @@ export function buildExportDocs(doc, language) {
   // export.mjs уже умеет рендерить original/translation.paragraphs бок о
   // бок — просто раньше сюда всегда попадал пустой массив.
   const paragraphs = Array.isArray(doc.result.paragraphs) ? doc.result.paragraphs : [];
+  const tables = Array.isArray(doc.result.tables) ? doc.result.tables : [];
   const name = doc.file.name;
   const original = {
     name,
@@ -19,7 +20,8 @@ export function buildExportDocs(doc, language) {
         return { number: e.number, label: e.label, value: field?.value ?? e.value ?? '' };
       })
       : undefined,
-    columns: [], items: [], keys: [], paragraphs: paragraphs.map(p => ({ text: p.text }))
+    columns: [], items: [], keys: [], paragraphs: paragraphs.map(p => ({ text: p.text })),
+    tables: tables.map(table => ({ section: table.section, rows: table.rows.map(row => ({ subject: row.subject, grade: row.grade })) }))
   };
   const translation = {
     name,
@@ -41,7 +43,8 @@ export function buildExportDocs(doc, language) {
         };
       })
       : undefined,
-    columns: [], items: [], keys: [], paragraphs: paragraphs.map(p => ({ text: p.translated || '' }))
+    columns: [], items: [], keys: [], paragraphs: paragraphs.map(p => ({ text: p.translated || '' })),
+    tables: tables.map(table => ({ section: table.section, rows: table.rows.map(row => ({ subject: row.translatedSubject, grade: row.translatedGrade })) }))
   };
   return { original, translation };
 }

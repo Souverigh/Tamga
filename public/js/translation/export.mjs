@@ -88,6 +88,9 @@ export function layoutBlocks(doc) {
   const blocks=[];
   if(doc.fields.length)blocks.push({heading:'Реквизиты'},{table:doc.fields.map(f=>[f.label,f.value])});
   if(doc.columns.length&&doc.items.length)blocks.push({heading:'Табличные данные'},{table:[doc.columns,...doc.items.map(row=>doc.keys.map(k=>row[k]))]});
+  (doc.tables || []).forEach(table => {
+    if (table.rows?.length) blocks.push({heading: table.section || 'Предметы и оценки', table: [['Предмет', 'Оценка'], ...table.rows.map(row => [row.subject, row.grade])]});
+  });
   const paragraphs=doc.paragraphs.flatMap(p=>String(p.text).split(/\r?\n\s*\r?\n/).map(text=>text.trim()).filter(Boolean));
   if(paragraphs.length)blocks.push({heading:'Полный текст распознавания — включая дополнительные отметки'},...paragraphs.map(text=>({text})));
   return blocks;
@@ -149,6 +152,16 @@ export function pairedLayoutBlocks(original,translation) {
       ...original.items.map((row,r)=>original.keys.map((k,c)=>bi(row[k],translation.items[r][original.keys[c]])))
     ]});
   }
+  (original.tables || []).forEach((table, tableIndex) => {
+    const translatedTable = translation.tables?.[tableIndex];
+    if (!table.rows?.length || !translatedTable) return;
+    blocks.push({heading: table.section || 'Предметы и оценки'});
+    blocks.push({table: [['Предмет (оригинал)', 'Оценка (оригинал)', 'Предмет (перевод)', 'Оценка (перевод)'],
+      ...table.rows.map((row, rowIndex) => {
+        const translatedRow = translatedTable.rows[rowIndex] || {};
+        return [row.subject, row.grade, translatedRow.subject, translatedRow.grade];
+      })]});
+  });
   const rows=original.paragraphs
     .map((p,i)=>[p.text,translation.paragraphs[i].text])
     .filter(([a])=>a.trim());
