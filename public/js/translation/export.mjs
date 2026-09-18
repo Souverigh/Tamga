@@ -1,5 +1,6 @@
 import { validateApostille } from './apostille.mjs';
 import { LANGUAGES } from './model.mjs';
+import { buildAttestatDocumentXml } from './attestatDocx.mjs';
 export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 
 // Приписка переводчика для приложения к переводу (Ethan, 17 сен 2026, со
@@ -132,7 +133,7 @@ export function documentBlocks(doc) {
 // подписанные фразы вместо одного грамматически идеального предложения на
 // каждый язык. Сопоставление — по key поля (см. export-model.mjs), не по
 // label: label уже переведён на язык экспорта.
-const ATTESTAT_LABELS = {
+export const ATTESTAT_LABELS = {
   ru: { holder: 'Настоящий документ выдан', bornAt: 'Место и дата рождения', graduated: 'Учебное заведение и год окончания', other: 'Подписи, печать и проверка', number: '№' },
   ky: { holder: 'Бул документ берилди', bornAt: 'Туулган жери жана күнү', graduated: 'Окуу жайы жана бүтүргөн жылы', other: 'Кол тамгалар, мөөр жана текшерүү', number: '№' },
   en: { holder: 'This certificate is issued to', bornAt: 'Born in, on', graduated: 'Graduated from, in', other: 'Signatures, seal and verification', number: 'No.' },
@@ -142,12 +143,12 @@ const ATTESTAT_LABELS = {
   zh: { holder: '本证书颁发给', bornAt: '出生地及出生日期', graduated: '毕业院校及毕业年份', other: '签字、印章及核验信息', number: '编号' },
   de: { holder: 'Dieses Dokument wurde ausgestellt für', bornAt: 'Geburtsort und -datum', graduated: 'Bildungseinrichtung und Abschlussjahr', other: 'Unterschriften, Siegel und Verifizierung', number: 'Nr.' }
 };
-const ATTESTAT_NARRATIVE_KEYS = ['documentType', 'documentNumber', 'fullName', 'birthPlace', 'birthDate', 'institution', 'graduationYear'];
+const ATTESTAT_NARRATIVE_KEYS = ['country', 'documentType', 'documentNumber', 'fullName', 'birthPlace', 'birthDate', 'institution', 'graduationYear'];
 function attestatBlocks(doc) {
   const L = ATTESTAT_LABELS[doc.language] || ATTESTAT_LABELS.en;
   const map = Object.fromEntries(doc.fields.filter(f => f.key).map(f => [f.key, f.value]));
   const blocks = [];
-  const titleLine = [map.documentType, map.documentNumber && `${L.number} ${map.documentNumber}`].filter(Boolean).join(' ');
+  const titleLine = [map.country, map.documentType, map.documentNumber && `${L.number} ${map.documentNumber}`].filter(Boolean).join(' ');
   if (titleLine) blocks.push({ heading: titleLine });
   const clauses = [];
   if (map.fullName) clauses.push(`${L.holder}: ${map.fullName}.`);
@@ -167,7 +168,7 @@ function attestatBlocks(doc) {
   if (rest.length) blocks.push({ heading: L.other }, { table: rest.map(f => [f.label, f.value]) });
   return blocks;
 }
-const TABLE_LABELS = {
+export const TABLE_LABELS = {
   ru: { subject: 'Предмет', grade: 'Оценка', subjects: 'Предметы и оценки', finals: 'Итоговые экзамены и оценки' },
   ky: { subject: 'Сабак', grade: 'Баа', subjects: 'Сабактар жана баалар', finals: 'Жыйынтыктоочу экзамендер жана баалар' },
   en: { subject: 'Subject', grade: 'Grade', subjects: 'Subjects and Grades', finals: 'Final State Examinations' },
@@ -344,6 +345,13 @@ const table = (rows, widths, options = {}) => {
   return '<w:tbl><w:tblPr>'+properties+'<w:tblBorders>'+borders+'</w:tblBorders><w:tblCellMar><w:top w:w="100" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>'+grid+header+body+'</w:tbl>';
 };
 export function buildDocumentXml(original,translation,paired,certification) {
+  // Аттестат в .docx получает свою настоящую вёрстку (шрифт Times New
+  // Roman, пунктирные рамки таблиц предметов/экзаменов) вместо общего
+  // рендера — см. attestatDocx.mjs. Только для непарного экспорта: именно
+  // так вкладка "Перевод" всегда и экспортирует (paired=false, см.
+  // panel.js); парный/двуязычный режим этой вёрстки пока не имеет — если
+  // понадобится, это отдельная задача.
+  if (!paired && translation.docType === 'Аттестат') return buildAttestatDocumentXml(translation, certification);
   const title = documentTitle(original.name, translation, paired);
   let body = title ? paragraph(title,true) : '';
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
