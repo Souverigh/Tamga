@@ -55,29 +55,36 @@ test('PDF rejects invalid numbering before creating a canvas', async () => {
   const doc = document(); doc.elements[10].number = '11';
   await assert.rejects(downloadTranslationPdf(doc), /apostille|\u0430\u043f\u043e\u0441\u0442\u0438\u043b/i);
 });
-test('certification footer (translator name/language pair/signature line, legal basis, notary stamp box) is absent by default and appears across all export formats when a translator name is given', async () => {
+test('certification footer (translator\'s note) is absent by default, and — once a translator name is given — appears across all export formats as two compact paragraphs, target language first then source language, matching the real bureau reference ("аттестат 9.docx", Ethan, 18 сен 2026); the earlier per-field bilingual layout with the статья 87 legal citation and the notary-stamp placeholder box is gone', async () => {
   const { buildTranslationTxt, buildDocumentXml, buildTranslationHtmlBody, certificationBlocks } = await import('../public/js/translation/export.mjs');
   const doc = document();
   assert.deepEqual(certificationBlocks(undefined, 'zh'), [], 'no translator name → no footer at all');
   assert.deepEqual(certificationBlocks({ translatorName: '  ' }, 'zh'), [], 'whitespace-only name is treated as absent');
   for (const render of [buildTranslationTxt, buildDocumentXml, buildTranslationHtmlBody]) {
     const withoutFooter = render(doc, doc, false);
-    assert.doesNotMatch(withoutFooter, /Удостоверение переводчика/);
+    assert.doesNotMatch(withoutFooter, /Достоверность перевода подтверждается|特此证明翻译准确无误|Иванова А\.Б\./);
+    // doc.language === 'zh' (target), sourceLanguage passed below is 'ky' (original)
     const withFooter = render(doc, doc, false, { translatorName: 'Иванова А.Б.', sourceLanguage: 'ky' });
-    assert.match(withFooter, /Удостоверение переводчика/);
     assert.match(withFooter, /Иванова А\.Б\./);
-    assert.match(withFooter, /Кыргызский/); // язык оригинала
-    assert.match(withFooter, /Китайский/); // язык перевода (doc.language === 'zh')
-    // Подпись переводчика двуязычная: локализована под пару языков перевода
-    // (ky/zh здесь), а не жёстко на русском — эти строки для сторон перевода,
-    // не для нотариуса (в отличие от заголовка/статьи закона ниже, которые
-    // всегда на русском+английском для нотариуса КР).
-    assert.match(withFooter, /Котормочунун колу/); // подпись — язык оригинала (ky)
-    assert.match(withFooter, /译者签名/); // подпись — язык перевода (zh)
-    // Печатный формат под стандарт КР: ссылка на статью закона о нотариате
-    // + размеченное (но не сфабрикованное) место для печати нотариуса.
-    assert.match(withFooter, /статья 87 Закона Кыргызской Республики.*«О нотариате»/);
-    assert.match(withFooter, /Место для удостоверительной надписи и печати нотариуса/);
+    // Целевой язык (zh) первым: имя языков в самом предложении на китайском,
+    // не жёстко на русском (иначе получилось бы "from Кыргызский into
+    // Китайский" посреди китайского/английского текста).
+    assert.match(withFooter, /本翻译由译者Иванова А\.Б\.将吉尔吉斯语译为中文/);
+    assert.match(withFooter, /特此证明翻译准确无误/);
+    // Язык оригинала (ky) вторым.
+    assert.match(withFooter, /Бул котормо кыргыз тилинен кытай тилине котормочу Иванова А\.Б\. тарабынан аткарылды/);
+    assert.match(withFooter, /Котормонун тактыгы ушул менен күбөлөндүрүлөт/);
+    // Порядок: язык перевода (реципиент документа) идёт первым абзацем, язык
+    // оригинала — вторым (см. комментарий в certificationBlocks выше).
+    assert.ok(withFooter.indexOf('特此证明翻译准确无误') < withFooter.indexOf('Котормонун тактыгы'), 'target-language paragraph must come before source-language paragraph');
+    // Старый формат (заголовок, ссылка на статью закона, рамка под печать
+    // нотариуса, отдельные подписи на ky/zh) полностью убран под реальный
+    // образец бюро переводов — см. certificationBlocks выше.
+    assert.doesNotMatch(withFooter, /Удостоверение переводчика/);
+    assert.doesNotMatch(withFooter, /статья 87/);
+    assert.doesNotMatch(withFooter, /Место для удостоверительной надписи/);
+    assert.doesNotMatch(withFooter, /Котормочунун колу/);
+    assert.doesNotMatch(withFooter, /译者签名/);
   }
 });
 

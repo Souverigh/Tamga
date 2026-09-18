@@ -2,37 +2,22 @@ import { validateApostille } from './apostille.mjs';
 import { LANGUAGES } from './model.mjs';
 export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 
-// Стандартная концовка "под нотариальное заверение" (Ethan, 17 сен 2026 —
-// со скриншота идеи "автоформирование концовки для переводчиков: ФИО
-// переводчика, языковая пара, место для подписи"). Опциональна — блоков нет
-// вообще, если ФИО переводчика не задано (нет смысла печатать пустую
-// формулировку). ФИО хранится в client-settings (formatting.translatorName,
-// см. api/client-settings.js) и подставляется панелью автоматически, но
-// клиент может переопределить его перед конкретным экспортом.
-// Родительный падеж "с ... на ..." по-русски зависит от языка (из
-// латиницы/кириллицы то и дело меняется склонение) — вместо конструирования
-// грамматически верной фразы на 8 языков просто указываем два языка отдельными
-// строками, это однозначно и не требует словаря склонений.
+// Приписка переводчика для приложения к переводу (Ethan, 17 сен 2026, со
+// скриншота идеи; переделано 18 сен 2026 под реальный образец переводческой
+// компании — файл "аттестат 9.docx"). Опциональна — блоков нет вообще, если
+// ФИО переводчика не задано. ФИО хранится в client-settings
+// (formatting.translatorName, см. api/client-settings.js) и подставляется
+// панелью автоматически, но клиент может переопределить его перед
+// конкретным экспортом.
 //
-// Ethan, 17 сен 2026: "сделать блок печатным по стандарту КР (место под
-// печать нотариуса, ссылка на конкретную статью закона о нотариате)".
-// Добавлено:
-//  1) ссылка на статью 87 Закона Кыргызской Республики «О нотариате»
-//     («Свидетельствование верности перевода») — статья, по которой нотариус
-//     либо сам свидетельствует верность перевода (если владеет языком), либо
-//     свидетельствует подлинность подписи переводчика (если не владеет).
-//     Номер статьи сверен по действующей редакции закона (структура глав
-//     совпадает с найденной в базе cbd.minjust.gov.kg — после ст. 83-86 об
-//     электронной подписи), НО закон менялся (например, закон КР №171 от
-//     30 июля 2025 г. вносил правки) — при появлении расхождений с реальной
-//     практикой нотариусов КР сверить ещё раз и поправить здесь.
-//  2) размеченное пустое место для удостоверительной надписи и печати
-//     нотариуса — САМ текст удостоверительной надписи мы не генерируем: это
-//     собственное нотариальное действие нотариуса (со своим реестровым
-//     номером и формулировкой по форме Минюста КР), подделывать или
-//     предугадывать его нельзя. Мы только оставляем видимое размеченное
-//     место (рамка на всю ширину) — как это принято при оформлении документов
-//     под нотариальное заверение в КР.
+// 18 сен 2026: первая версия (лейбл: значение построчно на двух языках,
+// плюс ссылка на статью 87 закона о нотариате и рамка под печать нотариуса)
+// заменена на формат реального бюро переводов — два компактных абзаца
+// (сначала язык перевода, потом язык оригинала), каждый — реквизиты бюро и
+// одно предложение "Настоящий перевод с X на Y выполнен переводчиком ИМЯ.
+// Достоверность перевода подтверждается." Ссылки на закон о нотариате и
+// места под печать нотариуса в этом образце нет — убраны; если понадобятся
+// обратно, это отдельная просьба.
 const CERTIFICATION_LABELS = {
   ru: { company: 'Компания', tin: 'ИНН', reg: 'ОКПО/регистрационный номер', address: 'Адрес', phone: 'Телефон', email: 'E-mail', translator: 'Переводчик', source: 'Язык оригинала', target: 'Язык перевода', date: 'Дата', signature: 'Подпись переводчика' },
   ky: { company: 'Компания', tin: 'ИНН', reg: 'ОКПО/каттоо номери', address: 'Дарек', phone: 'Телефон', email: 'E-mail', translator: 'Котормочу', source: 'Түп нуска тили', target: 'Котормо тили', date: 'Дата', signature: 'Котормочунун колу' },
@@ -44,35 +29,90 @@ const CERTIFICATION_LABELS = {
   de: { company: 'Unternehmen', tin: 'Steuernummer', reg: 'OKPO/Registrierungsnummer', address: 'Adresse', phone: 'Telefon', email: 'E-Mail', translator: 'Übersetzer', source: 'Originalsprache', target: 'Übersetzungssprache', date: 'Datum', signature: 'Unterschrift des Übersetzers' }
 };
 
+// Название языка ДАЁТСЯ НА ЯЗЫКЕ САМОЙ ФРАЗЫ — LANGUAGES выше фиксированно
+// русский (нужен для дропдаунов), а не для вставки в предложение на любом
+// из 8 языков экспорта: иначе в английском абзаце получилось бы "from
+// Кыргызский into Китайский" — русские слова посреди английского текста
+// (так было в старой версии). Для русского родительный падеж ("с ...
+// языка") хранится отдельно — только для русского: точное склонение
+// кыргызского/казахского и т.п. требует вычитки носителем (см. TECH_DEBT.md
+// про машинный перевод на ky), поэтому для остальных 7 языков используется
+// одна и та же словарная форма в обеих позициях.
+const LANGUAGE_NAME_IN = {
+  ru: { ru: 'русский', ky: 'кыргызский', en: 'английский', kk: 'казахский', uz: 'узбекский', tr: 'турецкий', zh: 'китайский', de: 'немецкий' },
+  ky: { ru: 'орус', ky: 'кыргыз', en: 'англис', kk: 'казак', uz: 'өзбек', tr: 'түрк', zh: 'кытай', de: 'немис' },
+  en: { ru: 'Russian', ky: 'Kyrgyz', en: 'English', kk: 'Kazakh', uz: 'Uzbek', tr: 'Turkish', zh: 'Chinese', de: 'German' },
+  kk: { ru: 'орыс', ky: 'қырғыз', en: 'ағылшын', kk: 'қазақ', uz: 'өзбек', tr: 'түрік', zh: 'қытай', de: 'неміс' },
+  uz: { ru: 'rus', ky: 'qirg‘iz', en: 'ingliz', kk: 'qozoq', uz: 'o‘zbek', tr: 'turk', zh: 'xitoy', de: 'nemis' },
+  tr: { ru: 'Rusça', ky: 'Kırgızca', en: 'İngilizce', kk: 'Kazakça', uz: 'Özbekçe', tr: 'Türkçe', zh: 'Çince', de: 'Almanca' },
+  zh: { ru: '俄语', ky: '吉尔吉斯语', en: '英语', kk: '哈萨克语', uz: '乌兹别克语', tr: '土耳其语', zh: '中文', de: '德语' },
+  de: { ru: 'Russisch', ky: 'Kirgisisch', en: 'Englisch', kk: 'Kasachisch', uz: 'Usbekisch', tr: 'Türkisch', zh: 'Chinesisch', de: 'Deutsch' }
+};
+const RU_LANGUAGE_GENITIVE = { ru: 'русского', ky: 'кыргызского', en: 'английского', kk: 'казахского', uz: 'узбекского', tr: 'турецкого', zh: 'китайского', de: 'немецкого' };
+function languageNameIn(lang, code) {
+  if (!code) return '—';
+  return (LANGUAGE_NAME_IN[lang] || LANGUAGE_NAME_IN.en)[code] || LANGUAGES[code] || code;
+}
+// Каждая функция возвращает [первое предложение (с ФИО), второе предложение
+// (про достоверность)] — раздельно, чтобы вывести их отдельными строками,
+// как в реальном образце (см. certificationBlocks ниже).
+const CERTIFICATION_STATEMENT = {
+  ru: (source, target, name) => [
+    `Настоящий перевод с ${RU_LANGUAGE_GENITIVE[source] || languageNameIn('ru', source)} языка на ${languageNameIn('ru', target)} язык выполнен переводчиком ${name}.`,
+    'Достоверность перевода подтверждается.'
+  ],
+  ky: (source, target, name) => [
+    `Бул котормо ${languageNameIn('ky', source)} тилинен ${languageNameIn('ky', target)} тилине котормочу ${name} тарабынан аткарылды.`,
+    'Котормонун тактыгы ушул менен күбөлөндүрүлөт.'
+  ],
+  en: (source, target, name) => [
+    `This translation from ${languageNameIn('en', source)} into ${languageNameIn('en', target)} was made by the translator ${name}.`,
+    'The accuracy of the translation is hereby certified.'
+  ],
+  kk: (source, target, name) => [
+    `Осы аударма ${languageNameIn('kk', source)} тілінен ${languageNameIn('kk', target)} тіліне аудармашы ${name} тарапынан жасалды.`,
+    'Аударманың дұрыстығы осымен куәландырылады.'
+  ],
+  uz: (source, target, name) => [
+    `Ushbu tarjima ${languageNameIn('uz', source)} tilidan ${languageNameIn('uz', target)} tiliga tarjimon ${name} tomonidan bajarilgan.`,
+    'Tarjimaning aniqligi shu bilan tasdiqlanadi.'
+  ],
+  tr: (source, target, name) => [
+    `Bu çeviri ${languageNameIn('tr', source)} dilinden ${languageNameIn('tr', target)} diline çevirmen ${name} tarafından yapılmıştır.`,
+    'Çevirinin doğruluğu işbu belge ile onaylanır.'
+  ],
+  zh: (source, target, name) => [
+    `本翻译由译者${name}将${languageNameIn('zh', source)}译为${languageNameIn('zh', target)}。`,
+    '特此证明翻译准确无误。'
+  ],
+  de: (source, target, name) => [
+    `Diese Übersetzung aus dem ${languageNameIn('de', source)} ins ${languageNameIn('de', target)} wurde von der Übersetzerin/dem Übersetzer ${name} angefertigt.`,
+    'Die Richtigkeit der Übersetzung wird hiermit bestätigt.'
+  ]
+};
 export function certificationBlocks({ translatorName, sourceLanguage, companyName, taxId, registrationId, address, phone, email } = {}, targetLanguage) {
   const name = String(translatorName || '').trim();
-  if (!name && !companyName && !taxId && !registrationId && !address && !phone && !email) return [];
-  const sourceLabel = LANGUAGES[sourceLanguage] || sourceLanguage || '—';
-  const targetLabel = LANGUAGES[targetLanguage] || targetLanguage || '—';
-  const source = CERTIFICATION_LABELS[sourceLanguage] || CERTIFICATION_LABELS.en;
-  const target = CERTIFICATION_LABELS[targetLanguage] || CERTIFICATION_LABELS.en;
-  const pair = (sourceText, targetText) => `${sourceText}\n${targetText}`;
-  const today = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
-  const companyLines = [
-    companyName && pair(`${source.company}: ${companyName}`, `${target.company}: ${companyName}`),
-    taxId && pair(`${source.tin}: ${taxId}`, `${target.tin}: ${taxId}`),
-    registrationId && pair(`${source.reg}: ${registrationId}`, `${target.reg}: ${registrationId}`),
-    address && pair(`${source.address}: ${address}`, `${target.address}: ${address}`),
-    phone && pair(`${source.phone}: ${phone}`, `${target.phone}: ${phone}`),
-    email && pair(`${source.email}: ${email}`, `${target.email}: ${email}`)
-  ].filter(Boolean);
-  return [
-    { heading: pair('Удостоверение переводчика', 'Translator certification') },
-    ...companyLines.map(text => ({ text })),
-    { text: pair(`${source.source}: ${sourceLabel}`, `${target.source}: ${sourceLabel}`) },
-    { text: pair(`${source.target}: ${targetLabel}`, `${target.target}: ${targetLabel}`) },
-    name ? { text: pair(`${source.translator}: ${name}`, `${target.translator}: ${name}`) } : null,
-    { text: pair(`${source.date}: ${today}`, `${target.date}: ${today}`) },
-    { text: pair(`${source.signature}: _______________________`, `${target.signature}: _______________________`) },
-    { text: pair('Основание: статья 87 Закона Кыргызской Республики «О нотариате» (свидетельствование верности перевода).', 'Legal basis: Article 87 of the Law of the Kyrgyz Republic on Notaries (certification of translation accuracy).') },
-    { heading: pair('Место для удостоверительной надписи и печати нотариуса', 'Space for the notarial certification and seal') },
-    { table: [['\n\n\n\n']], borderless: false }
-  ].filter(Boolean);
+  // Без ФИО переводчика приписывать нечего — блок не появляется вообще (то
+  // же поведение, что и раньше: чекбокс в панели требует заполненного ФИО).
+  if (!name) return [];
+  const buildParagraph = lang => {
+    const L = CERTIFICATION_LABELS[lang] || CERTIFICATION_LABELS.en;
+    const line1 = [companyName, [taxId && `${L.tin}: ${taxId}`, registrationId && `${L.reg}: ${registrationId}`].filter(Boolean).join(' / ')].filter(Boolean).join(', ');
+    // Адрес идёт как есть, без лейбла "Адрес:" — в реальном примере бюро
+    // (см. ниже) адрес просто продолжает строку с телефоном/e-mail.
+    const contactBits = [address, phone && `${L.phone}: ${phone}`, email && `E-mail: ${email}`].filter(Boolean).join(', ');
+    const [sentence1, sentence2] = (CERTIFICATION_STATEMENT[lang] || CERTIFICATION_STATEMENT.en)(sourceLanguage, targetLanguage, name);
+    const line2 = contactBits ? `${contactBits}   ${sentence1}` : sentence1;
+    return [line1, line2, sentence2].filter(Boolean).join('\n');
+  };
+  // Целевой язык первым (его читает получатель перевода), язык оригинала
+  // вторым (нужен нотариусу/бюро) — как в реальном образце переводческой
+  // компании (Ethan, 18 сен 2026, "аттестат 9.docx"), а не построчно
+  // попарно на двух языках сразу, как было раньше. Ссылку на статью 87
+  // закона о нотариате и место под печать нотариуса убрали — в этом
+  // реальном примере их нет; если понадобятся обратно, это отдельная
+  // просьба, а не часть этой приписки.
+  return [buildParagraph(targetLanguage), buildParagraph(sourceLanguage)].filter(Boolean).map(text => ({ text }));
 }
 
 export function documentBlocks(doc) {
@@ -159,7 +199,14 @@ export function layoutBlocks(doc) {
     const heading = sectionKey ? TL[sectionKey] : (table.section || TL.subjects);
     blocks.push({heading}, {table: [[TL.subject, TL.grade], ...table.rows.map(row => [row.subject, row.grade])]});
   });
-  const paragraphs=doc.paragraphs.flatMap(p=>String(p.text).split(/\r?\n\s*\r?\n/).map(text=>text.trim()).filter(Boolean));
+  // Для Аттестата поля+таблицы (предметы/оценки) уже полностью описывают
+  // документ — сплошной текст распознавания снизу был бы точным дублем
+  // уже показанных данных (Ethan, 18 сен 2026). preservesParagraphs теперь
+  // выключен для Аттестата на уровне извлечения (documentStructures.js),
+  // но проверка здесь нужна и для уже распознанных/закешированных на
+  // клиенте документов, у которых paragraphs успели прийти раньше.
+  const attestatCovered = doc.docType === 'Аттестат' && (doc.fields.length || (doc.tables||[]).some(t=>t.rows?.length));
+  const paragraphs=attestatCovered ? [] : doc.paragraphs.flatMap(p=>String(p.text).split(/\r?\n\s*\r?\n/).map(text=>text.trim()).filter(Boolean));
   if(paragraphs.length)blocks.push({heading:'Полный текст распознавания — включая дополнительные отметки'},...paragraphs.map(text=>({text})));
   return blocks;
 }
@@ -245,11 +292,30 @@ function buildBlocks(original,translation,paired) {
   if (!paired && translation.template === 'apostille') return apostilleBlocks(translation);
   return paired ? pairedLayoutBlocks(original,translation) : layoutBlocks(translation);
 }
+// Заголовок документа над самим переводом. Раньше здесь всегда стояло
+// либо имя загруженного файла (original.name/translation.name — то же
+// самое, что видно в поле "Файл" на панели), либо литеральное слово
+// "APOSTILLE". Для Аттестата это давало на выходе строку вида
+// "ea2d75-attestat-osobogo-obrazca-1591798694.jpg" поверх уже готового
+// связного заголовка документа (см. attestatBlocks ниже) — то есть имя
+// файла попадало в перевод, которого там быть не должно (Ethan, 18 сен
+// 2026, живой кейс с реальным аттестатом). Для непарного (paired=false —
+// именно так вкладка "Перевод" всегда и экспортирует, см. panel.js)
+// апостиля тоже убираем: apostilleBlocks() уже сама печатает заголовок
+// "APOSTILLE" внутри таблицы (title/subtitle), второй такой же сверху —
+// чистое дублирование (в .docx/.html он и так не показывался — только
+// в .txt эта дублирующая строка раньше пролезала, здесь заодно выровняли).
+function documentTitle(name, translation, paired) {
+  if (translation.docType === 'Аттестат') return '';
+  if (!paired && translation.template === 'apostille') return '';
+  return paired ? name : translation.name;
+}
 const txtCell = c => (c && c.__bi) ? `${c.a} → ${c.b}` : String(c);
 export function buildTranslationTxt(original,translation,paired,certification) {
-  const title = paired ? original.name : (translation.template === 'apostille' ? 'APOSTILLE' : translation.name);
+  const title = documentTitle(original.name, translation, paired);
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
-  return `${title}\n\n`+blocks.map(b=>(b.subtitle ? b.subtitle+'\n' : '')+(b.table?b.table.map(row=>row.map(txtCell).join('\t')).join('\n'):(b.heading||b.text))).join('\n');
+  const body = blocks.map(b=>(b.subtitle ? b.subtitle+'\n' : '')+(b.table?b.table.map(row=>row.map(txtCell).join('\t')).join('\n'):(b.heading||b.text))).join('\n');
+  return title ? `${title}\n\n${body}` : body;
 }
 export function downloadBlob(blob,name) {
   const url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -278,8 +344,8 @@ const table = (rows, widths, options = {}) => {
   return '<w:tbl><w:tblPr>'+properties+'<w:tblBorders>'+borders+'</w:tblBorders><w:tblCellMar><w:top w:w="100" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>'+grid+header+body+'</w:tbl>';
 };
 export function buildDocumentXml(original,translation,paired,certification) {
-  const title = paired ? original.name : (translation.template === 'apostille' ? 'APOSTILLE' : translation.name);
-  let body=!paired && translation.template === 'apostille' ? '' : paragraph(title,true);
+  const title = documentTitle(original.name, translation, paired);
+  let body = title ? paragraph(title,true) : '';
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
   for (const b of blocks) body+=b.table?table(b.table,b.widths,b):paragraph(b.heading||b.text,!!b.heading);
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
@@ -296,7 +362,8 @@ const cellHtml = cell => (cell && cell.__bi)
   ? escapeXml(cell.a)+'<br><span class="tr">→ '+escapeXml(cell.b)+'</span>'
   : escapeXml(cell);
 export function buildTranslationHtmlBody(original, translation, paired, certification) {
-  const title = !paired && translation.template === 'apostille' ? '' : '<h1>'+escapeXml(original.name)+'</h1>';
+  const titleText = documentTitle(original.name, translation, paired);
+  const title = titleText ? '<h1>'+escapeXml(titleText)+'</h1>' : '';
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
   return title+blocks.map(b => {
     if (!b.table) return b.heading ? '<h3>'+escapeXml(b.heading)+'</h3>' : '<p>'+escapeXml(b.text)+'</p>';
@@ -330,6 +397,16 @@ export async function downloadTranslationPdf(translation,certification) {
   document.body.append(container);
   try {
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Safe page-break points: bottom edge of every top-level block (h1/h3/p/
+    // table) plus every table row, measured in the live DOM before rasterizing.
+    // Without this, a fixed-pixel slice through the canvas could land mid-
+    // paragraph or mid-row, cutting text in half across the page boundary
+    // (Ethan, 18 сен 2026, live PDF export). A block taller than one page (rare)
+    // has no safe break inside the page window, so that page falls back to a
+    // hard cut at the page boundary, same as before.
+    const containerRect = container.getBoundingClientRect();
+    const breakEls = [...container.children, ...container.querySelectorAll('tr')];
+    const rawBreaks = breakEls.map(el => el.getBoundingClientRect().bottom - containerRect.top);
     const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#fff' });
     const { jsPDF } = globalThis.jspdf;
     const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -338,10 +415,23 @@ export async function downloadTranslationPdf(translation,certification) {
     const height = 841.89 - margin * 2;
     const scale = width / canvas.width;
     const pageHeight = Math.floor(height / scale);
+    const factor = canvas.width / containerRect.width;
+    const breakPoints = rawBreaks
+      .map(b => Math.round(b * factor))
+      .filter(v => v > 0 && v < canvas.height)
+      .sort((a, b) => a - b);
     let offset = 0;
     let first = true;
     while (offset < canvas.height) {
-      const sliceHeight = Math.min(pageHeight, canvas.height - offset);
+      const maxEnd = Math.min(offset + pageHeight, canvas.height);
+      let end = maxEnd;
+      if (maxEnd < canvas.height) {
+        for (const bp of breakPoints) {
+          if (bp > offset && bp <= maxEnd) end = bp;
+          else if (bp > maxEnd) break;
+        }
+      }
+      const sliceHeight = end - offset;
       const slice = document.createElement('canvas');
       slice.width = canvas.width;
       slice.height = sliceHeight;
