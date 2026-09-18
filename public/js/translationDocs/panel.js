@@ -180,6 +180,10 @@ export async function initTranslationDocs() {
   const currentUser = getClientBranding()?.currentUser;
   const isPersonalTranslator = currentUser?.role === 'translator';
 
+  let clientCertification = {
+    ...(getClientBranding()?.certification || {}),
+    companyName: getClientBranding()?.displayName || getClientBranding()?.certification?.companyName || ''
+  };
   if (isPersonalTranslator && currentUser.translatorName) {
     translatorInput.value = currentUser.translatorName;
     certToggle.checked = true;
@@ -190,7 +194,10 @@ export async function initTranslationDocs() {
     // пустым.
     fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, { headers: { 'x-client-token': token } })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.translatorName) { translatorInput.value = data.translatorName; certToggle.checked = true; certFieldsRow.style.display = ''; } })
+      .then(data => {
+        clientCertification = { ...(data?.certification || {}), companyName: data?.displayName || data?.certification?.companyName || '' };
+        if (data?.translatorName) { translatorInput.value = data.translatorName; certToggle.checked = true; certFieldsRow.style.display = ''; }
+      })
       .catch(() => {});
   }
 
@@ -214,7 +221,11 @@ export async function initTranslationDocs() {
 
   function currentCertification() {
     if (!certToggle.checked || !translatorInput.value.trim()) return undefined;
-    return { translatorName: translatorInput.value.trim(), sourceLanguage: sourceLangSelect.value };
+    return {
+      ...clientCertification,
+      translatorName: translatorInput.value.trim(),
+      sourceLanguage: sourceLangSelect.value
+    };
   }
 
   // --- загрузка файлов — тот же .dropzone, что у главного экрана и у

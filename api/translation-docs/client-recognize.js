@@ -34,6 +34,7 @@ module.exports = async (req, res) => {
     res.status(200).json({
       doc_type: recognition.docType,
       language: recognition.language,
+      structure: recognition.structure,
       regulation: recognition.regulation,
       fields: recognition.fields.map(f => ({
         key: f.key,
@@ -46,6 +47,9 @@ module.exports = async (req, res) => {
         translationStatus: f.translationStatus,
         requiresReview: f.requiresReview, reviewReason: f.reviewReason, verificationCandidate: f.verificationCandidate
       })),
+      paragraphs: Array.isArray(recognition.paragraphs)
+        ? recognition.paragraphs.map(paragraph => ({ text: paragraph.text, translated: paragraph.translated }))
+        : [],
       ...(Array.isArray(recognition.elements) ? {
         elements: recognition.elements.map(element => ({
           key: element.key,

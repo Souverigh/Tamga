@@ -33,22 +33,46 @@ export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;
 //     предугадывать его нельзя. Мы только оставляем видимое размеченное
 //     место (рамка на всю ширину) — как это принято при оформлении документов
 //     под нотариальное заверение в КР.
-export function certificationBlocks({ translatorName, sourceLanguage } = {}, targetLanguage) {
+const CERTIFICATION_LABELS = {
+  ru: { company: 'Компания', tin: 'ИНН', reg: 'ОКПО/регистрационный номер', address: 'Адрес', phone: 'Телефон', email: 'E-mail', translator: 'Переводчик', source: 'Язык оригинала', target: 'Язык перевода', date: 'Дата', signature: 'Подпись переводчика' },
+  ky: { company: 'Компания', tin: 'ИНН', reg: 'ОКПО/каттоо номери', address: 'Дарек', phone: 'Телефон', email: 'E-mail', translator: 'Котормочу', source: 'Түп нуска тили', target: 'Котормо тили', date: 'Дата', signature: 'Котормочунун колу' },
+  en: { company: 'Company', tin: 'TIN', reg: 'OKPO/registration number', address: 'Address', phone: 'Phone', email: 'E-mail', translator: 'Translator', source: 'Original language', target: 'Translation language', date: 'Date', signature: 'Translator signature' },
+  kk: { company: 'Компания', tin: 'БСН/ЖСН', reg: 'ОКПО/тіркеу нөмірі', address: 'Мекенжай', phone: 'Телефон', email: 'E-mail', translator: 'Аудармашы', source: 'Түпнұсқа тілі', target: 'Аударма тілі', date: 'Күні', signature: 'Аудармашының қолы' },
+  uz: { company: 'Kompaniya', tin: 'STIR', reg: 'OKPO/ro‘yxat raqami', address: 'Manzil', phone: 'Telefon', email: 'E-mail', translator: 'Tarjimon', source: 'Asl nusxa tili', target: 'Tarjima tili', date: 'Sana', signature: 'Tarjimon imzosi' },
+  tr: { company: 'Şirket', tin: 'VKN', reg: 'OKPO/kayıt numarası', address: 'Adres', phone: 'Telefon', email: 'E-posta', translator: 'Çevirmen', source: 'Orijinal dil', target: 'Çeviri dili', date: 'Tarih', signature: 'Çevirmen imzası' },
+  zh: { company: '公司', tin: '税号', reg: 'OKPO/注册号', address: '地址', phone: '电话', email: '电子邮箱', translator: '译者', source: '原文语言', target: '译文语言', date: '日期', signature: '译者签名' },
+  de: { company: 'Unternehmen', tin: 'Steuernummer', reg: 'OKPO/Registrierungsnummer', address: 'Adresse', phone: 'Telefon', email: 'E-Mail', translator: 'Übersetzer', source: 'Originalsprache', target: 'Übersetzungssprache', date: 'Datum', signature: 'Unterschrift des Übersetzers' }
+};
+
+export function certificationBlocks({ translatorName, sourceLanguage, companyName, taxId, registrationId, address, phone, email } = {}, targetLanguage) {
   const name = String(translatorName || '').trim();
-  if (!name) return [];
+  if (!name && !companyName && !taxId && !registrationId && !address && !phone && !email) return [];
   const sourceLabel = LANGUAGES[sourceLanguage] || sourceLanguage || '—';
   const targetLabel = LANGUAGES[targetLanguage] || targetLanguage || '—';
+  const source = CERTIFICATION_LABELS[sourceLanguage] || CERTIFICATION_LABELS.en;
+  const target = CERTIFICATION_LABELS[targetLanguage] || CERTIFICATION_LABELS.en;
+  const pair = (sourceText, targetText) => `${sourceText}\n${targetText}`;
   const today = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
+  const companyLines = [
+    companyName && pair(`${source.company}: ${companyName}`, `${target.company}: ${companyName}`),
+    taxId && pair(`${source.tin}: ${taxId}`, `${target.tin}: ${taxId}`),
+    registrationId && pair(`${source.reg}: ${registrationId}`, `${target.reg}: ${registrationId}`),
+    address && pair(`${source.address}: ${address}`, `${target.address}: ${address}`),
+    phone && pair(`${source.phone}: ${phone}`, `${target.phone}: ${phone}`),
+    email && pair(`${source.email}: ${email}`, `${target.email}: ${email}`)
+  ].filter(Boolean);
   return [
-    { heading: 'Удостоверение переводчика' },
-    { text: `Язык оригинала: ${sourceLabel}. Язык перевода: ${targetLabel}.` },
-    { text: `Переводчик: ${name}` },
-    { text: `Дата: ${today}` },
-    { text: 'Подпись переводчика: _______________________' },
-    { text: 'Основание: статья 87 Закона Кыргызской Республики «О нотариате» (свидетельствование верности перевода).' },
-    { heading: 'Место для удостоверительной надписи и печати нотариуса' },
+    { heading: pair('Удостоверение переводчика', 'Translator certification') },
+    ...companyLines.map(text => ({ text })),
+    { text: pair(`${source.source}: ${sourceLabel}`, `${target.source}: ${sourceLabel}`) },
+    { text: pair(`${source.target}: ${targetLabel}`, `${target.target}: ${targetLabel}`) },
+    name ? { text: pair(`${source.translator}: ${name}`, `${target.translator}: ${name}`) } : null,
+    { text: pair(`${source.date}: ${today}`, `${target.date}: ${today}`) },
+    { text: pair(`${source.signature}: _______________________`, `${target.signature}: _______________________`) },
+    { text: pair('Основание: статья 87 Закона Кыргызской Республики «О нотариате» (свидетельствование верности перевода).', 'Legal basis: Article 87 of the Law of the Kyrgyz Republic on Notaries (certification of translation accuracy).') },
+    { heading: pair('Место для удостоверительной надписи и печати нотариуса', 'Space for the notarial certification and seal') },
     { table: [['\n\n\n\n']], borderless: false }
-  ];
+  ].filter(Boolean);
 }
 
 export function documentBlocks(doc) {

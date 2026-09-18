@@ -55,6 +55,7 @@ module.exports = async (req, res) => {
       displayName: config.displayName,
       logoUrl: config.logoUrl,
       accentColor: config.accentColor,
+      certification: config.formatting?.certification || {},
       // Только названия кастомных типов — чтобы ручной выпадающий список типов
       // (см. public/js/ui/fileList.js) мог их показать. Сами поля/hints внутри
       // каждого типа остаются только на сервере (см. lib/extraction.js) —

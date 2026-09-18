@@ -97,6 +97,7 @@ module.exports = async (req, res) => {
         businessRules: config.businessRules || [],
         includeText: config.formatting?.includeText === true,
         translatorName: config.formatting?.translatorName || null,
+        certification: config.formatting?.certification || {},
         displayName: config.displayName || null,
         logoUrl: config.logoUrl || null,
         accentColor: config.accentColor || null
@@ -157,6 +158,24 @@ module.exports = async (req, res) => {
       }
       translatorName = body.translator_name.trim(); // пустая строка — сознательная очистка (ФИО переводчика больше не задано)
     }
+    let certification = null;
+    if ('certification' in body) {
+      if (!body.certification || typeof body.certification !== 'object' || Array.isArray(body.certification)) {
+        res.status(400).json({ error: 'certification должен быть объектом' });
+        return;
+      }
+      const allowed = ['companyName', 'taxId', 'registrationId', 'address', 'phone', 'email'];
+      certification = {};
+      for (const key of allowed) {
+        if (body.certification[key] !== undefined && body.certification[key] !== null) {
+          if (typeof body.certification[key] !== 'string' || body.certification[key].length > 300) {
+            res.status(400).json({ error: `certification.${key} должен быть строкой не длиннее 300 символов` });
+            return;
+          }
+          if (body.certification[key].trim()) certification[key] = body.certification[key].trim();
+        }
+      }
+    }
 
     if ('field_overrides' in body) {
       const { error, value } = validateFieldOverrides(body.field_overrides);
@@ -190,7 +209,7 @@ module.exports = async (req, res) => {
 
     // formatting.businessRules — read-modify-write НАПРЯМУЮ из Supabase (не из
     // кэша getClientConfig), см. комментарий в начале файла.
-    if (newBusinessRules !== null || 'include_text' in body || translatorName !== null) {
+    if (newBusinessRules !== null || 'include_text' in body || translatorName !== null || certification !== null) {
       const rawRow = await fetchRawRow(supabaseUrl, serviceKey, clientSlug);
       const currentFormatting = (rawRow && rawRow.formatting && typeof rawRow.formatting === 'object') ? { ...rawRow.formatting } : {};
       if (newBusinessRules !== null) {
@@ -201,6 +220,10 @@ module.exports = async (req, res) => {
       if (translatorName !== null) {
         if (translatorName) currentFormatting.translatorName = translatorName;
         else delete currentFormatting.translatorName; // пустая строка — очистка
+      }
+      if (certification !== null) {
+        if (Object.keys(certification).length) currentFormatting.certification = certification;
+        else delete currentFormatting.certification;
       }
       updates.formatting = Object.keys(currentFormatting).length ? currentFormatting : null;
     }
@@ -231,6 +254,7 @@ module.exports = async (req, res) => {
       businessRules: (saved.formatting && Array.isArray(saved.formatting.businessRules)) ? saved.formatting.businessRules : [],
       includeText: saved.formatting?.includeText === true,
       translatorName: saved.formatting?.translatorName || null,
+      certification: saved.formatting?.certification || {},
       displayName: saved.display_name || null,
       logoUrl: saved.logo_url || null,
       accentColor: saved.accent_color || null

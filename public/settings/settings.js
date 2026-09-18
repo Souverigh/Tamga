@@ -39,6 +39,11 @@ const fDisplayName = document.getElementById('fDisplayName');
 const fIncludeText = document.getElementById('fIncludeText');
 const fLogoUrl = document.getElementById('fLogoUrl');
 const fAccentColor = document.getElementById('fAccentColor');
+const fCertificationTaxId = document.getElementById('fCertificationTaxId');
+const fCertificationRegistrationId = document.getElementById('fCertificationRegistrationId');
+const fCertificationAddress = document.getElementById('fCertificationAddress');
+const fCertificationPhone = document.getElementById('fCertificationPhone');
+const fCertificationEmail = document.getElementById('fCertificationEmail');
 const colorSwatch = document.getElementById('colorSwatch');
 
 const fieldOverridesList = document.getElementById('fieldOverridesList');
@@ -630,6 +635,12 @@ function applyLoadedConfig(data) {
   fDisplayName.value = data.displayName || '';
   fLogoUrl.value = data.logoUrl || '';
   fAccentColor.value = data.accentColor || '';
+  const certification = data.certification || {};
+  fCertificationTaxId.value = certification.taxId || '';
+  fCertificationRegistrationId.value = certification.registrationId || '';
+  fCertificationAddress.value = certification.address || '';
+  fCertificationPhone.value = certification.phone || '';
+  fCertificationEmail.value = certification.email || '';
   colorSwatch.style.background = data.accentColor || 'var(--accent)';
   renderFieldOverridesList();
   renderCustomTypesList();
@@ -666,6 +677,14 @@ async function saveSettings() {
       display_name: fDisplayName.value.trim() || null,
       logo_url: fLogoUrl.value.trim() || null,
       accent_color: fAccentColor.value.trim() || null
+      ,certification: {
+        companyName: fDisplayName.value.trim(),
+        taxId: fCertificationTaxId.value.trim(),
+        registrationId: fCertificationRegistrationId.value.trim(),
+        address: fCertificationAddress.value.trim(),
+        phone: fCertificationPhone.value.trim(),
+        email: fCertificationEmail.value.trim()
+      }
     };
     const res = await fetch(`/api/client-settings?slug=${encodeURIComponent(slug)}`, {
       method: 'PATCH',
