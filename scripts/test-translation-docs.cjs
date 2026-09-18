@@ -173,7 +173,11 @@ async function main() {
         assert.ok(txt.includes(paired ? 'География\t4\tGeography\t4' : 'Geography\t4'));
         for (const output of [buildDocumentXml(original, translation, paired), buildPrintHtml(original, translation, paired)]) {
           assert.ok(output.includes('Biology') && output.includes('Geography'));
-          assert.ok(output.includes('Итоговые экзамены и оценки'), 'оба раздела должны экспортироваться');
+          // paired=true идёт через pairedLayoutBlocks (не тронут этой правкой,
+          // там section по-прежнему буквально русский); paired=false — через
+          // layoutBlocks, где заголовок раздела теперь переведён на язык
+          // экспорта (см. TABLE_LABELS/SECTION_TITLE_KEY в export.mjs, 18 сен 2026).
+          assert.ok(output.includes(paired ? 'Итоговые экзамены и оценки' : 'Final State Examinations'), 'оба раздела должны экспортироваться');
         }
       }
       assert.strictEqual(result.quality.translation.score, 100, 'пустая исходная оценка не является пропущенным переводом');

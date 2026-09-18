@@ -11,9 +11,11 @@ export function buildExportDocs(doc, language) {
   const paragraphs = Array.isArray(doc.result.paragraphs) ? doc.result.paragraphs : [];
   const tables = Array.isArray(doc.result.tables) ? doc.result.tables : [];
   const name = doc.file.name;
+  const docType = doc.result.doc_type;
   const original = {
     name,
-    fields: visible.map(f => ({ label: f.label, value: f.value })),
+    docType,
+    fields: visible.map(f => ({ key: f.key, label: f.label, value: f.value })),
     elements: Array.isArray(doc.result.elements)
       ? doc.result.elements.map(e => {
         const field = visible.find(f => f.key === e.key);
@@ -26,8 +28,12 @@ export function buildExportDocs(doc, language) {
   const translation = {
     name,
     language,
+    docType,
     template: doc.result.doc_type === 'apostille' ? 'apostille' : undefined,
-    fields: visible.map(f => ({ label: f.targetLabel || f.label, value: f.translated || '' })),
+    // key сохраняется наряду с уже переведённым targetLabel: рендер (export.mjs,
+    // связный текст для "Аттестата") сопоставляет поля по key, а не по лейблу —
+    // лейбл уже переведён на язык экспорта и не годится для сопоставления.
+    fields: visible.map(f => ({ key: f.key, label: f.targetLabel || f.label, value: f.translated || '' })),
     elements: Array.isArray(doc.result.elements)
       ? doc.result.elements.map(e => {
         const field = visible.find(f => f.key === e.key);

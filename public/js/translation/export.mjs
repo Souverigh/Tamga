@@ -82,14 +82,82 @@ export function documentBlocks(doc) {
   doc.paragraphs.forEach(p=>blocks.push({text:p.text}));
   return blocks;
 }
+// "Аттестат" (Ethan, 18 сен 2026, со скриншота живого перевода человеком):
+// ФИО/дата и место рождения/школа/год окончания читаются связным текстом
+// ("This certificate is issued to: ИМЯ, born in ГОРОДЕ, on ДАТЕ, finished
+// ШКОЛУ in ГОДУ"), а не таблицей "label: value" — так выглядит человеческий
+// перевод такой справки, таблица "Реквизиты" для него читалась как сухая
+// техническая карточка. Точную грамматику (падежи/род) для 8 языков не
+// строим — тот же компромисс, что и в certificationBlocks() ниже: короткие
+// подписанные фразы вместо одного грамматически идеального предложения на
+// каждый язык. Сопоставление — по key поля (см. export-model.mjs), не по
+// label: label уже переведён на язык экспорта.
+const ATTESTAT_LABELS = {
+  ru: { holder: 'Настоящий документ выдан', bornAt: 'Место и дата рождения', graduated: 'Учебное заведение и год окончания', other: 'Подписи, печать и проверка', number: '№' },
+  ky: { holder: 'Бул документ берилди', bornAt: 'Туулган жери жана күнү', graduated: 'Окуу жайы жана бүтүргөн жылы', other: 'Кол тамгалар, мөөр жана текшерүү', number: '№' },
+  en: { holder: 'This certificate is issued to', bornAt: 'Born in, on', graduated: 'Graduated from, in', other: 'Signatures, seal and verification', number: 'No.' },
+  kk: { holder: 'Осы құжат берілді', bornAt: 'Туған жері мен күні', graduated: 'Оқу орны және бітірген жылы', other: 'Қолтаңбалар, мөр және растау', number: '№' },
+  uz: { holder: 'Ushbu hujjat berilgan', bornAt: 'Tug‘ilgan joyi va sanasi', graduated: 'Bitirgan muassasa va yili', other: 'Imzolar, muhr va tasdiqlash', number: '№' },
+  tr: { holder: 'Bu belge şu kişiye verilmiştir', bornAt: 'Doğum yeri ve tarihi', graduated: 'Mezun olduğu kurum ve yıl', other: 'İmzalar, mühür ve doğrulama', number: 'No.' },
+  zh: { holder: '本证书颁发给', bornAt: '出生地及出生日期', graduated: '毕业院校及毕业年份', other: '签字、印章及核验信息', number: '编号' },
+  de: { holder: 'Dieses Dokument wurde ausgestellt für', bornAt: 'Geburtsort und -datum', graduated: 'Bildungseinrichtung und Abschlussjahr', other: 'Unterschriften, Siegel und Verifizierung', number: 'Nr.' }
+};
+const ATTESTAT_NARRATIVE_KEYS = ['documentType', 'documentNumber', 'fullName', 'birthPlace', 'birthDate', 'institution', 'graduationYear'];
+function attestatBlocks(doc) {
+  const L = ATTESTAT_LABELS[doc.language] || ATTESTAT_LABELS.en;
+  const map = Object.fromEntries(doc.fields.filter(f => f.key).map(f => [f.key, f.value]));
+  const blocks = [];
+  const titleLine = [map.documentType, map.documentNumber && `${L.number} ${map.documentNumber}`].filter(Boolean).join(' ');
+  if (titleLine) blocks.push({ heading: titleLine });
+  const clauses = [];
+  if (map.fullName) clauses.push(`${L.holder}: ${map.fullName}.`);
+  const born = [map.birthPlace, map.birthDate].filter(Boolean).join(', ');
+  if (born) clauses.push(`${L.bornAt}: ${born}.`);
+  const graduated = [map.institution, map.graduationYear].filter(Boolean).join(', ');
+  if (graduated) clauses.push(`${L.graduated}: ${graduated}.`);
+  if (clauses.length) blocks.push({ text: clauses.join(' ') });
+  // Остальные поля (директор, печать, регистрационный номер и т.п.) не
+  // теряются — уходят отдельным блоком под своим заголовком, а не под
+  // "Реквизиты", раз этой таблицы для Аттестата больше нет. subjectsAndGrades/
+  // finalExamsAndGrades сюда не попадают: для старого формата ответа (см.
+  // lib/translationDocs/legacyTables.js) это тот же самый текст, что уже
+  // восстановлен в doc.tables построчно — иначе он задвоился бы.
+  const used = new Set([...ATTESTAT_NARRATIVE_KEYS, 'subjectsAndGrades', 'finalExamsAndGrades']);
+  const rest = doc.fields.filter(f => !used.has(f.key) && f.value);
+  if (rest.length) blocks.push({ heading: L.other }, { table: rest.map(f => [f.label, f.value]) });
+  return blocks;
+}
+const TABLE_LABELS = {
+  ru: { subject: 'Предмет', grade: 'Оценка', subjects: 'Предметы и оценки', finals: 'Итоговые экзамены и оценки' },
+  ky: { subject: 'Сабак', grade: 'Баа', subjects: 'Сабактар жана баалар', finals: 'Жыйынтыктоочу экзамендер жана баалар' },
+  en: { subject: 'Subject', grade: 'Grade', subjects: 'Subjects and Grades', finals: 'Final State Examinations' },
+  kk: { subject: 'Пән', grade: 'Баға', subjects: 'Пәндер мен бағалар', finals: 'Қорытынды мемлекеттік емтихандар' },
+  uz: { subject: 'Fan', grade: 'Baho', subjects: 'Fanlar va baholar', finals: 'Yakuniy davlat imtihonlari' },
+  tr: { subject: 'Ders', grade: 'Not', subjects: 'Dersler ve Notlar', finals: 'Final Devlet Sınavları' },
+  zh: { subject: '科目', grade: '成绩', subjects: '科目及成绩', finals: '国家毕业考试成绩' },
+  de: { subject: 'Fach', grade: 'Note', subjects: 'Fächer und Noten', finals: 'Staatliche Abschlussprüfungen' }
+};
+// table.section приходит от Gemini как один из двух канонических русских
+// лейблов полей (см. lib/translationDocs/documentStructures.js) независимо
+// от языка экспорта — переводим по этому же принципу, что и лейблы полей
+// выше, а не оставляем как есть.
+const SECTION_TITLE_KEY = { 'Предметы и оценки': 'subjects', 'Итоговые экзамены и оценки': 'finals' };
 // Presentation only: retain every text fragment; remove redundant empty OCR
 // lines from layout rather than treating them as Word line breaks plus margins.
 export function layoutBlocks(doc) {
   const blocks=[];
-  if(doc.fields.length)blocks.push({heading:'Реквизиты'},{table:doc.fields.map(f=>[f.label,f.value])});
+  if (doc.docType === 'Аттестат' && doc.fields.length) {
+    blocks.push(...attestatBlocks(doc));
+  } else if (doc.fields.length) {
+    blocks.push({heading:'Реквизиты'},{table:doc.fields.map(f=>[f.label,f.value])});
+  }
   if(doc.columns.length&&doc.items.length)blocks.push({heading:'Табличные данные'},{table:[doc.columns,...doc.items.map(row=>doc.keys.map(k=>row[k]))]});
+  const TL = TABLE_LABELS[doc.language] || TABLE_LABELS.en;
   (doc.tables || []).forEach(table => {
-    if (table.rows?.length) blocks.push({heading: table.section || 'Предметы и оценки'}, {table: [['Предмет', 'Оценка'], ...table.rows.map(row => [row.subject, row.grade])]});
+    if (!table.rows?.length) return;
+    const sectionKey = SECTION_TITLE_KEY[table.section];
+    const heading = sectionKey ? TL[sectionKey] : (table.section || TL.subjects);
+    blocks.push({heading}, {table: [[TL.subject, TL.grade], ...table.rows.map(row => [row.subject, row.grade])]});
   });
   const paragraphs=doc.paragraphs.flatMap(p=>String(p.text).split(/\r?\n\s*\r?\n/).map(text=>text.trim()).filter(Boolean));
   if(paragraphs.length)blocks.push({heading:'Полный текст распознавания — включая дополнительные отметки'},...paragraphs.map(text=>({text})));
