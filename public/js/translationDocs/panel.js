@@ -159,18 +159,12 @@ export async function initTranslationDocs() {
 
   const certFieldsRow = el('div', null, 'translation-setup-row');
   certFieldsRow.style.marginTop = '10px'; certFieldsRow.style.display = '';
-  const sourceLangField = el('div', null, 'translation-field');
-  sourceLangField.append(el('span', 'Язык оригинала', 'translation-field-label'));
-  const sourceLangSelect = el('select');
-  Object.entries(LANGUAGES).forEach(([value, label]) => { const o = el('option', label); o.value = value; sourceLangSelect.append(o); });
-  sourceLangSelect.value = 'ru';
-  sourceLangField.append(sourceLangSelect);
   const translatorField = el('div', null, 'translation-field');
   translatorField.append(el('span', 'ФИО переводчика', 'translation-field-label'));
   const translatorInput = document.createElement('input');
   translatorInput.type = 'text'; translatorInput.placeholder = 'Иванова Айгуль Бакытовна';
   translatorField.append(translatorInput);
-  certFieldsRow.append(sourceLangField, translatorField);
+  certFieldsRow.append(translatorField);
   certBody.append(certFieldsRow);
   certDetails.append(certBody);
   root.append(certDetails);
@@ -200,7 +194,6 @@ export async function initTranslationDocs() {
       .then(data => {
         clientCertification = { ...(data?.certification || {}), companyName: data?.displayName || data?.certification?.companyName || '' };
         certToggle.checked = data?.certificationEnabled !== false;
-        sourceLangSelect.value = data?.sourceLanguage || 'ru';
         if (data?.translatorName) { translatorInput.value = data.translatorName; certFieldsRow.style.display = ''; }
       })
       .catch(() => {});
@@ -224,12 +217,12 @@ export async function initTranslationDocs() {
     }).catch(() => {});
   });
 
-  function currentCertification() {
+  function currentCertification(doc) {
     if (!certToggle.checked || !translatorInput.value.trim()) return undefined;
     return {
       ...clientCertification,
       translatorName: translatorInput.value.trim(),
-      sourceLanguage: sourceLangSelect.value
+      sourceLanguage: doc?.result?.sourceLanguage || 'ru'
     };
   }
 
@@ -601,7 +594,7 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
-      await exportDocx(original, translation, false, currentCertification());
+      await exportDocx(original, translation, false, currentCertification(doc));
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .docx';
       exportError.style.display = '';
@@ -614,7 +607,7 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
-      exportTxt(original, translation, false, currentCertification());
+      exportTxt(original, translation, false, currentCertification(doc));
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось собрать .txt';
       exportError.style.display = '';
@@ -627,7 +620,7 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
-      await downloadTranslationPdf(translation, currentCertification());
+      await downloadTranslationPdf(translation, currentCertification(doc));
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось скачать PDF';
       exportError.style.display = '';

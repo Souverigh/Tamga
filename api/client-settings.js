@@ -98,7 +98,6 @@ module.exports = async (req, res) => {
         includeText: config.formatting?.includeText === true,
         translatorName: config.formatting?.translatorName || null,
         certificationEnabled: config.formatting?.certificationEnabled !== false,
-        sourceLanguage: config.formatting?.sourceLanguage || 'ru',
         certification: config.formatting?.certification || {},
         displayName: config.displayName || null,
         logoUrl: config.logoUrl || null,
@@ -160,10 +159,6 @@ module.exports = async (req, res) => {
       }
       translatorName = body.translator_name.trim(); // пустая строка — сознательная очистка (ФИО переводчика больше не задано)
     }
-    if ('source_language' in body && (typeof body.source_language !== 'string' || !/^(ru|ky|en|kk|uz|tr|zh|de)$/.test(body.source_language))) {
-      res.status(400).json({ error: 'source_language содержит неподдерживаемый язык' });
-      return;
-    }
     if ('certification_enabled' in body && typeof body.certification_enabled !== 'boolean') {
       res.status(400).json({ error: 'certification_enabled должен быть true или false' });
       return;
@@ -219,7 +214,7 @@ module.exports = async (req, res) => {
 
     // formatting.businessRules — read-modify-write НАПРЯМУЮ из Supabase (не из
     // кэша getClientConfig), см. комментарий в начале файла.
-    if (newBusinessRules !== null || 'include_text' in body || translatorName !== null || certification !== null || 'source_language' in body || 'certification_enabled' in body) {
+    if (newBusinessRules !== null || 'include_text' in body || translatorName !== null || certification !== null || 'certification_enabled' in body) {
       const rawRow = await fetchRawRow(supabaseUrl, serviceKey, clientSlug);
       const currentFormatting = (rawRow && rawRow.formatting && typeof rawRow.formatting === 'object') ? { ...rawRow.formatting } : {};
       if (newBusinessRules !== null) {
@@ -227,7 +222,6 @@ module.exports = async (req, res) => {
         else delete currentFormatting.businessRules;
       }
       if ('include_text' in body) currentFormatting.includeText = body.include_text;
-      if ('source_language' in body) currentFormatting.sourceLanguage = body.source_language;
       if ('certification_enabled' in body) currentFormatting.certificationEnabled = body.certification_enabled;
       if (translatorName !== null) {
         if (translatorName) currentFormatting.translatorName = translatorName;
@@ -267,7 +261,6 @@ module.exports = async (req, res) => {
       includeText: saved.formatting?.includeText === true,
       translatorName: saved.formatting?.translatorName || null,
       certificationEnabled: saved.formatting?.certificationEnabled !== false,
-      sourceLanguage: saved.formatting?.sourceLanguage || 'ru',
       certification: saved.formatting?.certification || {},
       displayName: saved.display_name || null,
       logoUrl: saved.logo_url || null,

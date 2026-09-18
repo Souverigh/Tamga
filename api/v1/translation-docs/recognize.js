@@ -52,6 +52,7 @@ module.exports = async (req, res) => {
     res.status(200).json({
       doc_type: recognition.docType,
       language: recognition.language,
+      sourceLanguage: recognition.sourceLanguage,
       regulation: recognition.regulation,
       fields: recognition.fields.map(f => ({
         key: f.key, label: f.label, targetLabel: f.targetLabel, value: f.value, raw_text: f.rawText, confidence: f.confidence, translated: f.translated, translationStatus: f.translationStatus,

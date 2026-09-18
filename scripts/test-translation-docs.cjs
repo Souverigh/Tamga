@@ -201,6 +201,39 @@ async function main() {
       assert.strictEqual(result.fields.find(f => f.key === 'subjectsAndGrades').value, 'Биология, География\n5, 4');
     }
   });
+  await scenario('Язык оригинала определяется сервером автоматически по каждому документу (source_language от Gemini), а не выбирается клиентом в настройках', async () => {
+    // Валидный код от модели долетает как есть (регистр не важен).
+    callGeminiImpl = async () => fakeApostilleResponse({ source_language: 'ky' });
+    let result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
+    assert.strictEqual(result.sourceLanguage, 'ky');
+    callGeminiImpl = async () => fakeApostilleResponse({ source_language: 'ZH' });
+    result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
+    assert.strictEqual(result.sourceLanguage, 'zh');
+
+    // Отсутствующий/неподдерживаемый код — безопасный дефолт 'ru', не падение.
+    for (const source_language of [undefined, '', 'fr', 123]) {
+      callGeminiImpl = async () => fakeApostilleResponse({ source_language });
+      result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
+      assert.strictEqual(result.sourceLanguage, 'ru');
+    }
+
+    // И долетает через реальный клиентский эндпоинт (panel.js берёт его
+    // отсюда для приписки переводчика, а не из /api/client-settings).
+    callGeminiImpl = async () => fakeApostilleResponse({ source_language: 'ky' });
+    const accessPath = require.resolve('../lib/translationAccess');
+    const bodyPath = require.resolve('../lib/multipart');
+    const originals = [require.cache[accessPath], require.cache[bodyPath]];
+    require.cache[accessPath] = { id: accessPath, filename: accessPath, loaded: true, exports: { requirePaidTranslationClient: async () => 'test-client' } };
+    require.cache[bodyPath] = { id: bodyPath, filename: bodyPath, loaded: true, exports: { readRequestBody: async req => req.body } };
+    try {
+      const endpoint = require('../api/translation-docs/client-recognize');
+      const response = { setHeader() {}, status(n) { this.statusCode = n; return this; }, json(data) { this.data = data; } };
+      await endpoint({ method: 'POST', body: { image: FAKE_BASE64, mimeType: 'image/png', language: 'en', clientSlug: 'test-client' } }, response);
+      assert.strictEqual(response.data.sourceLanguage, 'ky');
+    } finally {
+      [accessPath, bodyPath].forEach((p, i) => { if (originals[i]) require.cache[p] = originals[i]; else delete require.cache[p]; });
+    }
+  });
   await scenario('Real client endpoint → panel adapter → downloadable DOCX/TXT, with names/dates/IDs', async () => {
     const { APOSTILLE_FIELDS } = require('../lib/translationDocs/apostille');
     const source = ['Кыргыз Республикасы', '', 'Алманова Т.', 'жетекчи', 'Жарандык абалдын актыларын каттоо органы', '', 'Бишкек шаары', '30.01.2018-ж.', 'Чүй-Бишкек аймактык Башкармалыгы', '54-1', '[seal]', 'Ж.Р. Исмаилов [signature]'];

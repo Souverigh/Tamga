@@ -34,6 +34,7 @@ module.exports = async (req, res) => {
     res.status(200).json({
       doc_type: recognition.docType,
       language: recognition.language,
+      sourceLanguage: recognition.sourceLanguage,
       structure: recognition.structure,
       quality: recognition.quality,
       regulation: recognition.regulation,
