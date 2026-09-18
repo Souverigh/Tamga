@@ -436,28 +436,6 @@ export async function initTranslationDocs() {
       return;
     }
 
-    function renderSubjectTables(tables) {
-      tablesContainer.replaceChildren();
-      const visible = Array.isArray(tables) ? tables.filter(table => table.rows?.length) : [];
-      tablesHeading.style.display = visible.length ? '' : 'none';
-      visible.forEach(table => {
-        const heading = el('div', table.section || 'Предметы и оценки', 'admin-section-title');
-        const tableEl = el('table', null, 'admin-table acct-header-table');
-        tableEl.innerHTML = '<thead><tr><th>Предмет</th><th>Оценка</th><th>Перевод предмета</th><th>Перевод оценки</th></tr></thead>';
-        const body = el('tbody');
-        table.rows.forEach(row => {
-          const tr = el('tr');
-          [row.subject, row.grade, row.translatedSubject, row.translatedGrade].forEach((value, index) => {
-            const td = el('td', value || '—');
-            td.dataset.label = ['Предмет', 'Оценка', 'Перевод предмета', 'Перевод оценки'][index];
-            tr.append(td);
-          });
-          body.append(tr);
-        });
-        tableEl.append(body);
-        tablesContainer.append(heading, tableEl);
-      });
-    }
     paragraphsHeading.style.display = '';
     const thead = el('thead');
     const headRow = el('tr');
@@ -472,6 +450,33 @@ export async function initTranslationDocs() {
       tbody.append(row);
     });
     paragraphsTable.append(thead, tbody);
+  }
+
+  // Вынесена на верхний уровень (была случайно вложена в renderParagraphsTable
+  // и потому недоступна из selectDoc, где реально вызывается — ReferenceError
+  // при переводе ЛЮБОГО документа, найдено вручную через браузерную фикстуру
+  // scripts/translation-tables-browser.cjs, 18 сен 2026).
+  function renderSubjectTables(tables) {
+    tablesContainer.replaceChildren();
+    const visible = Array.isArray(tables) ? tables.filter(table => table.rows?.length) : [];
+    tablesHeading.style.display = visible.length ? '' : 'none';
+    visible.forEach(table => {
+      const heading = el('div', table.section || 'Предметы и оценки', 'admin-section-title');
+      const tableEl = el('table', null, 'admin-table acct-header-table');
+      tableEl.innerHTML = '<thead><tr><th>Предмет</th><th>Оценка</th><th>Перевод предмета</th><th>Перевод оценки</th></tr></thead>';
+      const body = el('tbody');
+      table.rows.forEach(row => {
+        const tr = el('tr');
+        [row.subject, row.grade, row.translatedSubject, row.translatedGrade].forEach((value, index) => {
+          const td = el('td', value || '—');
+          td.dataset.label = ['Предмет', 'Оценка', 'Перевод предмета', 'Перевод оценки'][index];
+          tr.append(td);
+        });
+        body.append(tr);
+      });
+      tableEl.append(body);
+      tablesContainer.append(heading, tableEl);
+    });
   }
 
   async function selectDoc(index) {
@@ -709,6 +714,55 @@ export async function initTranslationDocs() {
       });
       paraTable.append(paraBody);
     }
+    // Таблицы предметов/оценок (Аттестат и т.п.) — редактирование строк тоже
+    // часть общего compare/save механизма, не отдельный формат сохранения:
+    // subject/grade/translatedSubject/translatedGrade правятся тут же,
+    // "Добавить строку"/"Удалить" меняют состав, а на "Сохранить изменения"
+    // doc.result.tables перестраивается из DOM (см. sync() ниже) и уходит в
+    // renderSubjectTables — тот же приём, что уже используется для
+    // fields/paragraphs выше. Сохранения на сервер нет и для них: как и
+    // fields/paragraphs, это только состояние вкладки, используемое при
+    // экспорте (buildExportDocs читает doc.result.tables заново на каждый
+    // клик "Скачать").
+    const tableSections = [];
+    if (Array.isArray(doc.result.tables) && doc.result.tables.length) {
+      doc.result.tables.forEach((tbl, tableIndex) => {
+        const tHeading = el('h4', tbl.section || 'Предметы и оценки'); tHeading.style.margin = '18px 0 8px';
+        const tTable = el('table', null, 'admin-table translation-compare-table');
+        tTable.innerHTML = '<thead><tr><th>Предмет</th><th>Оценка</th><th>Перевод предмета</th><th>Перевод оценки</th><th></th></tr></thead>';
+        const tBody = el('tbody');
+        const makeTableRow = (row = {}) => {
+          const tr = el('tr');
+          const cells = [
+            ['compare-table-subject', 'Предмет', row.subject],
+            ['compare-table-grade', 'Оценка', row.grade],
+            ['compare-table-translated-subject', 'Перевод предмета', row.translatedSubject],
+            ['compare-table-translated-grade', 'Перевод оценки', row.translatedGrade]
+          ].map(([cls, labelText, value]) => {
+            const input = document.createElement('input'); input.className = cls; input.value = value || '';
+            input.setAttribute('aria-label', `${labelText}: ${tbl.section || 'Предметы и оценки'}`);
+            const td = el('td'); td.dataset.label = labelText; td.append(input);
+            return td;
+          });
+          const removeCell = el('td');
+          const remove = button('Удалить'); remove.className = 'btn-secondary compare-delete';
+          remove.addEventListener('click', () => tr.remove());
+          removeCell.append(remove);
+          tr.append(...cells, removeCell);
+          return tr;
+        };
+        (tbl.rows || []).forEach(row => tBody.append(makeTableRow(row)));
+        tTable.append(tBody);
+        const addRow = button('Добавить строку'); addRow.className = 'btn-secondary';
+        addRow.style.margin = '8px 0 0';
+        addRow.addEventListener('click', () => {
+          const tr = makeTableRow();
+          tBody.append(tr);
+          tr.querySelector('.compare-table-subject').focus();
+        });
+        tableSections.push({ tHeading, tTable, addRow, tBody, tableIndex });
+      });
+    }
     const saveStatus = el('div', null, 'translation-compare-save-status');
     saveStatus.setAttribute('role', 'status');
     saveStatus.setAttribute('aria-live', 'polite');
@@ -753,6 +807,18 @@ export async function initTranslationDocs() {
         });
         renderParagraphsTable(doc.result.paragraphs);
       }
+      if (tableSections.length) {
+        doc.result.tables = tableSections.map(({ tBody, tableIndex }) => ({
+          section: doc.result.tables[tableIndex]?.section,
+          rows: Array.from(tBody.querySelectorAll('tr')).map(row => ({
+            subject: row.querySelector('.compare-table-subject').value,
+            grade: row.querySelector('.compare-table-grade').value,
+            translatedSubject: row.querySelector('.compare-table-translated-subject').value,
+            translatedGrade: row.querySelector('.compare-table-translated-grade').value
+          })).filter(row => row.subject.trim() || row.grade.trim() || row.translatedSubject.trim() || row.translatedGrade.trim())
+        }));
+        renderSubjectTables(doc.result.tables);
+      }
       let glossarySaved = true;
       if (glossaryEntries.length) {
         const token = getClientToken();
@@ -790,7 +856,7 @@ export async function initTranslationDocs() {
     });
     close.addEventListener('click', () => modal.remove());
     modal.addEventListener('click', event => { if (event.target === modal) modal.remove(); });
-    dialog.append(header, table, ...(paraTable ? [paraHeading, paraTable] : []), toolbar);
+    dialog.append(header, table, ...(paraTable ? [paraHeading, paraTable] : []), ...tableSections.flatMap(({ tHeading, tTable, addRow }) => [tHeading, tTable, addRow]), toolbar);
     modal.append(dialog);
     root.append(modal);
   });

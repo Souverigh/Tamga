@@ -81,6 +81,7 @@ require.cache[require.resolve(uaPath)] = {
 
 let translateSegmentsCalls = [];
 let translateText = text => `[TR]${text}`;
+let reverseTranslations = false;
 const translationPath = path.join(ROOT, 'lib/translation.js');
 require.cache[require.resolve(translationPath)] = {
   id: translationPath, filename: translationPath, loaded: true,
@@ -88,7 +89,8 @@ require.cache[require.resolve(translationPath)] = {
     validateTranslationRequest: body => body, // проходит как есть — сама валидация не тестируется здесь
     translateSegments: async (request, clientRef) => {
       translateSegmentsCalls.push({ request, clientRef });
-      return { segments: request.segments.map(s => ({ id: s.id, text: translateText(s.text) })) };
+      const segments = request.segments.map(s => ({ id: s.id, text: translateText(s.text) }));
+      return { segments: reverseTranslations ? segments.reverse() : segments };
     }
   }
 };
@@ -148,6 +150,57 @@ function fakeGenericResponse({ docType = 'Другое', fields = [], paragraphs
 }
 
 async function main() {
+  await scenario('Аттестат: пары предмет/оценка сохраняются при обратном порядке ответа, в двух таблицах и экспорте', async () => {
+    reverseTranslations = true;
+    translateText = text => ({ 'Биология': 'Biology', 'География': 'Geography' })[text] || text;
+    callGeminiImpl = async () => ({ result: { doc_type: 'Аттестат', fields: [], paragraphs: [], tables: [
+      { section: 'Предметы и оценки', rows: [{ subject: 'Биология', grade: '5', confidence: 95 }, { subject: 'География', grade: '4', confidence: 95 }] },
+      { section: 'Итоговые экзамены и оценки', rows: [{ subject: 'География', grade: '3', confidence: 95 }, { subject: 'Биология', grade: '', confidence: 95 }] }
+    ] } });
+    try {
+      const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
+      assert.deepStrictEqual(result.tables.map(t => t.rows.map(r => [r.subject, r.grade, r.translatedSubject, r.translatedGrade])), [
+        [['Биология', '5', 'Biology', '5'], ['География', '4', 'Geography', '4']],
+        [['География', '3', 'Geography', '3'], ['Биология', '', 'Biology', '']]
+      ]);
+      assert.deepStrictEqual(result.paragraphs, []);
+      const { buildExportDocs } = await import('../public/js/translationDocs/export-model.mjs');
+      const { buildTranslationTxt, buildDocumentXml, buildPrintHtml } = await import('../public/js/translation/export.mjs');
+      const { original, translation } = buildExportDocs({ file: { name: 'school.png' }, result: { ...result, doc_type: result.docType } }, 'en');
+      for (const paired of [false, true]) {
+        const txt = buildTranslationTxt(original, translation, paired);
+        assert.ok(txt.includes(paired ? 'Биология\t5\tBiology\t5' : 'Biology\t5'));
+        assert.ok(txt.includes(paired ? 'География\t4\tGeography\t4' : 'Geography\t4'));
+        for (const output of [buildDocumentXml(original, translation, paired), buildPrintHtml(original, translation, paired)]) {
+          assert.ok(output.includes('Biology') && output.includes('Geography'));
+          assert.ok(output.includes('Итоговые экзамены и оценки'), 'оба раздела должны экспортироваться');
+        }
+      }
+      assert.strictEqual(result.quality.translation.score, 100, 'пустая исходная оценка не является пропущенным переводом');
+    } finally { reverseTranslations = false; translateText = text => `[TR]${text}`; }
+  });
+  await scenario('Старый аттестат: явные пары восстанавливаются без потери строковых полей', async () => {
+    callGeminiImpl = async () => ({ result: { doc_type: 'Аттестат', fields: [
+      { label: 'Предметы и оценки', value: 'Биология — 5\nГеография — 4', confidence: 90 },
+      { label: 'Итоговые экзамены и оценки', value: 'Биология: 4; География: 3', confidence: 90 }
+    ] } });
+    const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
+    assert.deepStrictEqual(result.tables.map(t => t.rows.map(r => [r.subject, r.grade])), [
+      [['Биология', '5'], ['География', '4']], [['Биология', '4'], ['География', '3']]
+    ]);
+    assert.strictEqual(result.fields.find(f => f.key === 'subjectsAndGrades').value, 'Биология — 5\nГеография — 4');
+  });
+  await scenario('Неоднозначные старые строки не превращаются в guessed пары; пустые таблицы безопасны', async () => {
+    for (const tables of [undefined, [], [{ section: 'Пусто', rows: [] }]]) {
+      callGeminiImpl = async () => ({ result: { doc_type: 'Аттестат', tables, fields: [
+        { label: 'Предметы и оценки', value: 'Биология, География\n5, 4', confidence: 90 }
+      ] } });
+      const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
+      assert.ok(Array.isArray(result.tables));
+      assert.strictEqual(result.tables.flatMap(t => t.rows).length, 0);
+      assert.strictEqual(result.fields.find(f => f.key === 'subjectsAndGrades').value, 'Биология, География\n5, 4');
+    }
+  });
   await scenario('Real client endpoint → panel adapter → downloadable DOCX/TXT, with names/dates/IDs', async () => {
     const { APOSTILLE_FIELDS } = require('../lib/translationDocs/apostille');
     const source = ['Кыргыз Республикасы', '', 'Алманова Т.', 'жетекчи', 'Жарандык абалдын актыларын каттоо органы', '', 'Бишкек шаары', '30.01.2018-ж.', 'Чүй-Бишкек аймактык Башкармалыгы', '54-1', '[seal]', 'Ж.Р. Исмаилов [signature]'];

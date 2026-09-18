@@ -89,7 +89,7 @@ export function layoutBlocks(doc) {
   if(doc.fields.length)blocks.push({heading:'Реквизиты'},{table:doc.fields.map(f=>[f.label,f.value])});
   if(doc.columns.length&&doc.items.length)blocks.push({heading:'Табличные данные'},{table:[doc.columns,...doc.items.map(row=>doc.keys.map(k=>row[k]))]});
   (doc.tables || []).forEach(table => {
-    if (table.rows?.length) blocks.push({heading: table.section || 'Предметы и оценки', table: [['Предмет', 'Оценка'], ...table.rows.map(row => [row.subject, row.grade])]});
+    if (table.rows?.length) blocks.push({heading: table.section || 'Предметы и оценки'}, {table: [['Предмет', 'Оценка'], ...table.rows.map(row => [row.subject, row.grade])]});
   });
   const paragraphs=doc.paragraphs.flatMap(p=>String(p.text).split(/\r?\n\s*\r?\n/).map(text=>text.trim()).filter(Boolean));
   if(paragraphs.length)blocks.push({heading:'Полный текст распознавания — включая дополнительные отметки'},...paragraphs.map(text=>({text})));
@@ -254,33 +254,11 @@ export async function downloadTranslationPdf(translation,certification) {
   }
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed;left:-9999px;top:0;width:720px;padding:44px;background:#fff;color:#111;font:16px Arial,sans-serif;line-height:1.35;';
-  if (translation.template === 'apostille') {
-    container.innerHTML = buildTranslationHtmlBody(translation, translation, false, certification);
-  } else {
-    const title = document.createElement('h1');
-    title.textContent = translation.name;
-    container.append(title);
-    const tableEl = document.createElement('table');
-    tableEl.style.cssText = 'width:100%;border-collapse:collapse;table-layout:fixed;';
-    (translation.fields || []).forEach(field => {
-      const row = document.createElement('tr');
-      [field.label, field.value || ''].forEach(text => {
-        const cell = document.createElement('td');
-        cell.textContent = text;
-        cell.style.cssText = 'border:1px solid #777;padding:10px;vertical-align:top;overflow-wrap:anywhere;';
-        row.append(cell);
-      });
-      tableEl.append(row);
-    });
-    container.append(tableEl);
-    const footer = document.createElement('div');
-    footer.innerHTML = certificationBlocks(certification, translation.language)
-      .map(b => b.heading ? `<h3 style="font-size:14px;margin:18px 0 6px">${escapeXml(b.heading)}</h3>`
-        : b.table ? `<table style="width:100%;border-collapse:collapse;margin:4px 0"><tr><td style="border:1px solid #777;padding:10px;min-height:70px;white-space:pre-wrap">${b.table.map(row => row.map(escapeXml).join('')).join('')}</td></tr></table>`
-        : `<p style="margin:4px 0">${escapeXml(b.text)}</p>`)
-      .join('');
-    container.append(footer);
-  }
+  // Reuse the same block builder as print/DOCX/TXT export (buildTranslationHtmlBody)
+  // instead of hand-building a fields-only table here: the old custom container
+  // only ever rendered translation.fields, silently dropping subject/grade
+  // tables and recognized paragraphs from the direct PDF download.
+  container.innerHTML = buildTranslationHtmlBody(translation, translation, false, certification);
   document.body.append(container);
   try {
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
