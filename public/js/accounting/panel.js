@@ -199,13 +199,13 @@ export async function initAccounting() {
 
   function refreshFileList() { renderFileList(fileListEl, docs, activeIndex, selectDoc); }
 
+  // Тот же баг и тот же фикс, что и в public/js/translationDocs/panel.js
+  // (Ethan, 19 сен 2026: второй выбор файла стирал уже добавленные) — docs
+  // раньше ПЕРЕЗАПИСЫВАЛСЯ, теперь новые файлы ДОБАВЛЯЮТСЯ к списку; уже
+  // выбранный/распознанный документ не сбрасывается повторной загрузкой.
   function loadFiles(fileList) {
     if (!fileList || !fileList.length) return;
-    docs = createDocsFromFiles(fileList);
-    activeIndex = -1;
-    originalPanel.style.display = 'none';
-    resultPanel.style.display = 'none';
-    exportBtn.disabled = true;
+    docs = docs.concat(createDocsFromFiles(fileList));
     acctError.style.display = 'none';
     refreshFileList();
     recognizeBtn.disabled = false;

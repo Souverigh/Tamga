@@ -364,12 +364,18 @@ export async function initTranslationDocs() {
     originalDownload.disabled = false;
   }
 
+  // Ethan, 19 сен 2026: "когда загружаю второй файл, предыдущий стирается" —
+  // раньше docs ПЕРЕЗАПИСЫВАЛСЯ новым списком при каждом вызове (второй
+  // выбор файла/второе перетаскивание теряло уже добавленные документы).
+  // Теперь новые файлы ДОБАВЛЯЮТСЯ к уже выбранным — так и должна работать
+  // пакетная загрузка (fileInput.multiple уже поддерживает несколько файлов
+  // за один выбор, но пользователь может загружать по одному/по два отдельно,
+  // напр. фотографируя с телефона). Уже выбранный/переведённый документ
+  // (activeIndex, открытая панель результата) больше не сбрасывается —
+  // только явно нового выбора это не касается.
   function loadFiles(fileList) {
     if (!fileList || !fileList.length) return;
-    docs = createDocsFromFiles(fileList);
-    activeIndex = -1;
-    resultPanel.style.display = 'none';
-    [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = true);
+    docs = docs.concat(createDocsFromFiles(fileList));
     tdError.style.display = 'none';
     refreshFileList();
     translateBtn.disabled = false;
