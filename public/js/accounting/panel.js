@@ -146,6 +146,14 @@ export async function initAccounting() {
   recognizeBtn.disabled = true;
   root.append(recognizeBtn);
 
+  // Тот же приём, что в public/js/translationDocs/panel.js (Ethan, 19 сен
+  // 2026: "убрать документ из списка / очистить весь список") — кнопка
+  // удаления отдельного документа рисуется в самом списке
+  // (renderFileList/onRemove ниже), эта — единая кнопка сброса всего сразу.
+  const clearAllBtn = button('Очистить список');
+  clearAllBtn.style.display = 'none';
+  root.append(clearAllBtn);
+
   const acctError = el('div', null, 'admin-error'); acctError.style.display = 'none';
 
   // Прогресс пачки — тот же .progress-track/.progress-fill, что у обычного
@@ -197,7 +205,10 @@ export async function initAccounting() {
   let docs = [];
   let activeIndex = -1;
 
-  function refreshFileList() { renderFileList(fileListEl, docs, activeIndex, selectDoc); }
+  function refreshFileList() {
+    renderFileList(fileListEl, docs, activeIndex, selectDoc, removeDoc);
+    clearAllBtn.style.display = docs.length ? '' : 'none';
+  }
 
   // Тот же баг и тот же фикс, что и в public/js/translationDocs/panel.js
   // (Ethan, 19 сен 2026: второй выбор файла стирал уже добавленные) — docs
@@ -210,6 +221,44 @@ export async function initAccounting() {
     refreshFileList();
     recognizeBtn.disabled = false;
   }
+
+  function deselectActive() {
+    activeIndex = -1;
+    resultPanel.style.display = 'none';
+    originalPanel.style.display = 'none';
+  }
+
+  // Ethan, 19 сен 2026: "чтобы человек мог убрать какой-то документ из
+  // списка" — тот же приём, что в translationDocs/panel.js. exportBtn
+  // экспортирует ВСЕ распознанные документы разом (не только активный),
+  // поэтому его состояние пересчитывается по остатку docs, а не просто
+  // блокируется.
+  function removeDoc(index) {
+    if (index < 0 || index >= docs.length) return;
+    const wasActive = index === activeIndex;
+    docs.splice(index, 1);
+    if (wasActive) {
+      deselectActive();
+    } else if (index < activeIndex) {
+      activeIndex -= 1;
+    }
+    acctError.style.display = 'none';
+    refreshFileList();
+    recognizeBtn.disabled = !docs.length;
+    exportBtn.disabled = !docs.some(d => d.status === 'done');
+  }
+
+  // "и одна кнопка которая очищает весь список" — сброс всего сразу.
+  function clearAll() {
+    if (!docs.length) return;
+    docs = [];
+    deselectActive();
+    acctError.style.display = 'none';
+    refreshFileList();
+    recognizeBtn.disabled = true;
+    exportBtn.disabled = true;
+  }
+  clearAllBtn.addEventListener('click', clearAll);
 
   fileInput.addEventListener('change', () => {
     loadFiles(fileInput.files);

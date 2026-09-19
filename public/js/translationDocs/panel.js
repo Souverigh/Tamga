@@ -272,6 +272,15 @@ export async function initTranslationDocs() {
   const fileListEl = el('div', null, 'acct-file-list'); fileListEl.style.display = 'none';
   root.append(fileListEl);
 
+  // Ethan, 19 сен 2026: "чтобы человек мог убрать какой-то документ из
+  // списка перевода и одна кнопка которая очищает весь список" — кнопка
+  // удаления отдельного документа рисуется в самом списке (renderFileList,
+  // см. onRemove ниже), а эта — единая кнопка сброса всего списка сразу.
+  // Видна только когда в списке что-то есть (см. refreshFileList).
+  const clearAllBtn = button('Очистить список');
+  clearAllBtn.style.display = 'none';
+  root.append(clearAllBtn);
+
   const originalArea = el('section', null, 'panel acct-original-file-area');
   originalArea.style.display = 'none';
   originalArea.append(el('div', 'Оригинал', 'step-label'));
@@ -347,7 +356,10 @@ export async function initTranslationDocs() {
   let docs = [];
   let activeIndex = -1;
 
-  function refreshFileList() { renderFileList(fileListEl, docs, activeIndex, selectDoc); }
+  function refreshFileList() {
+    renderFileList(fileListEl, docs, activeIndex, selectDoc, removeDoc);
+    clearAllBtn.style.display = docs.length ? '' : 'none';
+  }
 
   let originalDownloadUrl = null;
   function updateOriginalDownload(file, base64) {
@@ -380,6 +392,46 @@ export async function initTranslationDocs() {
     refreshFileList();
     translateBtn.disabled = false;
   }
+
+  function deselectActive() {
+    activeIndex = -1;
+    resultPanel.style.display = 'none';
+    originalArea.style.display = 'none';
+    [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = true);
+    if (originalDownloadUrl) { URL.revokeObjectURL(originalDownloadUrl); originalDownloadUrl = null; }
+    originalDownload.disabled = true;
+  }
+
+  // Ethan, 19 сен 2026: "чтобы человек мог убрать какой-то документ из
+  // списка" — убирает ОДИН документ (кнопка "×" в самой строке, см.
+  // renderFileList/onRemove). Если убираемый документ был открыт —
+  // сворачиваем панель результата, показывать больше нечего. Если он шёл ДО
+  // активного по индексу — сдвигаем activeIndex, чтобы открытая панель
+  // осталась привязана к тому же документу, а не "переехала" на соседний.
+  function removeDoc(index) {
+    if (index < 0 || index >= docs.length) return;
+    const wasActive = index === activeIndex;
+    docs.splice(index, 1);
+    if (wasActive) {
+      deselectActive();
+    } else if (index < activeIndex) {
+      activeIndex -= 1;
+    }
+    tdError.style.display = 'none';
+    refreshFileList();
+    translateBtn.disabled = !docs.length;
+  }
+
+  // "и одна кнопка которая очищает весь список" — сброс всего сразу.
+  function clearAll() {
+    if (!docs.length) return;
+    docs = [];
+    deselectActive();
+    tdError.style.display = 'none';
+    refreshFileList();
+    translateBtn.disabled = true;
+  }
+  clearAllBtn.addEventListener('click', clearAll);
 
   function resetDoneDocsAndRefresh() {
     if (!docs.length) return;

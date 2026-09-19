@@ -18,7 +18,15 @@ let previewBlobUrl = null;
 // распознанных файлов со статусом каждого. onSelect(index) вызывается по
 // клику на строку — сама навигация (какой документ активен) остаётся у
 // вызывающего кода (accounting.js), эта функция только рисует список.
-export function renderFileList(fileListEl, docs, activeIndex, onSelect) {
+//
+// onRemove(index) — Ethan, 19 сен 2026: "чтобы человек могу убрать какой-то
+// документ из списка перевода" — кнопка "×" на каждой строке, тот же приём
+// (символ, title, stopPropagation, чтобы не срабатывал клик по строке), что
+// у public/js/ui/fileList.js (оригинальная вкладка "Распознавание", там уже
+// была своя кнопка удаления). Необязательный параметр — существующий
+// вызов из public/admin/accounting.js его не передаёт, кнопка удаления
+// тогда просто не рисуется, поведение этого вызова не меняется.
+export function renderFileList(fileListEl, docs, activeIndex, onSelect, onRemove) {
   if (!docs.length) {
     fileListEl.style.display = 'none';
     fileListEl.innerHTML = '';
@@ -37,7 +45,26 @@ export function renderFileList(fileListEl, docs, activeIndex, onSelect) {
     const status = document.createElement('span');
     status.className = `acct-file-status acct-file-status-${doc.status}`;
     status.textContent = FILE_STATUS_LABELS[doc.status];
-    main.append(name, status);
+    // status и кнопка удаления — общая группа справа (не растягиваются
+    // порознь через space-between у .acct-file-main), name слева получает
+    // всё оставшееся место под многоточие.
+    const meta = document.createElement('div');
+    meta.className = 'acct-file-meta';
+    meta.append(status);
+    if (typeof onRemove === 'function') {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'acct-file-remove';
+      remove.textContent = '×';
+      remove.title = 'Убрать этот документ из списка';
+      remove.setAttribute('aria-label', 'Убрать документ из списка');
+      remove.addEventListener('click', event => {
+        event.stopPropagation();
+        onRemove(index);
+      });
+      meta.append(remove);
+    }
+    main.append(name, meta);
     row.append(main);
     if (doc.error) {
       const error = document.createElement('div');
