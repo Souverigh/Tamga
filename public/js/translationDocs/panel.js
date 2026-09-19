@@ -29,9 +29,10 @@ import { registerTab } from '../contentTabs.js';
 import { renderFileList, renderPreview } from '../../admin/accounting/render.js';
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
 import { extractDocxContent } from '../ocr/docxLoader.js';
+import { extractStructuralParagraphs, spliceTranslatedParagraphs, assembleTranslatedDocx } from '../translation/structuralDocx.mjs';
 import { LOW_CONFIDENCE_THRESHOLD } from '../../admin/accounting/labels.js';
 import { LANGUAGES } from '../translation/model.mjs';
-import { exportTxt, exportDocx, downloadTranslationPdf, apostilleConvention } from '../translation/export.mjs';
+import { exportTxt, exportDocx, downloadTranslationPdf, apostilleConvention, downloadBlob } from '../translation/export.mjs';
 import { runWithConcurrency } from '../utils/concurrencyPool.js';
 import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.mjs';
 
@@ -39,6 +40,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dis
 
 const DOC_TYPE_LABELS = { apostille: 'Апостиль' };
 const MAX_TRANSLATION_CONCURRENCY = 20;
+// Для скачивания результата режима "Перевести как есть" — export.mjs имеет
+// свою safeName(), но не экспортирует её; здесь тот же приём локально.
+const safeFileName = name => (name || 'document').replace(/\.[^./\\]+$/, '').replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_').slice(0, 100) || 'document';
 
 // content — { base64, mimeType } (фото/PDF/скан из .docx) ИЛИ { sourceText }
 // (настоящий текст .docx, извлечённый docxLoader.js на клиенте) — ровно одно
@@ -135,6 +139,23 @@ export async function initTranslationDocs() {
   langRow.style.marginBottom = '12px';
   root.append(langRow);
   let selectedLanguage = langSelect.value;
+
+  // --- режим "Перевести как есть" (Ethan, 19 сен 2026) ----------------------
+  // Отдельный от классификации+полей путь: для настоящего .docx с текстом
+  // перевод вставляется ПРЯМО внутри оригинального word/document.xml — итог
+  // визуально идентичен оригиналу (таблицы/колонки/картинки не трогаются),
+  // а не оформляется по нашему шаблону. См. structuralDocx.mjs. Работает
+  // только для .docx (не для фото/PDF) — применяется в translateOne ниже.
+  const structuralRow = el('label', null, 'translation-info');
+  structuralRow.style.display = 'flex'; structuralRow.style.alignItems = 'center'; structuralRow.style.gap = '8px';
+  structuralRow.style.marginBottom = '12px'; structuralRow.style.padding = '10px 12px';
+  const structuralModeToggle = document.createElement('input');
+  structuralModeToggle.type = 'checkbox';
+  structuralRow.append(
+    structuralModeToggle,
+    el('span', 'Перевести как есть — сохранить структуру .docx (только для файлов .docx с настоящим текстом; без оформления по нашему шаблону, без блока нотариального заверения, скачивается сразу готовый файл)')
+  );
+  root.append(structuralRow);
 
   // --- удостоверение переводчика ("под нотариальное заверение", Ethan,
   // 17 сен 2026) — необязательный блок: без ФИО переводчика футер вообще не
@@ -354,13 +375,13 @@ export async function initTranslationDocs() {
     translateBtn.disabled = false;
   }
 
-  langSelect.addEventListener('change', () => {
-    selectedLanguage = langSelect.value;
+  function resetDoneDocsAndRefresh() {
     if (!docs.length) return;
     docs.forEach(doc => {
       if (doc.status === 'done') {
         doc.status = 'pending';
         doc.result = null;
+        doc.structural = null;
         doc.error = null;
       }
     });
@@ -370,7 +391,15 @@ export async function initTranslationDocs() {
     tdError.style.display = 'none';
     refreshFileList();
     translateBtn.disabled = false;
+  }
+
+  langSelect.addEventListener('change', () => {
+    selectedLanguage = langSelect.value;
+    resetDoneDocsAndRefresh();
   });
+  // Смена режима меняет то, КАК переводится .docx — уже переведённые
+  // документы нужно перевести заново тем путём, что выбран сейчас.
+  structuralModeToggle.addEventListener('change', resetDoneDocsAndRefresh);
 
   fileInput.addEventListener('change', () => {
     loadFiles(fileInput.files);
@@ -496,7 +525,7 @@ export async function initTranslationDocs() {
     renderPreview(previewBox, doc.file.type, base64);
     updateOriginalDownload(doc.file, base64);
 
-    if (doc.status !== 'done' || !doc.result) {
+    if (doc.status !== 'done' || (!doc.result && !doc.structural)) {
       resultPanel.style.display = 'none';
       [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = true);
       if (doc.error) {
@@ -505,8 +534,29 @@ export async function initTranslationDocs() {
       }
       return;
     }
-    const data = doc.result;
     exportError.style.display = 'none';
+
+    if (doc.structural) {
+      docTypeLabel.textContent = 'Перевести как есть (структура .docx сохранена)';
+      qualitySummary.replaceChildren();
+      regulationNote.replaceChildren();
+      regulationNote.append(el(
+        'div',
+        'В этом режиме документ переводится прямо внутри оригинальной структуры файла — без оформления по нашему шаблону и без блока нотариального заверения. Доступна только выгрузка .docx.',
+        'admin-note'
+      ));
+      renderFieldsTable([]);
+      renderSubjectTables([]);
+      renderParagraphsTable(doc.structural.paragraphs.map(p => ({ text: p.text, translated: doc.structural.translatedById.get(p.id) || '' })));
+      resultPanel.style.display = '';
+      exportDocxBtn.disabled = false;
+      exportTxtBtn.disabled = true;
+      printBtn.disabled = true;
+      compareBtn.disabled = true;
+      return;
+    }
+
+    const data = doc.result;
     docTypeLabel.textContent = DOC_TYPE_LABELS[data.doc_type] || data.doc_type;
     qualitySummary.replaceChildren();
     if (data.quality) {
@@ -547,6 +597,32 @@ export async function initTranslationDocs() {
     [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = false);
   }
 
+  // Режим "Перевести как есть" — переводит абзацы, извлечённые ПРЯМО из
+  // word/document.xml (structuralDocx.mjs), и складывает результат в
+  // doc.structural (zip + documentXml + paragraphs + переводы по id),
+  // ничего не проходя через recognizeAndTranslateDocument/pipeline.js.
+  // Списывает ту же страницу пакета клиента, что и обычный путь — см.
+  // lib/translationDocs/structuralTranslate.js.
+  async function translateStructural(doc, language) {
+    const { zip, documentXml, paragraphs } = await extractStructuralParagraphs(doc.file);
+    const res = await fetch('/api/translation-docs/structural-translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-client-token': token },
+      body: JSON.stringify({ segments: paragraphs.map(p => ({ id: p.id, text: p.text })), clientSlug: slug, language })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const messages = {
+        QUOTA_EXCEEDED: 'Лимит страниц по вашему тарифу исчерпан.',
+        QUOTA_UNAVAILABLE: 'Сервис учёта лимита временно недоступен. Повторите попытку позже.'
+      };
+      throw new Error(messages[data.code] || data.error || `Не удалось перевести документ (код ${res.status}).`);
+    }
+    const translatedById = new Map(data.segments.map(s => [s.id, s.text]));
+    doc.structural = { zip, documentXml, paragraphs, translatedById };
+    doc.result = null;
+  }
+
   async function translateOne(doc, language) {
     doc.status = 'recognizing';
     doc.error = null;
@@ -554,6 +630,14 @@ export async function initTranslationDocs() {
     try {
       const isDocx = doc.file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         || /\.docx$/i.test(doc.file.name);
+
+      if (isDocx && structuralModeToggle.checked) {
+        await translateStructural(doc, language);
+        doc.status = 'done';
+        refreshFileList();
+        return;
+      }
+      doc.structural = null;
       // .docx идёт своим путём (текст или встроенный скан, см. docxLoader.js)
       // — обычные фото/PDF, как и раньше, base64 самого файла.
       const content = isDocx
@@ -612,6 +696,13 @@ export async function initTranslationDocs() {
     if (!doc || doc.status !== 'done') return;
     exportError.style.display = 'none';
     try {
+      if (doc.structural) {
+        const { documentXml, paragraphs, translatedById, zip } = doc.structural;
+        const newXml = spliceTranslatedParagraphs(documentXml, paragraphs, translatedById);
+        const blob = await assembleTranslatedDocx(zip, newXml);
+        downloadBlob(blob, `${safeFileName(doc.file.name)}-translation.docx`);
+        return;
+      }
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
       await exportDocx(original, translation, false, currentCertification(doc));
     } catch (err) {
