@@ -8,6 +8,7 @@ import { postProcessText } from './postprocess/textCleanup.js';
 import { iterateFilePages, releasePageImage } from './ocr/pageSource.js';
 import { recognizeWithTesseract, cancelTesseract } from './ocr/tesseractClient.js';
 import { recognizeWithGemini } from './api/geminiRecognizeClient.js';
+import { detectRotation, rotateImage } from './ocr/orientation.js';
 import { saveResultsToStorage, loadSavedResults, clearSavedResults } from './storage/resultsStorage.js';
 import { downloadTxt, buildAllText } from './export/txtExport.js';
 import { downloadXlsx } from './export/xlsxExport.js';
@@ -281,8 +282,26 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
     // просто для сайта он больше не используется, т.к. клиент всегда шлёт explicit
     // значение; актуален для вызывающих без явного includeText (например, API).
     const includeText = includeTextCheckbox.checked;
-    const result = await recognizeWithGemini(pageImage, presetType, { onRetry, signal, clientSlug, clientToken, includeText });
-    return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys, confidence: result.confidence, warnings: result.warnings || [] };
+    // Фото/сканы иногда сняты боком (текст читается только если повернуть
+    // на 90/180/270°) — Gemini заметно хуже и менее стабильно распознаёт
+    // текст не в обычной ориентации (Ethan, 19 сен 2026: "каждый раз разный
+    // результат" на повёрнутом свидетельстве о рождении). Дешёвая проба
+    // (detectRotation, не списывает лимит страниц — см. lib/recognize.js:
+    // detectOrientation) определяет угол, дальше страница физически
+    // поворачивается ДО единственного платного запроса на распознавание.
+    // Сбой пробы не должен блокировать распознавание — при ошибке rotation
+    // всегда 0, страница уходит как есть, как и раньше.
+    let rotatedImage = null;
+    try {
+      const rotation = await detectRotation(pageImage, { signal });
+      if (rotation) rotatedImage = rotateImage(pageImage, rotation);
+    } catch (_) { /* best-effort */ }
+    try {
+      const result = await recognizeWithGemini(rotatedImage || pageImage, presetType, { onRetry, signal, clientSlug, clientToken, includeText });
+      return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys, confidence: result.confidence, warnings: result.warnings || [] };
+    } finally {
+      if (rotatedImage) releasePageImage(rotatedImage);
+    }
   }
   const rawText = await recognizeWithTesseract(pageImage, lang, m => {
     const pct = Math.round(m.progress * 100);
