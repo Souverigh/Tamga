@@ -3,6 +3,8 @@ import { LANGUAGES } from './model.mjs';
 import { buildAttestatDocumentXml } from './attestatDocx.mjs';
 import { buildIdCardDocumentXml } from './idCardDocx.mjs';
 import { buildPassportCanadaDocumentXml } from './passportCanadaDocx.mjs';
+import { buildPassportUzbekistanOldDocumentXml } from './passportUzbekistanOldDocx.mjs';
+import { buildPassportUzbekistanDocumentXml } from './passportUzbekistanDocx.mjs';
 export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 
 // Приписка переводчика для приложения к переводу (Ethan, 17 сен 2026, со
@@ -370,6 +372,11 @@ export function buildDocumentXml(original,translation,paired,certification) {
   // "Паспорт Канады" — отдельный тип со своей вёрсткой (не вариант этой же
   // ID-карты) — см. passportCanadaDocx.mjs.
   if (!paired && translation.docType === 'Паспорт Канады') return buildPassportCanadaDocumentXml(translation, certification);
+  // "Паспорт Узбекистана (старого образца)" / "(биометрический)" — два
+  // отдельных типа со своей вёрсткой каждый (не варианты ID-карты) — см.
+  // passportUzbekistanOldDocx.mjs / passportUzbekistanDocx.mjs.
+  if (!paired && translation.docType === 'Паспорт Узбекистана (старого образца)') return buildPassportUzbekistanOldDocumentXml(translation, certification);
+  if (!paired && translation.docType === 'Паспорт Узбекистана (биометрический)') return buildPassportUzbekistanDocumentXml(translation, certification);
   const title = documentTitle(original.name, translation, paired);
   let body = title ? paragraph(title,true) : '';
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];

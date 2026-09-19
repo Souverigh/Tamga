@@ -1,5 +1,13 @@
 // Shared source-to-output rules for recognition, review and export validation.
-const TRANSLIT = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: 'ie', ы: 'y', ь: '', э: 'e', ю: 'iu', я: 'ia', ң: 'ng', ү: 'u', ө: 'o' };
+// ң/ү/ө — киргизские кириллические буквы. ў/қ/ғ/ҳ — узбекские кириллические
+// буквы (документы на узбекской кириллице, напр. "Паспорт Узбекистана
+// (старого образца)"/"(биометрический)", добавлены 19 сен 2026: не были в
+// таблице вовсе, из-за этого ФИО с этими буквами транслитерировались бы
+// частично — буква проходила бы как есть внутри иначе латинского имени).
+// Соответствие латинскому узбекскому алфавиту: ў→oʻ, қ→q, ғ→gʻ, ҳ→h — тот
+// же уровень строгости, что у ky ң/ү/ө (практическое соответствие, не
+// сверено с носителем, см. TECH_DEBT.md).
+const TRANSLIT = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: 'ie', ы: 'y', ь: '', э: 'e', ю: 'iu', я: 'ia', ң: 'ng', ү: 'u', ө: 'o', ў: 'oʻ', қ: 'q', ғ: 'gʻ', ҳ: 'h' };
 const CYRILLIC_TARGET_LANGUAGES = ['ru', 'ky', 'kk'];
 const LATIN_TARGET_LANGUAGES = ['en', 'de', 'tr', 'uz', 'zh'];
 
@@ -45,7 +53,7 @@ const transliterateLatinToCyrillic = value => String(value).split(/(\s+)/).map(t
 
 export function transliterateName(value, language) {
   const text = String(value ?? '');
-  const hasCyrillic = /[а-яёңүө]/i.test(text);
+  const hasCyrillic = /[а-яёңүөўқғҳ]/i.test(text);
   const hasLatin = /[a-zà-ÿ]/i.test(text);
   if (hasCyrillic && LATIN_TARGET_LANGUAGES.includes(language)) {
     return Array.from(text).map(char => {
