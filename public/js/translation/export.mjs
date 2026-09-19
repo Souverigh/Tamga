@@ -1,6 +1,7 @@
 import { validateApostille } from './apostille.mjs';
 import { LANGUAGES } from './model.mjs';
 import { buildAttestatDocumentXml } from './attestatDocx.mjs';
+import { buildIdCardDocumentXml } from './idCardDocx.mjs';
 export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 
 // Приписка переводчика для приложения к переводу (Ethan, 17 сен 2026, со
@@ -359,6 +360,11 @@ export function buildDocumentXml(original,translation,paired,certification) {
   // panel.js); парный/двуязычный режим этой вёрстки пока не имеет — если
   // понадобится, это отдельная задача.
   if (!paired && translation.docType === 'Аттестат') return buildAttestatDocumentXml(translation, certification);
+  // То же самое для типа "Паспорт / удостоверение личности" (ID-карта КР
+  // и аналогичные документы личности) — см. комментарий в idCardDocx.mjs
+  // о том, чем эта вёрстка отличается от Аттестата (нет реального образца
+  // от бюро, MRZ не воспроизводится).
+  if (!paired && translation.docType === 'Паспорт / удостоверение личности') return buildIdCardDocumentXml(translation, certification);
   const title = documentTitle(original.name, translation, paired);
   let body = title ? paragraph(title,true) : '';
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];

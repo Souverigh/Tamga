@@ -30,16 +30,29 @@
 //    распознанное имя, если оно есть, иначе — маркер "/подпись/" на языке
 //    экспорта (тем же способом, что и в реальном образце).
 //  - Приписка бюро переводов внизу — это уже существующий certificationBlocks()
-//    из export.mjs (см. его комментарий):两 абзаца, язык перевода первым,
+//    из export.mjs (см. его комментарий): два абзаца, язык перевода первым,
 //    язык оригинала вторым. В настоящем образце этот блок набран другим
 //    шрифтом (Garamond, ~9pt) — здесь оставлен Times New Roman чуть мельче,
 //    чтобы не заводить третий шрифт ради одной детали; можно поправить
 //    отдельно, если понадобится точь-в-точь.
-import { escapeXml, certificationBlocks, ATTESTAT_LABELS, TABLE_LABELS, isFinalsSection } from './export.mjs';
+//
+// 18 сен 2026: низкоуровневые примитивы (ячейка/строка/таблица с рамками,
+// вложенная таблица) вынесены в docxLayoutEngine.mjs — переиспользуемый
+// движок под будущие типы документов с похожей "как в Word" вёрсткой
+// (архитектура подтверждена Ethan через AskUserQuestion). Этот файл теперь
+// содержит только конфиг Аттестата (шрифт, ширины колонок, лейблы) и
+// сборку блоков поверх примитивов движка — саму разметку .docx не
+// изобретает заново.
+import { certificationBlocks, ATTESTAT_LABELS, TABLE_LABELS, isFinalsSection } from './export.mjs';
+import { rFonts, createTextHelpers, cell, row, table, nestedTable } from './docxLayoutEngine.mjs';
 
-const FONT = '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman" w:eastAsia="SimSun"/>';
+// --- конфиг вёрстки Аттестата: шрифт и ширины колонок сняты с реального
+// референса (см. комментарий выше). Другой тип документа задаёт свои
+// значения в своём собственном файле-конфиге, не трогая этот.
+const FONT = rFonts('Times New Roman');
 const COL1 = 5055, COL2 = 3810, TOTAL = COL1 + COL2;
 const SIG_COL1 = 3802, SIG_COL2 = 1502;
+const { run, para, paraRuns, LINE_BREAK } = createTextHelpers(FONT);
 
 // "/подпись/"-конвенция бюро переводов: маркер вместо неразборчивой или
 // отсутствующей рукописной подписи (см. сам образец — там тоже "/signature/"
@@ -49,34 +62,12 @@ const SIGNATURE_PLACEHOLDER = {
   uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/'
 };
 
-const run = (text, { bold, italic, size } = {}) => {
-  const rPr = FONT + (bold ? '<w:b/><w:bCs/>' : '') + (italic ? '<w:i/><w:iCs/>' : '') + (size ? `<w:sz w:val="${size}"/>` : '');
-  const body = escapeXml(text).replace(/\r?\n/g, '</w:t><w:br/><w:t xml:space="preserve">');
-  return `<w:r><w:rPr>${rPr}</w:rPr><w:t xml:space="preserve">${body}</w:t></w:r>`;
-};
-const LINE_BREAK = '<w:r><w:br/></w:r>';
-const paraRuns = (runsXml, { align, spacingAfter = 0 } = {}) =>
-  `<w:p><w:pPr><w:spacing w:after="${spacingAfter}" w:line="240" w:lineRule="auto"/>${align ? `<w:jc w:val="${align}"/>` : ''}</w:pPr>${runsXml}</w:p>`;
-const para = (text, opts = {}) => paraRuns(run(text, opts), opts);
-
-const cellBorders = sides => sides.length
-  ? `<w:tcBorders>${sides.map(s => `<w:${s} w:val="dashed" w:sz="4" w:space="0" w:color="000000"/>`).join('')}</w:tcBorders>`
-  : '';
-const cell = (width, contentXml, { span, borders = [] } = {}) =>
-  `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${span ? `<w:gridSpan w:val="${span}"/>` : ''}${cellBorders(borders)}</w:tcPr>${contentXml}</w:tc>`;
-const row = (cellsXml, { height } = {}) =>
-  `<w:tr><w:trPr><w:cantSplit/>${height ? `<w:trHeight w:val="${height}"/>` : ''}</w:trPr>${cellsXml}</w:tr>`;
-
-const TABLE_OPEN = `<w:tbl><w:tblPr><w:tblW w:w="${TOTAL}" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="${COL1}"/><w:gridCol w:w="${COL2}"/></w:tblGrid>`;
-const TABLE_CLOSE = '</w:tbl>';
-
 function signatureTable(rows) {
   if (!rows.length) return '';
-  const trs = rows.map(([label, value]) => row(
-    cell(SIG_COL1, para(label, { align: 'right' })) +
-    cell(SIG_COL2, para(value, { align: 'right' }))
-  )).join('');
-  return `<w:tbl><w:tblPr><w:tblW w:w="${SIG_COL1 + SIG_COL2}" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="${SIG_COL1}"/><w:gridCol w:w="${SIG_COL2}"/></w:tblGrid>${trs}</w:tbl>`;
+  return nestedTable([SIG_COL1, SIG_COL2], rows.map(([label, value]) => [
+    para(label, { align: 'right' }),
+    para(value, { align: 'right' })
+  ]));
 }
 
 const columnHeaderRow = (label1, label2) => row(
@@ -167,7 +158,7 @@ export function buildAttestatDocumentXml(translation, certification) {
   if (sealField?.value) footer += para(`${sealField.label}: ${sealField.value}`);
   body += row(cell(TOTAL, footer, { span: 2, borders: ['top'] }));
 
-  const tableXml = TABLE_OPEN + body + TABLE_CLOSE;
+  const tableXml = table([COL1, COL2], body);
   // Приписка бюро переводов — то же самое, что и для остальных типов
   // документов (certificationBlocks в export.mjs): язык перевода первым
   // абзацем, язык оригинала вторым.
