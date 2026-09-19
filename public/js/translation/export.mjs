@@ -352,7 +352,25 @@ const table = (rows, widths, options = {}) => {
   const properties = widths
     ? '<w:tblW w:w="9638" w:type="dxa"/><w:tblLayout w:type="fixed"/>'
     : '<w:tblW w:w="0" w:type="auto"/>';
-  const grid = widths ? '<w:tblGrid>'+widths.map(width=>`<w:gridCol w:w="${width}"/>`).join('')+'</w:tblGrid>' : '';
+  // <w:tblGrid> — Ethan, 19 сен 2026, реальный кейс: .docx с таблицей "Реквизиты"
+  // (общий/резервный движок layoutBlocks — сейчас это только "Водительское
+  // удостоверение"/"Военный билет"/"Свидетельство о браке": у остальных
+  // структурных типов уже своя вёрстка через docxLayoutEngine.mjs) не
+  // открывался в настоящем Word ("Word experienced an error trying to open
+  // the file") — при этом и LibreOffice, и python-docx открывали файл без
+  // единой жалобы. Причина: без widths (обычные таблицы без апостиля) grid
+  // был ПУСТОЙ СТРОКОЙ — тег <w:tblGrid> не рисовался вовсе, хотя по схеме
+  // OOXML (CT_Tbl) это ОБЯЗАТЕЛЬНЫЙ дочерний элемент любой таблицы, а не
+  // только при фиксированной раскладке. Подтверждено воспроизведением:
+  // python-docx (docx.oxml.exceptions.InvalidXmlError: required <w:tblGrid>
+  // child element not present) — LibreOffice тот же файл открывал молча,
+  // достраивая сетку сама, то есть тестирование только через soffice эту
+  // ошибку не могло поймать в принципе. Число колонок без widths берём из
+  // первой строки данных; ширина колонок необязательна в самой сетке —
+  // именно так реальный Word рисует таблицы автоподбора ширины (w:type="auto"
+  // выше, без tblLayout fixed).
+  const columnCount = widths ? widths.length : (rows[0]?.length || 1);
+  const grid = '<w:tblGrid>'+(widths ? widths.map(width=>`<w:gridCol w:w="${width}"/>`) : Array(columnCount).fill('<w:gridCol/>')).join('')+'</w:tblGrid>';
   const borders = ['top','left','bottom','right','insideH','insideV'].map(side=>`<w:${side} w:val="${options.borderless ? 'nil' : 'single'}" w:sz="4" w:color="000000"/>`).join('');
   const header = options.title ? '<w:tr><w:tc><w:tcPr><w:tcW w:w="9638" w:type="dxa"/><w:gridSpan w:val="2"/></w:tcPr>'+alignedParagraph(options.title,true,true)+alignedParagraph(options.subtitle,true,true)+'</w:tc></w:tr>' : '';
   const body = rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row.map((cell,index)=>'<w:tc><w:tcPr>'+(widths ? `<w:tcW w:w="${widths[index]}" w:type="dxa"/>` : '<w:tcW w:w="0" w:type="auto"/>')+'<w:vAlign w:val="center"/></w:tcPr>'+(options.apostille ? alignedParagraph(cell, false, index === 1) : cellXml(cell))+'</w:tc>').join('')+'</w:tr>').join('');
