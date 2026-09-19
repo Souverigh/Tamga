@@ -3,9 +3,28 @@ export const MAX_BATCH_BYTES = 100 * 1024 * 1024;
 export function validateFileSize(file) {
   if (!Number.isFinite(file.size) || file.size <= 0 || file.size > MAX_FILE_BYTES) throw new Error('Размер файла должен быть от 1 байта до 20 МиБ');
 }
+// Целевая сторона рендера PDF-страницы — та же величина, что GEMINI_MAX_DIMENSION
+// в imageLoader.js (обычные фото/скан-загрузки уже идут в Gemini с этим
+// пределом по длинной стороне). Раньше здесь стоял флажок Math.min(2, ...) —
+// для страницы стандартного размера (A4/Letter, ~595-612×792-842pt в единицах
+// PDF) это давало scale ровно 2, то есть ~144 "DPI"-эквивалент. Для страницы
+// с векторным текстом это ещё туда-сюда читается, а вот для встроенного в PDF
+// скана/фотографии (не текста) — заметно хуже, чем то же самое изображение,
+// загруженное отдельным файлом JPG/PNG (Ethan, 19 сен 2026: "фотография
+// внутри PDF очень плохо читается"). Подняли цель до 2500px по длинной
+// стороне — то же самое разрешение, что уже проверено на фото и не упирается
+// в таймаут serverless-функции recognize (см. GEMINI_MAX_DIMENSION выше:
+// pageImageToBase64 всё равно не пропустит картинку крупнее этого предела,
+// так что раздувание запроса к Gemini сверх уже проверенного объёма здесь
+// невозможно). Плоский предел 4 — подстраховка от чрезмерного апскейла
+// нетипично маленьких страниц (например, PDF с одной квитанцией/этикеткой
+// небольшого физического размера), где 2500/сторона иначе дал бы 10-20x.
+// 4096px по стороне и 8 000 000 px совокупно остаются как и были — жёсткий
+// предел на размер canvas (безопасность памяти на слабом устройстве/телефоне).
+const PDF_TARGET_LONG_SIDE = 2500;
 export function boundedViewport({ width, height }) {
   if (![width, height].every(n => Number.isFinite(n) && n > 0)) throw new Error('Некорректные размеры страницы');
-  return { scale: Math.min(2, 4096 / width, 4096 / height, Math.sqrt(8000000 / width / height)) };
+  return { scale: Math.min(4, PDF_TARGET_LONG_SIDE / Math.max(width, height), 4096 / width, 4096 / height, Math.sqrt(8000000 / width / height)) };
 }
 export async function withDeadline(promise, cancel = () => {}, ms = 30000) {
   let timer;
