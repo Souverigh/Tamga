@@ -15,8 +15,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { image, mimeType } = await readRequestBody(req);
-    const result = await detectOrientation({ base64: image, mimeType, clientIp: extractClientIp(req) });
+    const { images } = await readRequestBody(req);
+    const result = await detectOrientation({ images, clientIp: extractClientIp(req) });
     res.status(200).json(result);
   } catch (err) {
     if (err instanceof RecognizeError) {
