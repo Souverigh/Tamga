@@ -2,6 +2,7 @@ import { validateApostille } from './apostille.mjs';
 import { LANGUAGES } from './model.mjs';
 import { buildAttestatDocumentXml } from './attestatDocx.mjs';
 import { buildIdCardDocumentXml } from './idCardDocx.mjs';
+import { buildPassportCanadaDocumentXml } from './passportCanadaDocx.mjs';
 export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 
 // Приписка переводчика для приложения к переводу (Ethan, 17 сен 2026, со
@@ -361,10 +362,14 @@ export function buildDocumentXml(original,translation,paired,certification) {
   // понадобится, это отдельная задача.
   if (!paired && translation.docType === 'Аттестат') return buildAttestatDocumentXml(translation, certification);
   // То же самое для типа "Паспорт / удостоверение личности" (ID-карта КР
-  // и аналогичные документы личности) — см. комментарий в idCardDocx.mjs
-  // о том, чем эта вёрстка отличается от Аттестата (нет реального образца
-  // от бюро, MRZ не воспроизводится).
+  // и аналогичные документы личности) — см. комментарий в idCardDocx.mjs.
+  // (Есть реальный образец от бюро для этого типа тоже, MRZ ВОСПРОИЗВОДИТСЯ
+  // — старый комментарий здесь был не обновлён после того, как это
+  // изменилось; см. idCardDocx.mjs.)
   if (!paired && translation.docType === 'Паспорт / удостоверение личности') return buildIdCardDocumentXml(translation, certification);
+  // "Паспорт Канады" — отдельный тип со своей вёрсткой (не вариант этой же
+  // ID-карты) — см. passportCanadaDocx.mjs.
+  if (!paired && translation.docType === 'Паспорт Канады') return buildPassportCanadaDocumentXml(translation, certification);
   const title = documentTitle(original.name, translation, paired);
   let body = title ? paragraph(title,true) : '';
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
