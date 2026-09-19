@@ -7,6 +7,7 @@ import { buildPassportUzbekistanOldDocumentXml } from './passportUzbekistanOldDo
 import { buildPassportUzbekistanDocumentXml } from './passportUzbekistanDocx.mjs';
 import { buildBirthCertificateDocumentXml } from './birthCertificateDocx.mjs';
 import { buildDeathCertificateDocumentXml } from './deathCertificateDocx.mjs';
+import { buildNoCriminalRecordDocumentXml } from './noCriminalRecordDocx.mjs';
 export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 
 // Приписка переводчика для приложения к переводу (Ethan, 17 сен 2026, со
@@ -385,6 +386,9 @@ export function buildDocumentXml(original,translation,paired,certification) {
   // "Свидетельство о смерти" — реальная вёрстка бюро (documentStructures.js
   // расширен с общей заглушки), см. deathCertificateDocx.mjs.
   if (!paired && translation.docType === 'Свидетельство о смерти') return buildDeathCertificateDocumentXml(translation, certification);
+  // "Справка о несудимости" — распечатка с портала "Тундук" (не бумажный
+  // бланк ЗАГС/паспортов), реальная вёрстка бюро, см. noCriminalRecordDocx.mjs.
+  if (!paired && translation.docType === 'Справка о несудимости') return buildNoCriminalRecordDocumentXml(translation, certification);
   const title = documentTitle(original.name, translation, paired);
   let body = title ? paragraph(title,true) : '';
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
