@@ -16,7 +16,7 @@
     "test:client-settings": "node --test scripts/test-client-settings-translator.cjs",
     "test:translation": "node --test scripts/test-translation.cjs",
     "test:accounting-quota": "node scripts/test-accounting-quota.cjs",
-    "test:translation-docs": "node scripts/test-translation-docs.cjs && node --test scripts/test-apostille.cjs scripts/test-apostille-verification.cjs",
+    "test:translation-docs": "node scripts/test-translation-docs.cjs && node --test scripts/test-apostille.cjs scripts/test-apostille-verification.cjs scripts/test-structural-translate.cjs",
     "test:security": "node --test scripts/audit-security.cjs",
     "test:document-templates": "node --test scripts/test-document-templates.cjs",
     "test:verified-transliterations": "node --test scripts/test-verified-transliterations.cjs",
