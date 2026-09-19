@@ -27,8 +27,12 @@ export const rFonts = (name, eastAsia = 'SimSun') =>
 // типа документа — сам конфиг типа документа не передаёт шрифт в каждый
 // вызов run()/para().
 export function createTextHelpers(fontXml) {
-  const run = (text, { bold, italic, size } = {}) => {
-    const rPr = fontXml + (bold ? '<w:b/><w:bCs/>' : '') + (italic ? '<w:i/><w:iCs/>' : '') + (size ? `<w:sz w:val="${size}"/>` : '');
+  // underline добавлен 19 сен 2026 при подключении третьего потребителя
+  // движка (Свидетельство о смерти, deathCertificateDocx.mjs) — в реальном
+  // образце значения полей жирные И подчёркнутые (не просто жирные, как у
+  // остальных типов).
+  const run = (text, { bold, italic, underline, size } = {}) => {
+    const rPr = fontXml + (bold ? '<w:b/><w:bCs/>' : '') + (italic ? '<w:i/><w:iCs/>' : '') + (underline ? '<w:u w:val="single"/>' : '') + (size ? `<w:sz w:val="${size}"/>` : '');
     const body = escapeXml(text).replace(/\r?\n/g, '</w:t><w:br/><w:t xml:space="preserve">');
     return `<w:r><w:rPr>${rPr}</w:rPr><w:t xml:space="preserve">${body}</w:t></w:r>`;
   };
