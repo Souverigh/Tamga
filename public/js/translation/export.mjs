@@ -5,6 +5,7 @@ import { buildIdCardDocumentXml } from './idCardDocx.mjs';
 import { buildPassportCanadaDocumentXml } from './passportCanadaDocx.mjs';
 import { buildPassportUzbekistanOldDocumentXml } from './passportUzbekistanOldDocx.mjs';
 import { buildPassportUzbekistanDocumentXml } from './passportUzbekistanDocx.mjs';
+import { buildBirthCertificateDocumentXml } from './birthCertificateDocx.mjs';
 export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 
 // Приписка переводчика для приложения к переводу (Ethan, 17 сен 2026, со
@@ -377,6 +378,9 @@ export function buildDocumentXml(original,translation,paired,certification) {
   // passportUzbekistanOldDocx.mjs / passportUzbekistanDocx.mjs.
   if (!paired && translation.docType === 'Паспорт Узбекистана (старого образца)') return buildPassportUzbekistanOldDocumentXml(translation, certification);
   if (!paired && translation.docType === 'Паспорт Узбекистана (биометрический)') return buildPassportUzbekistanDocumentXml(translation, certification);
+  // "Свидетельство о рождении" — реальная вёрстка бюро (documentStructures.js
+  // расширен с общей заглушки), см. birthCertificateDocx.mjs.
+  if (!paired && translation.docType === 'Свидетельство о рождении') return buildBirthCertificateDocumentXml(translation, certification);
   const title = documentTitle(original.name, translation, paired);
   let body = title ? paragraph(title,true) : '';
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
