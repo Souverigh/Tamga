@@ -157,23 +157,6 @@ export async function initTranslationDocs() {
   root.append(langRow);
   let selectedLanguage = langSelect.value;
 
-  // --- режим "Перевести как есть" (Ethan, 19 сен 2026) ----------------------
-  // Отдельный от классификации+полей путь: для настоящего .docx с текстом
-  // перевод вставляется ПРЯМО внутри оригинального word/document.xml — итог
-  // визуально идентичен оригиналу (таблицы/колонки/картинки не трогаются),
-  // а не оформляется по нашему шаблону. См. structuralDocx.mjs. Работает
-  // только для .docx (не для фото/PDF) — применяется в translateOne ниже.
-  const structuralRow = el('label', null, 'translation-info');
-  structuralRow.style.display = 'flex'; structuralRow.style.alignItems = 'center'; structuralRow.style.gap = '8px';
-  structuralRow.style.marginBottom = '12px'; structuralRow.style.padding = '10px 12px';
-  const structuralModeToggle = document.createElement('input');
-  structuralModeToggle.type = 'checkbox';
-  structuralRow.append(
-    structuralModeToggle,
-    el('span', 'Перевести как есть — сохранить структуру .docx (только для файлов .docx с настоящим текстом; без оформления по нашему шаблону, без блока нотариального заверения, скачивается сразу готовый файл)')
-  );
-  root.append(structuralRow);
-
   // --- удостоверение переводчика ("под нотариальное заверение", Ethan,
   // 17 сен 2026) — необязательный блок: без ФИО переводчика футер вообще не
   // добавляется в экспорт (см. certificationBlocks в translation/export.mjs).
@@ -474,8 +457,6 @@ export async function initTranslationDocs() {
   });
   // Смена режима меняет то, КАК переводится .docx — уже переведённые
   // документы нужно перевести заново тем путём, что выбран сейчас.
-  structuralModeToggle.addEventListener('change', resetDoneDocsAndRefresh);
-
   fileInput.addEventListener('change', () => {
     loadFiles(fileInput.files);
     fileInput.value = ''; // позволяет выбрать те же файлы повторно
@@ -707,11 +688,25 @@ export async function initTranslationDocs() {
       const isDocx = doc.file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         || /\.docx$/i.test(doc.file.name);
 
-      if (isDocx && structuralModeToggle.checked) {
-        await translateStructural(doc, language);
-        doc.status = 'done';
-        refreshFileList();
-        return;
+      // "Перевести как есть" — теперь всегда пробуется первым для .docx, без
+      // отдельной галочки в UI (Ethan, 19 сен 2026: "включить по умолчанию и
+      // убрать из UI"): для настоящего текстового .docx это единственный
+      // режим, который сохраняет исходную вёрстку/таблицы вместо оформления
+      // по нашему шаблону. Откатываемся на обычное распознавание ТОЛЬКО если
+      // extractStructuralParagraphs не нашла ни одного абзаца — это значит
+      // .docx на самом деле скан, вставленный как картинка (см. её
+      // сообщение в structuralDocx.mjs). Любая ДРУГАЯ ошибка (сеть, лимит,
+      // сбой Gemini) должна всплыть как есть, а не тихо повторять запрос
+      // другим путём — иначе списали бы страницу дважды за одну попытку.
+      if (isDocx) {
+        try {
+          await translateStructural(doc, language);
+          doc.status = 'done';
+          refreshFileList();
+          return;
+        } catch (structuralError) {
+          if (!/не найдено переводимого текста/.test(structuralError.message || '')) throw structuralError;
+        }
       }
       doc.structural = null;
       // .docx идёт своим путём (текст или встроенный скан, см. docxLoader.js)
