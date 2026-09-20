@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { APOSTILLE_FIELDS } = require('../lib/translationDocs/apostille');
 const labels = ['国家', '本公文', '签署人', '身份/职务', '加盖的印章/印鉴', '认证', '地点', '日期', '认证机关', '编号', '印章/印鉴', '签名'];
 function document() {
-  const values = ['吉尔吉斯共和国', '', 'Amanova G.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-18', '楚河-比什凯克区域司法局', '54-1', '[印章]', 'Zh. R. Ismailov'];
+  const values = ['吉尔吉斯共和国', '', 'Amanova G.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-2018', '楚河-比什凯克区域司法局', '54-1', '[印章]', 'Zh. R. Ismailov'];
   return { name: 'test', template: 'apostille', language: 'zh', fields: [], columns: [], items: [], paragraphs: [], elements: APOSTILLE_FIELDS.map((f, i) => ({ key: f.key, elementType: f.elementType || 'numbered_field', number: f.number || '', label: labels[i], value: values[i], sourceValue: values[i] })) };
 }
 test('all text exports retain ten fields and unnumbered headings', async () => {
@@ -142,7 +142,7 @@ test('export accepts deterministic transliteration and DD-MM-YY dates, but rejec
   const { validateApostille } = await import('../public/js/translation/apostille.mjs');
   const doc = document();
   Object.assign(doc.elements[2], { sourceValue: 'Алманова Т.', value: 'Almanova T.' });
-  Object.assign(doc.elements[7], { sourceValue: '30.01.2018-ж.', value: '30-01-18' });
+  Object.assign(doc.elements[7], { sourceValue: '30.01.2018-ж.', value: '30-01-2018' });
   Object.assign(doc.elements[11], { sourceValue: 'Ж.Р. Исмаилов [signature]', value: 'Zh.R. Ismailov 【签字】' });
   assert.doesNotThrow(() => validateApostille(doc.elements, 'zh', true));
   doc.elements[9].value = '54-2';
@@ -159,13 +159,32 @@ test('reviewed source corrections are used instead of stale extracted names', as
 });
 test('date formats and status colors match the requested rules', async () => {
   const { normalizeDate, apostilleValue, TRANSLATION_STATUSES } = await import('../public/js/translation/field-rules.mjs');
-  for (const text of ['30.01.2018-ж.', '2018-01-30', '30/01/18', '30-01-18']) assert.equal(normalizeDate(text), '30-01-18');
+  for (const text of ['30.01.2018-ж.', '2018-01-30', '30/01/18', '30-01-2018']) assert.equal(normalizeDate(text), '30-01-2018');
   assert.equal(normalizeDate('[unclear]'), '[unclear]');
   assert.equal(apostilleValue('apostille_number', 'KG-0054/1', 'zh').value, 'KG-0054/1');
   assert.equal(apostilleValue('signatory_name', 'Amanova G.', 'zh').status, 'preserved');
   assert.equal(TRANSLATION_STATUSES.translated[1], '#18794e');
   assert.equal(TRANSLATION_STATUSES.transliterated[1], '#7c3aed');
   assert.equal(TRANSLATION_STATUSES.preserved[1], '#64748b');
+});
+// Даты словом на языках исходных документов (Ethan, 20 сен 2026, живой кейс:
+// свидетельство о рождении, "27 января 1991 года" оставалось как есть).
+test('dates written with month names (ru/ky/kk/uz) become DD-MM-YYYY, the trailing "года/г./жылы" is dropped, time is kept', async () => {
+  const { normalizeDate } = await import('../public/js/translation/field-rules.mjs');
+  const cases = {
+    '27 января 1991 года': '27-01-1991', '24 апреля 2012 г.': '24-04-2012', '1 марта 2020': '01-03-2020', '12 сентября 1999': '12-09-1999',
+    '27-январь 1991-ж.': '27-01-1991', '27 қаңтар 1991 ж.': '27-01-1991', '27 yanvar 1991': '27-01-1991',
+    '5 мая 2001 года, 10:49:39 (GMT+6)': '05-05-2001, 10:49:39 (GMT+6)'
+  };
+  for (const [source, expected] of Object.entries(cases)) assert.equal(normalizeDate(source), expected, source);
+  // канадский паспорт: английский/французский месяц через "/", год двумя цифрами
+  for (const [source, expected] of Object.entries({ '05 MAY /MAI 79': '05-05-1979', '05 MAY/MAI 79': '05-05-1979', '01 AUG/AOÛT 1990': '01-08-1990', '14 JAN/JAN 23': '14-01-2023' })) assert.equal(normalizeDate(source), expected, source);
+  // двузначный год: до +10 лет от текущего — 20xx (срок действия), дальше — 19xx (дата рождения)
+  const thisYear = new Date().getFullYear();
+  assert.equal(normalizeDate(`01 JAN/JAN ${String(thisYear + 10).slice(-2)}`), `01-01-${thisYear + 10}`);
+  assert.equal(normalizeDate(`01 JAN/JAN ${String(thisYear + 11).slice(-2)}`), `01-01-${thisYear - 89}`);
+  // не месяц — не трогаем
+  assert.equal(normalizeDate('27 Xyz 1991'), '27 Xyz 1991');
 });
 test('uncertain names require explicit review, and editing invalidates the confirmation', async () => {
   const { buildExportDocs } = await import('../public/js/translationDocs/export-model.mjs');

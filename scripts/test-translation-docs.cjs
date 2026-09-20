@@ -241,7 +241,7 @@ async function main() {
   await scenario('Real client endpoint → panel adapter → downloadable DOCX/TXT, with names/dates/IDs', async () => {
     const { APOSTILLE_FIELDS } = require('../lib/translationDocs/apostille');
     const source = ['Кыргыз Республикасы', '', 'Алманова Т.', 'жетекчи', 'Жарандык абалдын актыларын каттоо органы', '', 'Бишкек шаары', '30.01.2018-ж.', 'Чүй-Бишкек аймактык Башкармалыгы', '54-1', '[seal]', 'Ж.Р. Исмаилов [signature]'];
-    const target = ['吉尔吉斯共和国', '', 'Almanova T.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-18', '楚河-比什凯克区域管理局', '54-1', '【印章】', 'Zh.R. Ismailov 【签字】'];
+    const target = ['吉尔吉斯共和国', '', 'Almanova T.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-2018', '楚河-比什凯克区域管理局', '54-1', '【印章】', 'Zh.R. Ismailov 【签字】'];
     const dictionary = new Map(source.map((s, i) => [s, target[i]]));
     translateSegmentsCalls = [];
     translateText = text => dictionary.get(text);
@@ -277,8 +277,8 @@ async function main() {
       assert.strictEqual(downloads.length, 2);
       const zip = await global.JSZip.loadAsync(await downloads[0].blob.arrayBuffer());
       const xml = await zip.file('word/document.xml').async('string');
-      for (const expected of ['Almanova T.', '30-01-18', '54-1', 'Zh.R. Ismailov']) assert.ok(xml.includes(expected));
-      assert.ok((await downloads[1].blob.text()).includes('30-01-18'));
+      for (const expected of ['Almanova T.', '30-01-2018', '54-1', 'Zh.R. Ismailov']) assert.ok(xml.includes(expected));
+      assert.ok((await downloads[1].blob.text()).includes('30-01-2018'));
     } finally {
       [accessPath, bodyPath].forEach((p, i) => { if (originals[i]) require.cache[p] = originals[i]; else delete require.cache[p]; });
       global.document = saved.document; global.JSZip = saved.JSZip; URL.createObjectURL = saved.create; global.setTimeout = saved.setTimeout;
@@ -287,8 +287,8 @@ async function main() {
   });
   await scenario('Chinese apostille translates seal and stamp text without changing source data', async () => {
     const { APOSTILLE_FIELDS } = require('../lib/translationDocs/apostille');
-    const source = ['Kyrgyz Republic', '', 'Amanova G.', 'Head', 'Zharandyk abaldyn aktylaryn kattoo bolumu', '', 'Bishkek', '30-01-18', 'Justice Department', '54-1', '[seal]', 'Zh. R. Ismailov'];
-    const target = ['吉尔吉斯共和国', '', 'Amanova G.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-18', '司法局', '54-1', '【印章】', 'Zh. R. Ismailov'];
+    const source = ['Kyrgyz Republic', '', 'Amanova G.', 'Head', 'Zharandyk abaldyn aktylaryn kattoo bolumu', '', 'Bishkek', '30-01-2018', 'Justice Department', '54-1', '[seal]', 'Zh. R. Ismailov'];
+    const target = ['吉尔吉斯共和国', '', 'Amanova G.', '负责人', '民事身份登记机关', '', '比什凯克市', '30-01-2018', '司法局', '54-1', '【印章】', 'Zh. R. Ismailov'];
     const dictionary = new Map(source.map((s, i) => [s, target[i]]));
     dictionary.set('Ministry of Justice', '司法部');
     translateText = text => dictionary.get(text);
@@ -445,7 +445,7 @@ async function main() {
     assert.strictEqual(byKey.country.translated, '[TR]Кыргызская Республика');
     assert.strictEqual(byKey.apostille_number.translated, '482');
     assert.strictEqual(byKey.apostille_number.translationStatus, 'preserved');
-    assert.strictEqual(byKey.certified_date.translated, '10-09-26');
+    assert.strictEqual(byKey.certified_date.translated, '10-09-2026');
     assert.strictEqual(byKey.certified_date.translationStatus, 'translated');
     assert.strictEqual(byKey.signatory_name.value, '');
     assert.strictEqual(byKey.signatory_name.translated, '', 'пустые поля не переводятся');
@@ -560,8 +560,8 @@ async function main() {
       const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
       assert.strictEqual(result.docType, 'Информация о составе семьи');
       assert.deepStrictEqual(result.familyMembers.map(m => [m.translatedFullName, m.translatedRelationship, m.translatedBirthDate]), [
-        ['Ivanov Ivan Ivanovich', 'Son', '20-09-06'],
-        ['Ivanova Mariia Petrovna', 'Mother', '05-01-80']
+        ['Ivanov Ivan Ivanovich', 'Son', '20-09-2006'],
+        ['Ivanova Mariia Petrovna', 'Mother', '05-01-1980']
       ]);
       assert.deepStrictEqual(result.familyMembers.map(m => [m.fullName, m.relationship, m.birthDate]), [
         ['Иванов Иван Иванович', 'Сын', '2006-09-20'], ['Иванова Мария Петровна', 'Мать', '1980-01-05']
@@ -613,14 +613,14 @@ async function main() {
       const { buildDocumentXml, buildTranslationTxt } = await import('../public/js/translation/export.mjs');
       const { original, translation } = buildExportDocs({ file: { name: 'family.pdf' }, result: response.data }, 'en');
       const xml = buildDocumentXml(original, translation, false);
-      for (const expected of ['INFORMATION ON FAMILY COMPOSITION', 'Relationship', 'Ivanov Ivan Ivanovich', 'Ivanova Mariia Petrovna', 'Son', 'Mother', '20-09-06', '05-01-80', 'КАЙТАЛАНГАН', '[QR code]', 'Number of family members']) {
+      for (const expected of ['INFORMATION ON FAMILY COMPOSITION', 'Relationship', 'Ivanov Ivan Ivanovich', 'Ivanova Mariia Petrovna', 'Son', 'Mother', '20-09-2006', '05-01-1980', 'КАЙТАЛАНГАН', '[QR code]', 'Number of family members']) {
         assert.ok(xml.includes(expected), `в .docx нет "${expected}"`);
       }
       assert.ok(!xml.includes('Сын') && !xml.includes('2006-09-20'), 'в переводе не должно остаться исходных значений таблицы');
       // .txt/.html/.pdf для этого типа идут через layoutBlocks (общий путь) — не через .docx-вёрстку.
       const txt = buildTranslationTxt(original, translation, false);
-      assert.ok(txt.includes('1\tIvanov Ivan Ivanovich\tSon\t20-09-06'), txt);
-      assert.ok(txt.includes('2\tIvanova Mariia Petrovna\tMother\t05-01-80'));
+      assert.ok(txt.includes('1\tIvanov Ivan Ivanovich\tSon\t20-09-2006'), txt);
+      assert.ok(txt.includes('2\tIvanova Mariia Petrovna\tMother\t05-01-1980'));
       const pairedTxt = buildTranslationTxt(original, translation, true);
       assert.ok(pairedTxt.includes('Сын') && pairedTxt.includes('Son'));
     } finally {

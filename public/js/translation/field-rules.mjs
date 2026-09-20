@@ -78,20 +78,59 @@ export function transliterateName(value, language) {
 // части (она первой перед "/"), французскую сторону игнорируем, т.к. она
 // не нужна, если английское сокращение уже однозначно определяет месяц.
 const MONTH_ABBR = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
+// Названия месяцев словом на языках исходных документов (Ethan, 20 сен 2026,
+// живой кейс: в свидетельстве о рождении "27 января 1991 года" и "24 апреля
+// 2012 г." оставались как есть — ни один числовой паттерн ниже их не
+// матчил). Ищем по началу слова, в нижнем регистре: покрывает падежные формы
+// ("января"/"январь"/"январе") без перечисления каждой. Порядок важен только
+// для коротких основ, которые являются началом других: "мам" (казахский май)
+// не должен ловиться как "мар" (март) — у них разные первые три буквы, так
+// что конфликтов по трём буквам нет; "май"/"мая" (русский/кыргызский) и
+// "may" (узбекский) сравниваются целиком.
+const MONTH_NAME_STEMS = [
+  // ru / ky
+  ['янв', 1], ['фев', 2], ['мар', 3], ['апр', 4], ['мая', 5], ['май', 5], ['июн', 6], ['июл', 7], ['авг', 8], ['сен', 9], ['окт', 10], ['ноя', 11], ['дек', 12],
+  // kk
+  ['қаң', 1], ['ақп', 2], ['нау', 3], ['сәу', 4], ['мам', 5], ['мау', 6], ['шіл', 7], ['там', 8], ['қыр', 9], ['қаз', 10], ['қар', 11], ['жел', 12],
+  // uz (латиница)
+  ['yan', 1], ['fev', 2], ['apr', 4], ['iyun', 6], ['iyul', 7], ['avg', 8], ['sen', 9], ['okt', 10], ['noy', 11], ['dek', 12]
+];
+function monthFromName(word) {
+  const w = String(word || '').toLowerCase();
+  if (w === 'may') return 5;
+  if (w === 'mart') return 3;
+  const hit = MONTH_NAME_STEMS.find(([stem]) => w.startsWith(stem));
+  return hit ? hit[1] : 0;
+}
+// Год всегда четырьмя цифрами (Ethan, 20 сен 2026: "для всех дат ДД-ММ-ГГГГ").
+// Двузначный год ("79" в канадском паспорте, "30/01/18") разворачиваем по
+// окну: не дальше 10 лет вперёд от текущего года — 20xx (срок действия
+// документа), иначе 19xx (дата рождения). Окно, а не фиксированный век:
+// у даты рождения "79" это 1979, у срока действия "35" — 2035.
+function fullYear(value) {
+  const digits = String(value);
+  if (digits.length >= 4) return digits.slice(-4);
+  const yy = Number(digits);
+  const limit = (new Date().getFullYear() + 10) % 100;
+  return String((yy <= limit ? 2000 : 1900) + yy);
+}
 export function normalizeDate(value) {
   const text = String(value || '').trim();
   let match = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
-  if (match) return `${match[3].padStart(2, '0')}-${match[2].padStart(2, '0')}-${match[1].slice(-2)}`;
+  if (match) return `${match[3].padStart(2, '0')}-${match[2].padStart(2, '0')}-${fullYear(match[1])}`;
   match = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4}|\d{2})(?:\s*-?\s*(?:ж\.?|г\.?))?$/i);
-  if (match && Number(match[1]) >= 1 && Number(match[1]) <= 31 && Number(match[2]) >= 1 && Number(match[2]) <= 12) return `${match[1].padStart(2, '0')}-${match[2].padStart(2, '0')}-${match[3].slice(-2)}`;
+  if (match && Number(match[1]) >= 1 && Number(match[1]) <= 31 && Number(match[2]) >= 1 && Number(match[2]) <= 12) return `${match[1].padStart(2, '0')}-${match[2].padStart(2, '0')}-${fullYear(match[3])}`;
+  // Год бывает и двузначным: канадский паспорт печатает дату рождения как
+  // "05 MAY /MAI 79" (Ethan, 20 сен 2026, живой кейс — дата не форматировалась,
+  // шаблон требовал четыре цифры года).
   // "01 AUG/AOÛT 1990" или "14 JAN/JAN 2023" — день, англ. (возможно с
   // французской парой через "/") сокращение месяца, год (19 сен 2026,
   // добавлено для канадского паспорта — Ethan заметил, что дата так и
-  // осталась в исходном виде вместо ДД-ММ-ГГ).
-  match = text.match(/^(\d{1,2})\s+([A-Za-zÀ-ÿ]{3,})(?:\s*\/\s*[A-Za-zÀ-ÿ.]+)?\s+(\d{4})$/);
+  // осталась в исходном виде вместо ДД-ММ-ГГГГ).
+  match = text.match(/^(\d{1,2})\s+([A-Za-zÀ-ÿ]{3,})(?:\s*\/\s*[A-Za-zÀ-ÿ.]+)?\s+(\d{4}|\d{2})$/);
   if (match) {
     const month = MONTH_ABBR[match[2].slice(0, 3).toUpperCase()];
-    if (month) return `${match[1].padStart(2, '0')}-${String(month).padStart(2, '0')}-${match[3].slice(-2)}`;
+    if (month) return `${match[1].padStart(2, '0')}-${String(month).padStart(2, '0')}-${fullYear(match[3])}`;
   }
   // "June 30, 2026" — американский порядок (месяц словом, день, запятая,
   // год), а не "30 Jun 2026" как выше (Ethan, 19 сен 2026: электронная
@@ -102,28 +141,39 @@ export function normalizeDate(value) {
   match = text.match(/^([A-Za-zÀ-ÿ]{3,})\s+(\d{1,2}),?\s+(\d{4})$/);
   if (match) {
     const month = MONTH_ABBR[match[1].slice(0, 3).toUpperCase()];
-    if (month) return `${match[2].padStart(2, '0')}-${String(month).padStart(2, '0')}-${match[3].slice(-2)}`;
+    if (month) return `${match[2].padStart(2, '0')}-${String(month).padStart(2, '0')}-${fullYear(match[3])}`;
   }
   // Дата с "хвостом" (время, часовой пояс, "года"/"жылы"/"г."/"ж.") — ни один
   // из паттернов выше не матчит ЦЕЛИКОМ такую строку, и дата раньше уходила
   // непереведённой (Ethan, 19 сен 2026: электронная справка КР отдаёт "Дата и
   // время формирования документа" как "30-06-2026 года, 10:49:39 (GMT+6)").
-  // Находим саму дату где угодно в строке, переводим её в ДД-ММ-ГГ, слово
+  // Находим саму дату где угодно в строке, переводим её в ДД-ММ-ГГГГ, слово
   // "года"/"жылы"/"г."/"ж." сразу после даты убираем как избыточное (уже не
   // нужно при цифровом формате), а остальной хвост (время, часовой пояс)
   // сохраняем как есть — тот же принцип и для docx, и для PDF/фото, т.к.
   // normalizeDate вызывается уже после извлечения текста, одинаково для всех
   // источников (см. isDateField в lib/translationDocs/pipeline.js).
-  const stripTail = (index, length) => text.slice(index + length).replace(/^\s*(?:года|жылы|г\.|ж\.)\s*,?\s*/i, ' ').trim();
+  const stripTail = (index, length) => text.slice(index + length).replace(/^[\s-]*(?:года|жылы|г\.|ж\.)\s*,?\s*/i, ' ').trim();
+  // "27 января 1991 года", "24 апреля 2012 г.", "27-январь 1991-ж.", "27 қаңтар
+  // 1991 ж.", "27 yanvar 1991" — день, месяц словом (ru/ky/kk/uz), год.
+  match = text.match(/(\d{1,2})[\s-]+(\p{L}{3,})\.?,?\s+(\d{4})/u);
+  if (match) {
+    const month = monthFromName(match[2]);
+    if (month) {
+      const normalized = `${match[1].padStart(2, '0')}-${String(month).padStart(2, '0')}-${fullYear(match[3])}`;
+      const rest = stripTail(match.index, match[0].length);
+      return rest ? `${normalized}, ${rest}` : normalized;
+    }
+  }
   match = text.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (match) {
-    const normalized = `${match[3].padStart(2, '0')}-${match[2].padStart(2, '0')}-${match[1].slice(-2)}`;
+    const normalized = `${match[3].padStart(2, '0')}-${match[2].padStart(2, '0')}-${fullYear(match[1])}`;
     const rest = stripTail(match.index, match[0].length);
     return rest ? `${normalized}, ${rest}` : normalized;
   }
   match = text.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4}|\d{2})/);
   if (match && Number(match[1]) >= 1 && Number(match[1]) <= 31 && Number(match[2]) >= 1 && Number(match[2]) <= 12) {
-    const normalized = `${match[1].padStart(2, '0')}-${match[2].padStart(2, '0')}-${match[3].slice(-2)}`;
+    const normalized = `${match[1].padStart(2, '0')}-${match[2].padStart(2, '0')}-${fullYear(match[3])}`;
     const rest = stripTail(match.index, match[0].length);
     return rest ? `${normalized}, ${rest}` : normalized;
   }
@@ -133,7 +183,7 @@ export function normalizeDate(value) {
   if (match) {
     const month = MONTH_ABBR[match[1].slice(0, 3).toUpperCase()];
     if (month) {
-      const normalized = `${match[2].padStart(2, '0')}-${String(month).padStart(2, '0')}-${match[3].slice(-2)}`;
+      const normalized = `${match[2].padStart(2, '0')}-${String(month).padStart(2, '0')}-${fullYear(match[3])}`;
       const rest = stripTail(match.index, match[0].length).replace(/^,\s*/, '');
       return rest ? `${normalized}, ${rest}` : normalized;
     }
