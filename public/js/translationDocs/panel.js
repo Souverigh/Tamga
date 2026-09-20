@@ -62,7 +62,14 @@ async function recognizeViaApi(token, slug, content, language, pageCount) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-client-token': token },
     body: JSON.stringify({
-      ...('sourceText' in content ? { sourceText: content.sourceText } : { image: content.base64, mimeType: content.mimeType }),
+      // 'sourceText' здесь никогда не было настоящим свойством content —
+      // extractDocxContent() (ocr/docxLoader.js) возвращает { mode: 'text',
+      // text } или { mode: 'image', base64, mimeType }, а не { sourceText }
+      // (Ethan, 19 сен 2026: обычный, не структурный, перевод .docx с
+      // текстом всегда падал с "Поле image обязательно" — этот баг был с
+      // самого добавления .docx, просто никто не пользовался этим путём
+      // без включённого "Перевести как есть").
+      ...(content.mode === 'text' ? { sourceText: content.text } : { image: content.base64, mimeType: content.mimeType }),
       clientSlug: slug, language, pageCount
     })
   });
