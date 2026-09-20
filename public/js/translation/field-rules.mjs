@@ -93,6 +93,29 @@ export function normalizeDate(value) {
     const month = MONTH_ABBR[match[2].slice(0, 3).toUpperCase()];
     if (month) return `${match[1].padStart(2, '0')}-${String(month).padStart(2, '0')}-${match[3].slice(-2)}`;
   }
+  // Дата с "хвостом" (время, часовой пояс, "года"/"жылы"/"г."/"ж.") — ни один
+  // из паттернов выше не матчит ЦЕЛИКОМ такую строку, и дата раньше уходила
+  // непереведённой (Ethan, 19 сен 2026: электронная справка КР отдаёт "Дата и
+  // время формирования документа" как "30-06-2026 года, 10:49:39 (GMT+6)").
+  // Находим саму дату где угодно в строке, переводим её в ДД-ММ-ГГ, слово
+  // "года"/"жылы"/"г."/"ж." сразу после даты убираем как избыточное (уже не
+  // нужно при цифровом формате), а остальной хвост (время, часовой пояс)
+  // сохраняем как есть — тот же принцип и для docx, и для PDF/фото, т.к.
+  // normalizeDate вызывается уже после извлечения текста, одинаково для всех
+  // источников (см. isDateField в lib/translationDocs/pipeline.js).
+  const stripTail = (index, length) => text.slice(index + length).replace(/^\s*(?:года|жылы|г\.|ж\.)\s*,?\s*/i, ' ').trim();
+  match = text.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (match) {
+    const normalized = `${match[3].padStart(2, '0')}-${match[2].padStart(2, '0')}-${match[1].slice(-2)}`;
+    const rest = stripTail(match.index, match[0].length);
+    return rest ? `${normalized}, ${rest}` : normalized;
+  }
+  match = text.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4}|\d{2})/);
+  if (match && Number(match[1]) >= 1 && Number(match[1]) <= 31 && Number(match[2]) >= 1 && Number(match[2]) <= 12) {
+    const normalized = `${match[1].padStart(2, '0')}-${match[2].padStart(2, '0')}-${match[3].slice(-2)}`;
+    const rest = stripTail(match.index, match[0].length);
+    return rest ? `${normalized}, ${rest}` : normalized;
+  }
   return text;
 }
 
