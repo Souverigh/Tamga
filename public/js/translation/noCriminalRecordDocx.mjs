@@ -51,17 +51,19 @@ const SERVICE_RESULT_HEADING = {
   ru: 'РЕЗУЛЬТАТ УСЛУГИ', ky: 'КЫЗМАТТЫН ЖЫЙЫНТЫГЫ', en: 'SERVICE RESULT', kk: 'ҚЫЗМЕТ НӘТИЖЕСІ',
   uz: 'XIZMAT NATIJASI', tr: 'HİZMET SONUCU', zh: '服务结果', de: 'DIENSTLEISTUNGSERGEBNIS'
 };
-const QR_INSTRUCTION = {
+// Ethan, 19 сен 2026: экспортируется для familyCompositionDocx.mjs — та же
+// процедурная фраза портала "Тундук", не дублируем 8 переводов.
+export const QR_INSTRUCTION = {
   ru: 'Для проверки данных отсканируйте QR-код ниже:', ky: 'Маалыматты текшерүү үчүн төмөнкү QR-кодду сканерлеңиз:',
   en: 'For data verification, it is necessary to scan the QR code below:', kk: 'Деректерді тексеру үшін төмендегі QR-кодты сканерлеңіз:',
   uz: 'Ma’lumotlarni tekshirish uchun quyidagi QR-kodni skanerlang:', tr: 'Verileri doğrulamak için aşağıdaki QR kodunu tarayın:',
   zh: '如需验证数据，请扫描下方二维码：', de: 'Zur Datenüberprüfung scannen Sie bitte den untenstehenden QR-Code:'
 };
-const QR_PLACEHOLDER = {
+export const QR_PLACEHOLDER = {
   ru: '/QR-код/', ky: '/QR-код/', en: '/QR code/', kk: '/QR-код/',
   uz: '/QR-kod/', tr: '/QR kodu/', zh: '/二维码/', de: '/QR-Code/'
 };
-const ESIGNATURE_NOTICE = {
+export const ESIGNATURE_NOTICE = {
   ru: 'На документ наложена электронная подпись Государственного портала электронных услуг.',
   ky: 'Документке Мамлекеттик электрондук кызматтар порталынын электрондук колу коюлган.',
   en: 'An e-signature of the State Electronic Services Portal has been placed on the document.',

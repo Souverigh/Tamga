@@ -531,6 +531,110 @@ async function main() {
     }
   });
 
+  // "Информация о составе семьи" (портал "Тундук", Ethan, 19 сен 2026):
+  // таблица членов семьи идёт отдельным массивом familyMembers, а не через
+  // tables (та схема жёстко привязана к Аттестату) — весь путь от ответа
+  // модели до .docx/.txt.
+  const familyFields = {
+    'Страна выдачи': 'Кыргызская Республика', 'ФИО': 'Иванов Иван Иванович', 'ПИН (ИНН)': '22009200000001',
+    'Количество членов семьи': '2', 'Адрес': 'г. Бишкек', 'Орган выдачи': 'Министерство цифрового развития',
+    'QR-код': '[qr]', 'Текст на штампе': 'КАЙТАЛАНГАН', 'Дата подписи': '2026-08-05', 'Код подписи': 'ABC123'
+  };
+  const fakeFamilyResponse = (docType = 'Информация о составе семьи') => ({
+    result: {
+      doc_type: docType, source_language: 'ru', paragraphs: [],
+      fields: Object.entries(familyFields).map(([label, value]) => ({ label, value, raw_text: value, page: 1, confidence: 95 })),
+      familyMembers: [
+        { fullName: 'Иванов Иван Иванович', relationship: 'Сын', birthDate: '2006-09-20', raw_text: '1 Иванов Иван Иванович Сын 2006-09-20', page: 1, confidence: 93 },
+        { fullName: 'Иванова Мария Петровна', relationship: 'Мать', birthDate: '1980-01-05', raw_text: '2 Иванова Мария Петровна Мать 1980-01-05', page: 1, confidence: 91 }
+      ]
+    },
+    usage: { promptTokenCount: 20, candidatesTokenCount: 10, totalTokenCount: 30 }
+  });
+  await scenario('Информация о составе семьи: familyMembers — ФИО транслитерируется, дата нормализуется, степень родства переводится (в обратном порядке ответа)', async () => {
+    translateSegmentsCalls = [];
+    reverseTranslations = true;
+    translateText = text => ({ 'Сын': 'Son', 'Мать': 'Mother' })[text] || `[TR]${text}`;
+    callGeminiImpl = async () => fakeFamilyResponse();
+    try {
+      const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
+      assert.strictEqual(result.docType, 'Информация о составе семьи');
+      assert.deepStrictEqual(result.familyMembers.map(m => [m.translatedFullName, m.translatedRelationship, m.translatedBirthDate]), [
+        ['Ivanov Ivan Ivanovich', 'Son', '20-09-06'],
+        ['Ivanova Mariia Petrovna', 'Mother', '05-01-80']
+      ]);
+      assert.deepStrictEqual(result.familyMembers.map(m => [m.fullName, m.relationship, m.birthDate]), [
+        ['Иванов Иван Иванович', 'Сын', '2006-09-20'], ['Иванова Мария Петровна', 'Мать', '1980-01-05']
+      ]);
+      const sent = translateSegmentsCalls.flatMap(c => c.request.segments.map(s => s.text));
+      assert.ok(sent.includes('Сын') && sent.includes('Мать'));
+      assert.ok(!sent.some(text => /Иванов|2006|1980/.test(text)), 'имена и даты членов семьи не уходят в модель перевода');
+      const byKey = Object.fromEntries(result.fields.map(f => [f.key, f]));
+      assert.strictEqual(byKey.memberCount.translated, '2');
+      assert.strictEqual(byKey.memberCount.translationStatus, 'preserved');
+      assert.strictEqual(byKey.qrCode.translated, '[QR code]');
+      assert.ok(result.quality.translation.totalItems > 0);
+    } finally { reverseTranslations = false; translateText = text => `[TR]${text}`; }
+  });
+  await scenario('familyMembers, присланные моделью для другого типа документа, игнорируются', async () => {
+    callGeminiImpl = async () => fakeFamilyResponse('Справка о несудимости');
+    const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en' });
+    assert.strictEqual(result.docType, 'Справка о несудимости');
+    assert.deepStrictEqual(result.familyMembers, []);
+  });
+  await scenario('Информация о составе семьи: глоссарий применяется к именам членов семьи', async () => {
+    lookupTransliterationsCalls = [];
+    lookupTransliterationsImpl = async (clientSlug, originals) => {
+      assert.ok(originals.includes('Иванова Мария Петровна'));
+      return { 'Иванова Мария Петровна': 'Ivanova Mariya Petrovna' };
+    };
+    callGeminiImpl = async () => fakeFamilyResponse();
+    try {
+      const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'en', clientSlug: 'acme' });
+      assert.strictEqual(result.familyMembers[1].translatedFullName, 'Ivanova Mariya Petrovna');
+      assert.strictEqual(result.familyMembers[0].translatedFullName, 'Ivanov Ivan Ivanovich');
+    } finally { lookupTransliterationsImpl = async () => ({}); }
+  });
+  await scenario('Информация о составе семьи: эндпоинт → адаптер панели → .docx/.txt с таблицей, QR и штампом', async () => {
+    translateText = text => ({ 'Сын': 'Son', 'Мать': 'Mother' })[text] || `[TR]${text}`;
+    callGeminiImpl = async () => fakeFamilyResponse();
+    const accessPath = require.resolve('../lib/translationAccess');
+    const bodyPath = require.resolve('../lib/multipart');
+    const originals = [require.cache[accessPath], require.cache[bodyPath]];
+    require.cache[accessPath] = { id: accessPath, filename: accessPath, loaded: true, exports: { requirePaidTranslationClient: async () => 'test-client' } };
+    require.cache[bodyPath] = { id: bodyPath, filename: bodyPath, loaded: true, exports: { readRequestBody: async req => req.body } };
+    try {
+      const endpoint = require('../api/translation-docs/client-recognize');
+      const response = { setHeader() {}, status(n) { this.statusCode = n; return this; }, json(data) { this.data = JSON.parse(JSON.stringify(data)); } };
+      await endpoint({ method: 'POST', body: { image: FAKE_BASE64, mimeType: 'image/png', language: 'en', clientSlug: 'test-client' } }, response);
+      assert.strictEqual(response.statusCode, 200);
+      assert.strictEqual(response.data.familyMembers.length, 2);
+      const { buildExportDocs } = await import('../public/js/translationDocs/export-model.mjs');
+      const { buildDocumentXml, buildTranslationTxt } = await import('../public/js/translation/export.mjs');
+      const { original, translation } = buildExportDocs({ file: { name: 'family.pdf' }, result: response.data }, 'en');
+      const xml = buildDocumentXml(original, translation, false);
+      for (const expected of ['INFORMATION ON FAMILY COMPOSITION', 'Relationship', 'Ivanov Ivan Ivanovich', 'Ivanova Mariia Petrovna', 'Son', 'Mother', '20-09-06', '05-01-80', 'КАЙТАЛАНГАН', '[QR code]', 'Number of family members']) {
+        assert.ok(xml.includes(expected), `в .docx нет "${expected}"`);
+      }
+      assert.ok(!xml.includes('Сын') && !xml.includes('2006-09-20'), 'в переводе не должно остаться исходных значений таблицы');
+      // .txt/.html/.pdf для этого типа идут через layoutBlocks (общий путь) — не через .docx-вёрстку.
+      const txt = buildTranslationTxt(original, translation, false);
+      assert.ok(txt.includes('1\tIvanov Ivan Ivanovich\tSon\t20-09-06'), txt);
+      assert.ok(txt.includes('2\tIvanova Mariia Petrovna\tMother\t05-01-80'));
+      const pairedTxt = buildTranslationTxt(original, translation, true);
+      assert.ok(pairedTxt.includes('Сын') && pairedTxt.includes('Son'));
+    } finally {
+      [accessPath, bodyPath].forEach((p, i) => { if (originals[i]) require.cache[p] = originals[i]; else delete require.cache[p]; });
+      translateText = text => `[TR]${text}`;
+    }
+  });
+  await scenario('Информация о составе семьи: без QR/штампа/членов семьи вёрстка не выдумывает их', async () => {
+    const { buildFamilyCompositionDocumentXml } = await import('../public/js/translation/familyCompositionDocx.mjs');
+    const xml = buildFamilyCompositionDocumentXml({ language: 'ru', fields: [{ key: 'fullName', label: 'ФИО', value: 'IVANOV I.I.' }], familyMembers: [] });
+    assert.ok(xml.includes('IVANOV I.I.') && xml.includes('ИНФОРМАЦИЯ О СОСТАВЕ СЕМЬИ'));
+    assert.ok(!xml.includes('QR') && !xml.includes('Степень родства'));
+  });
+
   console.log('\n=== Регрессия модуля "Перевод" (recognizeAndTranslateDocument) ===');
   results.forEach(r => {
     console.log(`  ${r.ok ? '✓' : '✗'} ${r.label}`);

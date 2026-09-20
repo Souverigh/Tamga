@@ -347,6 +347,12 @@ export async function initTranslationDocs() {
   tablesHeading.style.margin = '16px 0 6px'; tablesHeading.style.display = 'none';
   const tablesContainer = el('div');
   colFields.append(tablesHeading, tablesContainer);
+  // Члены семьи ("Информация о составе семьи") — своя таблица с другими
+  // колонками, а не tablesContainer выше (тот жёстко "Предмет/Оценка").
+  const familyHeading = el('div', 'Члены семьи', 'step-label');
+  familyHeading.style.margin = '16px 0 6px'; familyHeading.style.display = 'none';
+  const familyContainer = el('div');
+  colFields.append(familyHeading, familyContainer);
 
   columns.append(colFields);
   resultPanel.append(columns);
@@ -570,6 +576,33 @@ export async function initTranslationDocs() {
     });
   }
 
+  // Только просмотр (правка в режиме сравнения пока не подключена, как и у
+  // renderSubjectTables до появления сохранения таблиц) — экспорт читает
+  // doc.result.familyMembers заново на каждый клик "Скачать".
+  function renderFamilyMembers(members) {
+    familyContainer.replaceChildren();
+    const visible = Array.isArray(members) ? members : [];
+    familyHeading.style.display = visible.length ? '' : 'none';
+    if (!visible.length) return;
+    const columns = ['№', 'Ф.И.О.', 'Степень родства', 'Дата рождения', 'Перевод Ф.И.О.', 'Перевод степени родства', 'Перевод даты рождения'];
+    const tableEl = el('table', null, 'admin-table acct-header-table');
+    const head = el('thead'); const headRow = el('tr');
+    columns.forEach(name => headRow.append(el('th', name)));
+    head.append(headRow);
+    const body = el('tbody');
+    visible.forEach((member, index) => {
+      const tr = el('tr');
+      [String(index + 1), member.fullName, member.relationship, member.birthDate, member.translatedFullName, member.translatedRelationship, member.translatedBirthDate].forEach((value, cellIndex) => {
+        const td = el('td', value || '—');
+        td.dataset.label = columns[cellIndex];
+        tr.append(td);
+      });
+      body.append(tr);
+    });
+    tableEl.append(head, body);
+    familyContainer.append(tableEl);
+  }
+
   async function selectDoc(index) {
     const doc = docs[index];
     if (!doc) return;
@@ -604,6 +637,7 @@ export async function initTranslationDocs() {
       ));
       renderFieldsTable([]);
       renderSubjectTables([]);
+      renderFamilyMembers([]);
       renderParagraphsTable(doc.structural.paragraphs.map(p => ({ text: p.text, translated: doc.structural.translatedById.get(p.id) || '' })));
       resultPanel.style.display = '';
       exportDocxBtn.disabled = false;
@@ -649,6 +683,7 @@ export async function initTranslationDocs() {
     regulationNote.append(el('strong', 'Важная информация'), regulationList);
     renderFieldsTable(data.fields);
     renderSubjectTables(data.tables);
+    renderFamilyMembers(data.familyMembers);
     renderParagraphsTable(data.paragraphs);
     resultPanel.style.display = '';
     [exportDocxBtn, exportTxtBtn, printBtn, compareBtn].forEach(b => b.disabled = false);

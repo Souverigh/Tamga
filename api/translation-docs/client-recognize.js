@@ -64,6 +64,17 @@ module.exports = async (req, res) => {
           }))
         }))
         : [],
+      familyMembers: Array.isArray(recognition.familyMembers)
+        ? recognition.familyMembers.map(member => ({
+          fullName: member.fullName,
+          relationship: member.relationship,
+          birthDate: member.birthDate,
+          translatedFullName: member.translatedFullName,
+          translatedRelationship: member.translatedRelationship,
+          translatedBirthDate: member.translatedBirthDate,
+          confidence: member.confidence
+        }))
+        : [],
       ...(Array.isArray(recognition.elements) ? {
         elements: recognition.elements.map(element => ({
           key: element.key,

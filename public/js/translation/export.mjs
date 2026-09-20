@@ -8,6 +8,7 @@ import { buildPassportUzbekistanDocumentXml } from './passportUzbekistanDocx.mjs
 import { buildBirthCertificateDocumentXml } from './birthCertificateDocx.mjs';
 import { buildDeathCertificateDocumentXml } from './deathCertificateDocx.mjs';
 import { buildNoCriminalRecordDocumentXml } from './noCriminalRecordDocx.mjs';
+import { buildFamilyCompositionDocumentXml } from './familyCompositionDocx.mjs';
 export const escapeXml = text => String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 
 // Приписка переводчика для приложения к переводу (Ethan, 17 сен 2026, со
@@ -198,6 +199,19 @@ export const TABLE_LABELS = {
 // (живой баг, Ethan, 18 сен 2026 — распознанный аттестат, таблица
 // предметов пропала из .docx целиком).
 export const isFinalsSection = section => /итог|final|экзам/i.test(String(section || ''));
+// Заголовок и колонки таблицы членов семьи ("Информация о составе семьи") —
+// общие для .docx-вёрстки (familyCompositionDocx.mjs) и резервного
+// текстового/HTML/PDF-пути (layoutBlocks/pairedLayoutBlocks).
+export const FAMILY_TABLE_LABELS = {
+  ru: { heading: 'Члены семьи', number: '№', fullName: 'Ф.И.О.', relationship: 'Степень родства', birthDate: 'Дата рождения' },
+  ky: { heading: 'Үй-бүлө мүчөлөрү', number: '№', fullName: 'А.Ж.А.', relationship: 'Туугандык даражасы', birthDate: 'Туулган күнү' },
+  en: { heading: 'Family members', number: 'No.', fullName: 'Full name', relationship: 'Relationship', birthDate: 'Date of birth' },
+  kk: { heading: 'Отбасы мүшелері', number: '№', fullName: 'Т.А.Ә.', relationship: 'Туыстық дәрежесі', birthDate: 'Туған күні' },
+  uz: { heading: 'Oila a’zolari', number: '№', fullName: 'F.I.Sh.', relationship: 'Qarindoshlik darajasi', birthDate: 'Tug‘ilgan sana' },
+  tr: { heading: 'Aile üyeleri', number: 'No.', fullName: 'Ad Soyad', relationship: 'Yakınlık derecesi', birthDate: 'Doğum tarihi' },
+  zh: { heading: '家庭成员', number: '序号', fullName: '姓名', relationship: '亲属关系', birthDate: '出生日期' },
+  de: { heading: 'Familienmitglieder', number: 'Nr.', fullName: 'Vollständiger Name', relationship: 'Verwandtschaftsverhältnis', birthDate: 'Geburtsdatum' }
+};
 // Presentation only: retain every text fragment; remove redundant empty OCR
 // lines from layout rather than treating them as Word line breaks plus margins.
 export function layoutBlocks(doc) {
@@ -214,6 +228,10 @@ export function layoutBlocks(doc) {
     const heading = isFinalsSection(table.section) ? TL.finals : TL.subjects;
     blocks.push({heading}, {table: [[TL.subject, TL.grade], ...table.rows.map(row => [row.subject, row.grade])]});
   });
+  if (doc.familyMembers?.length) {
+    const FL = FAMILY_TABLE_LABELS[doc.language] || FAMILY_TABLE_LABELS.en;
+    blocks.push({heading: FL.heading}, {table: [[FL.number, FL.fullName, FL.relationship, FL.birthDate], ...doc.familyMembers.map((member, index) => [String(index + 1), member.fullName, member.relationship, member.birthDate])]});
+  }
   // Для Аттестата поля+таблицы (предметы/оценки) уже полностью описывают
   // документ — сплошной текст распознавания снизу был бы точным дублем
   // уже показанных данных (Ethan, 18 сен 2026). preservesParagraphs теперь
@@ -292,6 +310,14 @@ export function pairedLayoutBlocks(original,translation) {
         return [row.subject, row.grade, translatedRow.subject, translatedRow.grade];
       })]});
   });
+  if (original.familyMembers?.length) {
+    blocks.push({heading: FAMILY_TABLE_LABELS.ru.heading});
+    blocks.push({table: [['№', 'Ф.И.О. (оригинал)', 'Степень родства (оригинал)', 'Дата рождения (оригинал)', 'Ф.И.О. (перевод)', 'Степень родства (перевод)', 'Дата рождения (перевод)'],
+      ...original.familyMembers.map((member, index) => {
+        const translated = translation.familyMembers?.[index] || {};
+        return [String(index + 1), member.fullName, member.relationship, member.birthDate, translated.fullName, translated.relationship, translated.birthDate];
+      })]});
+  }
   const rows=original.paragraphs
     .map((p,i)=>[p.text,translation.paragraphs[i].text])
     .filter(([a])=>a.trim());
@@ -407,6 +433,9 @@ export function buildDocumentXml(original,translation,paired,certification) {
   // "Справка о несудимости" — распечатка с портала "Тундук" (не бумажный
   // бланк ЗАГС/паспортов), реальная вёрстка бюро, см. noCriminalRecordDocx.mjs.
   if (!paired && translation.docType === 'Справка о несудимости') return buildNoCriminalRecordDocumentXml(translation, certification);
+  // "Информация о составе семьи" — вторая распечатка с портала "Тундук"
+  // (таблица членов семьи вместо результата услуги), см. familyCompositionDocx.mjs.
+  if (!paired && translation.docType === 'Информация о составе семьи') return buildFamilyCompositionDocumentXml(translation, certification);
   const title = documentTitle(original.name, translation, paired);
   let body = title ? paragraph(title,true) : '';
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];

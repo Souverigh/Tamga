@@ -10,6 +10,9 @@ export function buildExportDocs(doc, language) {
   // бок — просто раньше сюда всегда попадал пустой массив.
   const paragraphs = Array.isArray(doc.result.paragraphs) ? doc.result.paragraphs : [];
   const tables = Array.isArray(doc.result.tables) ? doc.result.tables : [];
+  // Таблица членов семьи ("Информация о составе семьи") — не tables: другие
+  // колонки, см. lib/translationDocs/pipeline.js.
+  const familyMembers = Array.isArray(doc.result.familyMembers) ? doc.result.familyMembers : [];
   const name = doc.file.name;
   const docType = doc.result.doc_type;
   const original = {
@@ -23,7 +26,8 @@ export function buildExportDocs(doc, language) {
       })
       : undefined,
     columns: [], items: [], keys: [], paragraphs: paragraphs.map(p => ({ text: p.text })),
-    tables: tables.map(table => ({ section: table.section, rows: table.rows.map(row => ({ subject: row.subject, grade: row.grade })) }))
+    tables: tables.map(table => ({ section: table.section, rows: table.rows.map(row => ({ subject: row.subject, grade: row.grade })) })),
+    familyMembers: familyMembers.map(member => ({ fullName: member.fullName, relationship: member.relationship, birthDate: member.birthDate }))
   };
   const translation = {
     name,
@@ -50,7 +54,8 @@ export function buildExportDocs(doc, language) {
       })
       : undefined,
     columns: [], items: [], keys: [], paragraphs: paragraphs.map(p => ({ text: p.translated || '' })),
-    tables: tables.map(table => ({ section: table.section, rows: table.rows.map(row => ({ subject: row.translatedSubject, grade: row.translatedGrade })) }))
+    tables: tables.map(table => ({ section: table.section, rows: table.rows.map(row => ({ subject: row.translatedSubject, grade: row.translatedGrade })) })),
+    familyMembers: familyMembers.map(member => ({ fullName: member.translatedFullName || '', relationship: member.translatedRelationship || '', birthDate: member.translatedBirthDate || '' }))
   };
   return { original, translation };
 }
