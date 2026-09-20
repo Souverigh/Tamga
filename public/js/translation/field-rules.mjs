@@ -141,14 +141,19 @@ export function normalizeDate(value) {
   return text;
 }
 
+// Третий маркер — [qr] (Ethan, 19 сен 2026: "печати, подписи, QR-коды —
+// нужно так же указывать и обрабатывать, как мы уже сделали для подписей").
+// Тот же принцип: графический элемент, который бессмысленно транскрибировать
+// как текст — модель просто отмечает его наличие, а перевод подставляет
+// готовую подпись-плейсхолдер на нужном языке.
 export function localizeMarkers(value, language) {
   const markers = {
-    zh: ['【印章】', '【签字】'], en: ['[seal]', '[signature]'],
-    ru: ['[печать]', '[подпись]'], ky: ['[мөөр]', '[кол тамга]'],
-    kk: ['[мөр]', '[қолтаңба]'], de: ['[Siegel]', '[Unterschrift]'],
-    tr: ['[mühür]', '[imza]'], uz: ['[muhr]', '[imzo]']
-  }[language] || ['[seal]', '[signature]'];
-  return value.replace(/\[seal\]/gi, markers[0]).replace(/\[signature\]/gi, markers[1]);
+    zh: ['【印章】', '【签字】', '【二维码】'], en: ['[seal]', '[signature]', '[QR code]'],
+    ru: ['[печать]', '[подпись]', '[QR-код]'], ky: ['[мөөр]', '[кол тамга]', '[QR-код]'],
+    kk: ['[мөр]', '[қолтаңба]', '[QR-код]'], de: ['[Siegel]', '[Unterschrift]', '[QR-Code]'],
+    tr: ['[mühür]', '[imza]', '[QR kodu]'], uz: ['[muhr]', '[imzo]', '[QR-kod]']
+  }[language] || ['[seal]', '[signature]', '[QR code]'];
+  return value.replace(/\[seal\]/gi, markers[0]).replace(/\[signature\]/gi, markers[1]).replace(/\[qr\]/gi, markers[2]);
 }
 
 // null means the content needs translation. Names/dates/IDs never go to an LLM.
