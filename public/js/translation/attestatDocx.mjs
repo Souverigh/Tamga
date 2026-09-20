@@ -151,11 +151,18 @@ export function buildAttestatDocumentXml(translation, certification) {
   if (issueDateField?.value) footer += paraRuns(run(`${issueDateField.label}: `) + run(issueDateField.value, { bold: true, italic: true }));
   const verificationField = byKey('verificationUrl');
   if (verificationField?.value) footer += paraRuns(run(`${verificationField.label}: `) + run(verificationField.value, { bold: true, italic: true }));
-  if (fields.some(f => f.key === 'seal')) footer += para('M.P.', { bold: true, italic: true });
   const regField = byKey('registrationNumber');
   if (regField?.value) footer += para(`${regField.label}: ${regField.value}`, { bold: true, italic: true });
+  // "M.P." раньше показывался БЕЗУСЛОВНО (fields.some(f => f.key === 'seal')
+  // истинно всегда — 'seal' есть в списке полей этого типа независимо от
+  // того, нашла ли модель графическую печать на конкретном документе).
+  // Теперь — только если печать реально обнаружена (sealField.value), тот
+  // же принцип, что у birthCertificateDocx.mjs/deathCertificateDocx.mjs.
   const sealField = byKey('seal');
-  if (sealField?.value) footer += para(`${sealField.label}: ${sealField.value}`);
+  if (sealField?.value) {
+    footer += para('M.P.', { bold: true, italic: true });
+    footer += para(`${sealField.label}: ${sealField.value}`);
+  }
   body += row(cell(TOTAL, footer, { span: 2, borders: ['top'] }));
 
   const tableXml = table([COL1, COL2], body);
@@ -163,6 +170,9 @@ export function buildAttestatDocumentXml(translation, certification) {
   // документов (certificationBlocks в export.mjs): язык перевода первым
   // абзацем, язык оригинала вторым.
   const certParas = certificationBlocks(certification, lang).map(b => para(b.text, { size: 20 })).join('');
-  const documentBody = tableXml + certParas;
+  // stampText (см. birthCertificateDocx.mjs) — читаемая отметка поверх
+  // бланка (например "Дубликат"), относится к документу в целом.
+  const stampXml = map.stampText ? para(map.stampText, { align: 'center', bold: true, italic: true }) + para('') : '';
+  const documentBody = stampXml + tableXml + certParas;
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + documentBody + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
 }

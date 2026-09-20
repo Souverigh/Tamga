@@ -56,13 +56,6 @@ const TITLE = {
   ru: 'СВИДЕТЕЛЬСТВО О СМЕРТИ', ky: 'ӨЛГӨНДҮГҮ ЖӨНҮНДӨ КҮБӨЛҮК', en: 'CERTIFICATE OF DEATH',
   kk: 'ҚАЙТЫС БОЛУ ТУРАЛЫ КУӘЛІК', uz: 'VAFOT ETGANLIK HAQIDA GUVOHNOMA', tr: 'ÖLÜM BELGESİ', zh: '死亡证明', de: 'STERBEURKUNDE'
 };
-// Own-copy того же плейсхолдер-конвента, что в idCardDocx.mjs/
-// passportCanadaDocx.mjs/birthCertificateDocx.mjs.
-const SIGNATURE_PLACEHOLDER = {
-  ru: '/подпись/', ky: '/кол коюлган/', en: '/signature/', kk: '/қолы/',
-  uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/'
-};
-
 // Лейбл обычным начертанием, значение жирным И подчёркнутым, на одной
 // строке — как в образце (в отличие от stacked-полей свидетельства о
 // рождении, где лейбл и значение на РАЗНЫХ строках).
@@ -79,7 +72,10 @@ export function buildDeathCertificateDocumentXml(translation, certification) {
   const fields = translation.fields || [];
   const map = Object.fromEntries(fields.filter(f => f.key).map(f => [f.key, f]));
   const title = TITLE[lang] || TITLE.en;
-  const sigLabel = SIGNATURE_PLACEHOLDER[lang] || SIGNATURE_PLACEHOLDER.en;
+
+  // stampText (см. birthCertificateDocx.mjs) — читаемая отметка поверх
+  // бланка (например "Дубликат"), относится к документу в целом.
+  const stampXml = map.stampText?.value ? para(map.stampText.value, { align: 'center', bold: true, italic: true }) + para('') : '';
 
   const header = (map.country?.value ? para(map.country.value, { align: 'center', bold: true, size: 24 }) : '')
     + para(title, { align: 'center', bold: true, size: 28 }) + para('');
@@ -90,19 +86,21 @@ export function buildDeathCertificateDocumentXml(translation, certification) {
     map.issuingAuthority, map.issueDate
   ].map(fieldLine).join('');
 
-  // Ответственный сотрудник — та же строка "Лейбл: Значение", плюс
-  // плейсхолдер подписи следом (как в образце: "...Ismailova /signature/").
+  // Ответственный сотрудник — та же строка "Лейбл: Значение", плюс маркер
+  // подписи следом, только если модель действительно увидела графическую
+  // подпись на этом документе (map.signature.value, kind: 'signature' — см.
+  // documentStructures.js/birthCertificateDocx.mjs), а не безусловно.
   const employeeXml = map.responsibleEmployee?.value
-    ? paraRuns(run(`${map.responsibleEmployee.label}: `) + run(map.responsibleEmployee.value, { bold: true, underline: true }) + run(`  ${sigLabel}`, { italic: true }))
+    ? paraRuns(run(`${map.responsibleEmployee.label}: `) + run(map.responsibleEmployee.value, { bold: true, underline: true }) + (map.signature?.value ? run(`  ${map.signature.value}`, { italic: true }) : ''))
     : '';
 
-  const sealXml = map.seal?.value ? para('') + para(`/${map.seal.label}: ${map.seal.value}/`, { italic: true }) : '';
+  const sealXml = map.seal?.value ? para('') + para(`${map.seal.label}: ${map.seal.value}`, { italic: true }) : '';
   const documentNumberXml = map.documentNumber?.value ? para('') + para(map.documentNumber.value, { bold: true }) : '';
 
   const cellXml = header + bodyFields + employeeXml + sealXml + documentNumberXml;
   const mainTableXml = table([TOTAL], row(cell(TOTAL, cellXml)), { borderStyle: 'double', borderSz: 12, sides: ['top', 'left', 'bottom', 'right'] });
 
   const certParas = certificationBlocks(certification, lang).map(b => para(b.text, { size: 20 })).join('');
-  const documentBody = mainTableXml + certParas;
+  const documentBody = stampXml + mainTableXml + certParas;
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + documentBody + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
 }
