@@ -93,6 +93,17 @@ export function normalizeDate(value) {
     const month = MONTH_ABBR[match[2].slice(0, 3).toUpperCase()];
     if (month) return `${match[1].padStart(2, '0')}-${String(month).padStart(2, '0')}-${match[3].slice(-2)}`;
   }
+  // "June 30, 2026" — американский порядок (месяц словом, день, запятая,
+  // год), а не "30 Jun 2026" как выше (Ethan, 19 сен 2026: электронная
+  // справка КР на английском отдаёт "Дата и время формирования документа"
+  // и "Дата подписи" именно так — ни один паттерн выше не матчил, дата
+  // оставалась непереведённой). MONTH_ABBR ищем по первым 3 буквам — работает
+  // и для полного "June", и для сокращения "Jun".
+  match = text.match(/^([A-Za-zÀ-ÿ]{3,})\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (match) {
+    const month = MONTH_ABBR[match[1].slice(0, 3).toUpperCase()];
+    if (month) return `${match[2].padStart(2, '0')}-${String(month).padStart(2, '0')}-${match[3].slice(-2)}`;
+  }
   // Дата с "хвостом" (время, часовой пояс, "года"/"жылы"/"г."/"ж.") — ни один
   // из паттернов выше не матчит ЦЕЛИКОМ такую строку, и дата раньше уходила
   // непереведённой (Ethan, 19 сен 2026: электронная справка КР отдаёт "Дата и
@@ -115,6 +126,17 @@ export function normalizeDate(value) {
     const normalized = `${match[1].padStart(2, '0')}-${match[2].padStart(2, '0')}-${match[3].slice(-2)}`;
     const rest = stripTail(match.index, match[0].length);
     return rest ? `${normalized}, ${rest}` : normalized;
+  }
+  // "June 30, 2026, 10:49:39 (GMT+6)" — тот же случай, что и "MONTH DD,
+  // YYYY" выше, но с хвостом времени/часового пояса после года.
+  match = text.match(/([A-Za-zÀ-ÿ]{3,})\s+(\d{1,2}),?\s+(\d{4})/);
+  if (match) {
+    const month = MONTH_ABBR[match[1].slice(0, 3).toUpperCase()];
+    if (month) {
+      const normalized = `${match[2].padStart(2, '0')}-${String(month).padStart(2, '0')}-${match[3].slice(-2)}`;
+      const rest = stripTail(match.index, match[0].length).replace(/^,\s*/, '');
+      return rest ? `${normalized}, ${rest}` : normalized;
+    }
   }
   return text;
 }
