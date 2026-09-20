@@ -296,10 +296,9 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
     // Gemini. Сбой пробы не должен блокировать распознавание — при ошибке
     // rotation всегда 0, страница уходит как есть, как и раньше.
     let rotatedImage = null;
-    try {
-      const rotation = await detectRotation(pageImage);
-      if (rotation) rotatedImage = rotateImage(pageImage, rotation);
-    } catch (_) { /* best-effort */ }
+    const rotation = await detectRotation(pageImage);
+    console.log('[orientation] обнаруженный поворот страницы:', rotation, '°');
+    if (rotation) rotatedImage = rotateImage(pageImage, rotation);
     try {
       const result = await recognizeWithGemini(rotatedImage || pageImage, presetType, { onRetry, signal, clientSlug, clientToken, includeText });
       return { rawText: result.text, docType: result.docType, fields: result.fields, items: result.items, columns: result.columns, columnKeys: result.columnKeys, confidence: result.confidence, warnings: result.warnings || [] };

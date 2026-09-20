@@ -32,8 +32,17 @@ export async function detectRotation(pageImage) {
     await worker.loadLanguage('osd');
     await worker.initialize('osd');
     const { data } = await worker.detect(pageImage);
-    return ROTATIONS.includes(data?.orientation_degrees) ? data.orientation_degrees : 0;
-  } catch (_) {
+    if (!ROTATIONS.includes(data?.orientation_degrees)) {
+      console.warn('detectRotation: неожиданный ответ OSD, пропускаем поворот', data);
+      return 0;
+    }
+    return data.orientation_degrees;
+  } catch (error) {
+    // Сбой этой пробы не должен блокировать основное распознавание — но
+    // молчать о нём тоже нельзя (иначе "почему поворот не сработал"
+    // невозможно отладить без доступа к чужому браузеру, см. историю этого
+    // модуля выше — уже трижды меняли подход из-за таких немых сбоев).
+    console.warn('detectRotation: проверка поворота не удалась, страница уйдёт как есть', error);
     return 0;
   } finally {
     if (activeWorker === worker) activeWorker = null;
