@@ -31,8 +31,18 @@ import { DOC_TYPE_LABELS } from '../../admin/accounting/labels.js';
 import { renderFileList, renderPreview, renderHeaderTable, renderItemsTable, renderRules } from '../../admin/accounting/render.js';
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
 import { runWithConcurrency } from '../utils/concurrencyPool.js';
+import { fixPdfRotation } from '../ocr/pdfRotationFix.js';
 
 const MAX_ACCOUNTING_CONCURRENCY = 20;
+
+// Сканы/фото PDF иногда сняты боком (см. ocr/pdfRotationFix.js) — проверяем и
+// правим один раз на файл, дальше и превью, и сама отправка на распознавание
+// используют один и тот же (уже поправленный) файл. Кэшируем на самом doc,
+// чтобы не гонять проверку повторно при каждом клике по файлу в списке.
+async function getUploadFile(doc) {
+  if (!doc.__uploadFile) doc.__uploadFile = await fixPdfRotation(doc.file);
+  return doc.__uploadFile;
+}
 
 async function recognizeViaApi(token, slug, base64, mimeType) {
   const res = await fetch('/api/accounting/client-recognize', {
@@ -278,8 +288,9 @@ export async function initAccounting() {
     activeIndex = index;
     refreshFileList();
 
-    const base64 = await fileToBase64(doc.file);
-    renderPreview(previewBox, doc.file.type, base64);
+    const uploadFile = await getUploadFile(doc);
+    const base64 = await fileToBase64(uploadFile);
+    renderPreview(previewBox, uploadFile.type, base64);
     originalPanel.style.display = '';
 
     if (doc.status !== 'done' || !doc.result) {
@@ -301,8 +312,9 @@ export async function initAccounting() {
     doc.error = null;
     refreshFileList();
     try {
-      const base64 = await fileToBase64(doc.file);
-      const data = await recognizeViaApi(token, slug, base64, doc.file.type);
+      const uploadFile = await getUploadFile(doc);
+      const base64 = await fileToBase64(uploadFile);
+      const data = await recognizeViaApi(token, slug, base64, uploadFile.type);
       doc.status = 'done';
       doc.result = { ...data, file_name: doc.file.name };
     } catch (err) {

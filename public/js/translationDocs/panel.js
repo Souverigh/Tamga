@@ -28,6 +28,7 @@ import { getClientSlug, getClientToken, getClientBranding } from '../branding.js
 import { registerTab } from '../contentTabs.js';
 import { renderFileList, renderPreview } from '../../admin/accounting/render.js';
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
+import { fixPdfRotation } from '../ocr/pdfRotationFix.js';
 import { extractDocxContent } from '../ocr/docxLoader.js';
 import { extractStructuralParagraphs, spliceTranslatedParagraphs, assembleTranslatedDocx } from '../translation/structuralDocx.mjs';
 import { LOW_CONFIDENCE_THRESHOLD } from '../../admin/accounting/labels.js';
@@ -43,6 +44,15 @@ const MAX_TRANSLATION_CONCURRENCY = 20;
 // Для скачивания результата режима "Перевести как есть" — export.mjs имеет
 // свою safeName(), но не экспортирует её; здесь тот же приём локально.
 const safeFileName = name => (name || 'document').replace(/\.[^./\\]+$/, '').replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_').slice(0, 100) || 'document';
+
+// Сканы/фото PDF иногда сняты боком (см. ocr/pdfRotationFix.js) — проверяем и
+// правим один раз на файл, дальше и превью, и сама отправка на распознавание
+// используют один и тот же (уже поправленный) файл. Кэшируем на самом doc,
+// чтобы не гонять проверку повторно при каждом клике по файлу в списке.
+async function getUploadFile(doc) {
+  if (!doc.__uploadFile) doc.__uploadFile = await fixPdfRotation(doc.file);
+  return doc.__uploadFile;
+}
 
 // content — { base64, mimeType } (фото/PDF/скан из .docx) ИЛИ { sourceText }
 // (настоящий текст .docx, извлечённый docxLoader.js на клиенте) — ровно одно
@@ -578,10 +588,11 @@ export async function initTranslationDocs() {
     activeIndex = index;
     refreshFileList();
 
-    const base64 = await fileToBase64(doc.file);
+    const uploadFile = await getUploadFile(doc);
+    const base64 = await fileToBase64(uploadFile);
     originalArea.style.display = '';
-    renderPreview(previewBox, doc.file.type, base64);
-    updateOriginalDownload(doc.file, base64);
+    renderPreview(previewBox, uploadFile.type, base64);
+    updateOriginalDownload(uploadFile, base64);
 
     if (doc.status !== 'done' || (!doc.result && !doc.structural)) {
       resultPanel.style.display = 'none';
@@ -697,11 +708,13 @@ export async function initTranslationDocs() {
       }
       doc.structural = null;
       // .docx идёт своим путём (текст или встроенный скан, см. docxLoader.js)
-      // — обычные фото/PDF, как и раньше, base64 самого файла.
+      // — обычные фото/PDF, как и раньше, base64 самого файла (уже с
+      // поправленным поворотом, см. getUploadFile/ocr/pdfRotationFix.js).
+      const uploadFile = isDocx ? doc.file : await getUploadFile(doc);
       const content = isDocx
         ? await extractDocxContent(doc.file)
-        : { base64: await fileToBase64(doc.file), mimeType: doc.file.type };
-      const pageCount = await getPageCount(doc.file);
+        : { base64: await fileToBase64(uploadFile), mimeType: uploadFile.type };
+      const pageCount = await getPageCount(uploadFile);
       const data = await recognizeViaApi(token, slug, content, language, pageCount);
       doc.status = 'done';
       doc.result = data;
