@@ -51,16 +51,25 @@ function transliterateLatinWord(word) {
 }
 const transliterateLatinToCyrillic = value => String(value).split(/(\s+)/).map(transliterateLatinWord).join('');
 
+// Регистр многобуквенных соответствий (Ethan, 20 сен 2026, живой кейс:
+// "ПАВЛОВИЧ" давало "PAVLOVICh"): заглавная буква с заглавной соседкой — часть
+// слова, набранного ЗАГЛАВНЫМИ, и её соответствие целиком в верхнем регистре
+// ("Ч" → "CH"); заглавная без заглавных соседей — начало слова или инициал
+// ("Ч." → "Ch", "Чингиз" → "Chingiz").
 export function transliterateName(value, language) {
   const text = String(value ?? '');
   const hasCyrillic = /[а-яёңүөўқғҳ]/i.test(text);
   const hasLatin = /[a-zà-ÿ]/i.test(text);
   if (hasCyrillic && LATIN_TARGET_LANGUAGES.includes(language)) {
-    return Array.from(text).map(char => {
+    const chars = Array.from(text);
+    const isUpperLetter = c => !!c && c.toLowerCase() !== c.toUpperCase() && c === c.toUpperCase();
+    return chars.map((char, i) => {
       const lower = char.toLowerCase();
       const mapped = TRANSLIT[lower];
       if (mapped === undefined) return char;
-      return char === lower ? mapped : mapped.charAt(0).toUpperCase() + mapped.slice(1);
+      if (char === lower) return mapped;
+      const inCapsWord = isUpperLetter(chars[i - 1]) || isUpperLetter(chars[i + 1]);
+      return inCapsWord ? mapped.toUpperCase() : mapped.charAt(0).toUpperCase() + mapped.slice(1);
     }).join('');
   }
   // Исходное имя уже на латинице (иностранный документ, напр. канадский

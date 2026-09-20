@@ -56,12 +56,17 @@ const PLACE_PREFIX = /^(?:г|с|п|пос|аул|обл|р-н)\.?\s+/i;
 
 export function transliterate(value, language) {
   if (!LATIN_SCRIPT_LANGUAGES.has(language)) return value;
-  return Array.from(str(value).replace(PLACE_PREFIX,'')).map(ch => {
+  const chars = Array.from(str(value).replace(PLACE_PREFIX,''));
+  const isUpperLetter = c => !!c && c.toLowerCase() !== c.toUpperCase() && c === c.toUpperCase();
+  return chars.map((ch, i) => {
     const lower = ch.toLowerCase();
     const mapped = TRANSLIT_TABLE[lower];
     if (mapped === undefined) return ch;
-    if (ch !== lower) return mapped.charAt(0).toUpperCase() + mapped.slice(1);
-    return mapped;
+    if (ch === lower) return mapped;
+    // заглавная с заглавной соседкой — слово ЗАГЛАВНЫМИ ("ПАВЛОВИЧ" → "PAVLOVICH",
+    // не "PAVLOVICh"); одиночная/начальная — "Ch" (то же правило в field-rules.mjs)
+    const inCapsWord = isUpperLetter(chars[i-1]) || isUpperLetter(chars[i+1]);
+    return inCapsWord ? mapped.toUpperCase() : mapped.charAt(0).toUpperCase() + mapped.slice(1);
   }).join('');
 }
 

@@ -157,6 +157,21 @@ test('reviewed source corrections are used instead of stale extracted names', as
   const { original, translation } = buildExportDocs({ file: { name: 'reviewed.png' }, result: { doc_type: 'apostille', fields, elements: fixture.elements } }, 'zh');
   assert.match(buildDocumentXml(original, translation, false), /Almanova G\./);
 });
+// "ПАВЛОВИЧ" давало "PAVLOVICh" — заглавная буква с многобуквенным
+// соответствием капитализировалась как начало слова, даже внутри слова
+// ЗАГЛАВНЫМИ (Ethan, 20 сен 2026, живой кейс).
+test('transliteration keeps case: ALL-CAPS words stay upper case, title-case words and initials stay Title-case', async () => {
+  const { transliterateName } = await import('../public/js/translation/field-rules.mjs');
+  const { transliterate } = await import('../public/js/translation/model.mjs');
+  const cases = {
+    'ПАВЛОВИЧ': 'PAVLOVICH', 'ШИРИНОВ ЖУМАБЕК': 'SHIRINOV ZHUMABEK', 'ИВАНОВА МАРИЯ ПЕТРОВНА': 'IVANOVA MARIIA PETROVNA',
+    'Павлович': 'Pavlovich', 'Чингиз Шаршенов': 'Chingiz Sharshenov', 'Ж. Р. Исмаилов': 'Zh. R. Ismailov', 'ЩУКИН-ЧАЙКА': 'SHCHUKIN-CHAIKA'
+  };
+  for (const [source, expected] of Object.entries(cases)) {
+    assert.equal(transliterateName(source, 'en'), expected, source);
+    assert.equal(transliterate(source, 'en'), expected, source);
+  }
+});
 test('date formats and status colors match the requested rules', async () => {
   const { normalizeDate, apostilleValue, TRANSLATION_STATUSES } = await import('../public/js/translation/field-rules.mjs');
   for (const text of ['30.01.2018-ж.', '2018-01-30', '30/01/18', '30-01-2018']) assert.equal(normalizeDate(text), '30-01-2018');
