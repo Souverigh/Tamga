@@ -695,12 +695,14 @@ export async function initTranslationDocs() {
   // ничего не проходя через recognizeAndTranslateDocument/pipeline.js.
   // Списывает ту же страницу пакета клиента, что и обычный путь — см.
   // lib/translationDocs/structuralTranslate.js.
-  async function translateStructural(doc, language) {
-    const { zip, documentXml, paragraphs } = await extractStructuralParagraphs(doc.file);
+  // Перевод готовых сегментов текста (общий эндпоинт для "Перевести как есть"
+  // .docx и для перевода текстового PDF на месте). pageCount — сколько
+  // страниц списать с пакета клиента (у .docx — одна).
+  async function requestSegmentTranslation(segments, language, pageCount) {
     const res = await fetch('/api/translation-docs/structural-translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-client-token': token },
-      body: JSON.stringify({ segments: paragraphs.map(p => ({ id: p.id, text: p.text })), clientSlug: slug, language })
+      body: JSON.stringify({ segments, clientSlug: slug, language, ...(pageCount ? { pageCount } : {}) })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -710,9 +712,40 @@ export async function initTranslationDocs() {
       };
       throw new Error(messages[data.code] || data.error || `Не удалось перевести документ (код ${res.status}).`);
     }
-    const translatedById = new Map(data.segments.map(s => [s.id, s.text]));
+    return data.segments;
+  }
+
+  async function translateStructural(doc, language) {
+    const { zip, documentXml, paragraphs } = await extractStructuralParagraphs(doc.file);
+    const translated = await requestSegmentTranslation(paragraphs.map(p => ({ id: p.id, text: p.text })), language);
+    const translatedById = new Map(translated.map(s => [s.id, s.text]));
     doc.structural = { zip, documentXml, paragraphs, translatedById };
     doc.result = null;
+  }
+
+  // Ethan, 20 сен 2026: "если в PDF есть текст, переводим как есть, не меняя
+  // структуру, когда человек скачивает PDF; Word не трогаем". Для текстового
+  // PDF (не скан, не апостиль) кнопка "Печать / PDF" отдаёт сам исходный PDF
+  // с переводом на местах оригинального текста — см. pdfInPlace.mjs. Возвращает
+  // true, если файл скачан этим путём; false — нужен прежний PDF по шаблону
+  // (скан, не PDF, апостиль с его проверяемой вёрсткой, "перевести как есть"
+  // .docx). Перевод кешируется в doc.inPlacePdf по языку: повторное скачивание
+  // не списывает страницы заново.
+  async function downloadInPlacePdf(doc) {
+    const isPdf = doc.file.type === 'application/pdf' || /\.pdf$/i.test(doc.file.name);
+    if (!isPdf || doc.structural || doc.result?.doc_type === 'apostille') return false;
+    const language = selectedLanguage;
+    if (doc.inPlacePdf?.language !== language) {
+      const { translatePdfInPlace } = await import('./pdfInPlace.mjs');
+      const blob = await translatePdfInPlace(doc.file, {
+        language,
+        translate: (segments, pageCount) => requestSegmentTranslation(segments, language, pageCount)
+      });
+      doc.inPlacePdf = { language, blob };
+    }
+    if (!doc.inPlacePdf.blob) return false;
+    downloadBlob(doc.inPlacePdf.blob, `${safeFileName(doc.file.name)}-translation.pdf`);
+    return true;
   }
 
   async function translateOne(doc, language) {
@@ -836,12 +869,31 @@ export async function initTranslationDocs() {
     const doc = docs[activeIndex];
     if (!doc || doc.status !== 'done') return;
     exportError.style.display = 'none';
+    const label = printBtn.textContent;
+    printBtn.disabled = true;
     try {
+      let inPlaceError = null;
+      try {
+        printBtn.textContent = 'Готовим PDF…';
+        if (await downloadInPlacePdf(doc)) return;
+      } catch (err) {
+        // Не получилось сохранить оформление оригинала — отдаём PDF по шаблону,
+        // но говорим об этом, а не молча подменяем результат.
+        console.error('[translationDocs] перевод PDF на месте не удался', err);
+        inPlaceError = err;
+      }
       const { original, translation } = buildExportDocs(doc, selectedLanguage);
       await downloadTranslationPdf(translation, currentCertification(doc));
+      if (inPlaceError) {
+        exportError.textContent = `Не удалось сохранить оформление оригинала (${inPlaceError.message || 'ошибка'}). Скачан PDF по шаблону.`;
+        exportError.style.display = '';
+      }
     } catch (err) {
       exportError.textContent = err.message || 'Не удалось скачать PDF';
       exportError.style.display = '';
+    } finally {
+      printBtn.textContent = label;
+      printBtn.disabled = false;
     }
   });
 
