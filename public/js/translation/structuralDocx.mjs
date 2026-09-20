@@ -55,7 +55,11 @@ function extractParagraphText(inner) {
   let match;
   while ((match = tokenRe.exec(inner))) {
     if (match[0].startsWith('<w:tab')) text += '\t';
-    else if (match[0].startsWith('<w:br')) text += '\n';
+    else if (match[0].startsWith('<w:br')) {
+      // разрыв страницы/колонки — не перевод строки: он сохраняется отдельно
+      // (см. preservedRuns) и не должен превращаться в "\n" в тексте перевода
+      if (!/w:type="(?:page|column)"/.test(match[0])) text += '\n';
+    }
     else { text += decodeXmlEntities(match[1] || ''); found = true; }
   }
   return found ? text : null;
@@ -74,6 +78,34 @@ function firstRunRPr(inner) {
     }
   }
   return '';
+}
+
+// Run'ы абзаца, которые НЕ являются текстом и должны пережить замену текста
+// (найдено полной проверкой модуля 20 сен 2026: склейка заменяла весь <w:p>
+// одним новым run с переводом, и логотип/QR, привязанные к абзацу с текстом,
+// пропадали вместе с оригинальными run'ами; в шапке файла было обещано
+// обратное — что картинки лежат "снаружи" абзаца). Сохраняем картинки и
+// фигуры, элементы полей (fldChar/instrText — иначе поле теряет начало или
+// конец) и разрывы страницы/колонки. Run, где картинка стоит рядом с
+// текстом, сохраняется БЕЗ своих <w:t> — иначе оригинальный текст остался бы
+// рядом с переводом. Всё, что было ДО первого run с текстом, остаётся перед
+// переводом, всё остальное — после него.
+const PRESERVE_RUN_RE = /<w:(?:drawing|pict|object|fldChar|instrText)\b|<mc:AlternateContent\b|<w:br\s[^>]*w:type="(?:page|column)"/;
+function preservedRuns(inner) {
+  const runRe = /<w:r(?:\s[^>]*)?>([\s\S]*?)<\/w:r>/g;
+  const runs = [];
+  let match;
+  while ((match = runRe.exec(inner))) {
+    runs.push({ xml: match[0], hasText: /<w:t(?:\s[^>]*)?>/.test(match[1]), keep: PRESERVE_RUN_RE.test(match[1]) });
+  }
+  const firstText = runs.findIndex(run => run.hasText);
+  let before = '', after = '';
+  runs.forEach((run, i) => {
+    if (!run.keep) return;
+    const xml = run.hasText ? run.xml.replace(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>/g, '') : run.xml;
+    if (firstText === -1 || i < firstText) before += xml; else after += xml;
+  });
+  return { before, after };
 }
 
 // Распаковывает .docx и возвращает список переводимых абзацев с их
@@ -110,24 +142,48 @@ export async function extractStructuralParagraphs(file) {
   // просто не попадает в paragraphs (переводить нечего) — структура вокруг
   // него в документе не трогается вообще, как и раньше для любого другого
   // нетекстового узла.
-  const pRe = /<w:p(\s[^>]*?)?(?<!\/)>([\s\S]*?)<\/w:p>/g;
-  let match;
+  // Абзацы ищем с учётом вложенности (найдено полной проверкой модуля 20 сен
+  // 2026): в текстовом блоке (<w:txbxContent>) СВОИ <w:p> лежат ВНУТРИ <w:p>
+  // внешнего абзаца. Ленивый регэксп находил закрытие внутреннего и принимал
+  // его за закрытие внешнего — после склейки XML получался невалидным (Word
+  // отказывается открывать такой файл). Теперь считаем стек открытий/закрытий
+  // и переводим только "листовые" абзацы (без вложенных <w:p>) — их замена
+  // всегда корректна; внешний абзац с текстовым блоком не трогаем вовсе
+  // (его собственный текст, если он есть, останется в оригинале).
+  // Самозакрытый <w:p .../> (см. комментарий выше) — не открытие абзаца.
+  const tagRe = /<w:p(?:\s[^>]*?)?(?<!\/)>|<\/w:p>/g;
+  const open = [];
+  const leaves = [];
+  let tag;
+  while ((tag = tagRe.exec(documentXml))) {
+    if (tag[0] === '</w:p>') {
+      const paragraph = open.pop();
+      if (paragraph && !paragraph.hasChild) leaves.push({ ...paragraph, end: tag.index + tag[0].length });
+    } else {
+      if (open.length) open[open.length - 1].hasChild = true;
+      open.push({ start: tag.index, openTag: tag[0], innerStart: tag.index + tag[0].length, hasChild: false });
+    }
+  }
+  leaves.sort((x, y) => x.start - y.start);
   let index = 0;
-  while ((match = pRe.exec(documentXml))) {
-    const [full, rawAttrs, inner] = match;
-    const attrs = rawAttrs || '';
+  for (const leaf of leaves) {
+    const attrs = leaf.openTag.slice('<w:p'.length, -1);
+    const inner = documentXml.slice(leaf.innerStart, leaf.end - '</w:p>'.length);
     const pprMatch = inner.match(/^(<w:pPr>[\s\S]*?<\/w:pPr>)/);
     const pPrXml = pprMatch ? pprMatch[1] : '';
     const bodyInner = pprMatch ? inner.slice(pprMatch[1].length) : inner;
     const text = extractParagraphText(bodyInner);
     if (text === null || !text.trim()) continue;
+    const kept = preservedRuns(bodyInner);
     paragraphs.push({
       id: `p${index}`,
       text,
-      start: match.index,
-      end: match.index + full.length,
+      start: leaf.start,
+      end: leaf.end,
       attrs, pPrXml,
-      rPrXml: firstRunRPr(bodyInner)
+      rPrXml: firstRunRPr(bodyInner),
+      beforeXml: kept.before,
+      afterXml: kept.after
     });
     index += 1;
   }
@@ -158,7 +214,7 @@ export function spliceTranslatedParagraphs(documentXml, paragraphs, translatedBy
     const p = paragraphs[i];
     const translated = translatedById.get(p.id);
     if (translated === undefined || !translated.trim()) continue; // не пришёл перевод — оставляем оригинал как есть, не портим документ
-    const replacement = `<w:p${p.attrs}>${p.pPrXml}${buildRun(translated, p.rPrXml)}</w:p>`;
+    const replacement = `<w:p${p.attrs}>${p.pPrXml}${p.beforeXml || ''}${buildRun(translated, p.rPrXml)}${p.afterXml || ''}</w:p>`;
     xml = xml.slice(0, p.start) + replacement + xml.slice(p.end);
   }
   return xml;

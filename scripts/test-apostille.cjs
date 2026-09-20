@@ -172,6 +172,13 @@ test('transliteration keeps case: ALL-CAPS words stay upper case, title-case wor
     assert.equal(transliterate(source, 'en'), expected, source);
   }
 });
+// Латиница → кириллица: "y" между согласными — "ы" (Ethan, 19 сен 2026:
+// "ADYLOVICH" превращалось в "АДИЛОВИЧ"), в остальных позициях — по-прежнему "и".
+test('Latin to Cyrillic transliteration: y between consonants is "ы", elsewhere "и"', async () => {
+  const { transliterateName } = await import('../public/js/translation/field-rules.mjs');
+  const cases = { 'ADYLOVICH': 'АДЫЛОВИЧ', 'Bektybek': 'Бектыбек', 'SADYRBAEVA': 'САДЫРБАЕВА', 'Mary': 'Мари', 'Kimberly': 'Кимберли', 'Yuri': 'Юри', 'Yan': 'Ян' };
+  for (const [source, expected] of Object.entries(cases)) assert.equal(transliterateName(source, 'ru'), expected, source);
+});
 test('date formats and status colors match the requested rules', async () => {
   const { normalizeDate, apostilleValue, TRANSLATION_STATUSES } = await import('../public/js/translation/field-rules.mjs');
   for (const text of ['30.01.2018-ж.', '2018-01-30', '30/01/18', '30-01-2018']) assert.equal(normalizeDate(text), '30-01-2018');
@@ -225,7 +232,7 @@ test('PDF renders the same apostille layout and reaches save without validation 
     createElement(tag) {
       return tag === 'canvas'
         ? { getContext: () => ({ drawImage() {} }), toDataURL: () => 'data:image/png;base64,test' }
-        : { style: {}, innerHTML: '', remove() { removed = true; } };
+        : { style: {}, innerHTML: '', children: [], querySelectorAll: () => [], getBoundingClientRect: () => ({ top: 0, width: 720 }), remove() { removed = true; } };
     }
   };
   global.requestAnimationFrame = callback => callback();

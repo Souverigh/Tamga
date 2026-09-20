@@ -59,6 +59,14 @@ const { run, para, paraRuns } = createTextHelpers(FONT);
 const PHOTO = 1951, TYPE_COL = 1985, CODE_COL = 2780, NUM_COL = 2855;
 const LABEL_COL = 2977, VALUE_COL = 4643;
 const TOTAL = PHOTO + TYPE_COL + CODE_COL + NUM_COL;
+// Границы "подпись | значение" в строках биометрии (LABEL_COL) приходятся
+// ВНУТРИ колонки "Код" верхней строки (Тип | Код | Номер) — при сетке из 4
+// колонок в этих строках было 3 ячейки на 4 колонки (нарушение структуры
+// таблицы, найдено автоматической проверкой всех вёрсток 20 сен 2026).
+// Поэтому колонка "Код" разрезана на две в самой сетке: верхняя строка
+// объединяет их (gridSpan), строки биометрии делят по границе LABEL_COL.
+const CODE_LEFT = LABEL_COL - TYPE_COL, CODE_RIGHT = CODE_COL - CODE_LEFT;
+const GRID = [PHOTO, TYPE_COL, CODE_LEFT, CODE_RIGHT, NUM_COL];
 const THIN = { style: 'single', sz: 4 };
 
 // Собственные копии констант (файлы вёрстки типов документов друг у друга
@@ -95,14 +103,14 @@ export function buildPassportUzbekistanDocumentXml(translation, certification) {
   const photoLabel = PHOTO_PLACEHOLDER[lang] || PHOTO_PLACEHOLDER.en;
 
   // --- шапка: страна на всю ширину, тонкая линия-разделитель снизу.
-  const headerRow = row(cell(TOTAL, para(countryText, { align: 'center', bold: true, size: 26 }), { span: 4, borders: ['bottom'], borderOpts: THIN }));
+  const headerRow = row(cell(TOTAL, para(countryText, { align: 'center', bold: true, size: 26 }), { span: 5, borders: ['bottom'], borderOpts: THIN }));
 
   // --- строка лейблов Тип / Код / Номер паспорта — пустая ячейка над
   // фотоколонкой, три лейбла с тонким разделителем слева от каждого.
   const typeCodeNumLabelsRow = row(
     cell(PHOTO, para('')) +
     cell(TYPE_COL, labelPara(map.passportType), { borders: ['left'], borderOpts: THIN }) +
-    cell(CODE_COL, labelPara(map.code), { borders: ['left'], borderOpts: THIN }) +
+    cell(CODE_COL, labelPara(map.code), { span: 2, borders: ['left'], borderOpts: THIN }) +
     cell(NUM_COL, labelPara(map.passportNumber), { borders: ['left'], borderOpts: THIN })
   );
 
@@ -112,7 +120,7 @@ export function buildPassportUzbekistanDocumentXml(translation, certification) {
   const typeCodeNumValuesRow = row(
     `<w:tc><w:tcPr><w:tcW w:w="${PHOTO}" w:type="dxa"/><w:vMerge w:val="restart"/><w:vAlign w:val="center"/></w:tcPr>${photoCellXml}</w:tc>` +
     cell(TYPE_COL, valuePara(map.passportType), { borders: ['left'], borderOpts: THIN }) +
-    cell(CODE_COL, valuePara(map.code), { borders: ['left'], borderOpts: THIN }) +
+    cell(CODE_COL, valuePara(map.code), { span: 2, borders: ['left'], borderOpts: THIN }) +
     cell(NUM_COL, valuePara(map.passportNumber), { borders: ['left'], borderOpts: THIN })
   );
 
@@ -125,8 +133,8 @@ export function buildPassportUzbekistanDocumentXml(translation, certification) {
     .filter(field => field?.value)
     .map(field =>
       `<w:tc><w:tcPr><w:tcW w:w="${PHOTO}" w:type="dxa"/><w:vMerge/></w:tcPr><w:p/></w:tc>` +
-      cell(LABEL_COL, labelPara(field), { borders: ['left'], borderOpts: THIN }) +
-      cell(VALUE_COL, valuePara(field))
+      cell(LABEL_COL, labelPara(field), { span: 2, borders: ['left'], borderOpts: THIN }) +
+      cell(VALUE_COL, valuePara(field), { span: 2 })
     )
     .map(cellsXml => row(cellsXml))
     .join('');
@@ -136,11 +144,11 @@ export function buildPassportUzbekistanDocumentXml(translation, certification) {
   // buildCombinedInstruction), только если распознана. Без фотоколонки —
   // на всю ширину, как в образце.
   const mrzRow = map.mrz?.value
-    ? row(cell(TOTAL, para('') + para(map.mrz.value, { bold: true }), { span: 4 }))
+    ? row(cell(TOTAL, para('') + para(map.mrz.value, { bold: true }), { span: 5 }))
     : '';
 
   const body = headerRow + typeCodeNumLabelsRow + typeCodeNumValuesRow + bioRows + mrzRow;
-  const tableXml = table([PHOTO, TYPE_COL, CODE_COL, NUM_COL], body, { borderStyle: 'double', sides: ['top', 'left', 'bottom', 'right'] });
+  const tableXml = table(GRID, body, { borderStyle: 'double', sides: ['top', 'left', 'bottom', 'right'] });
 
   const certParas = certificationBlocks(certification, lang).map(b => para(b.text, { size: 20 })).join('');
   const documentBody = tableXml + certParas;

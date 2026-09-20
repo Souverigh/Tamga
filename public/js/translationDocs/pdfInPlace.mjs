@@ -126,7 +126,12 @@ async function loadPdf(file) {
 // Достаёт блоки текста всех страниц + отрендеренные страницы для выборки
 // цветов. Возвращает null, если это не текстовый PDF (скан/пустой).
 async function extractPages(pdf, { render }) {
-  const pageCount = Math.min(pdf.numPages, MAX_PAGES);
+  // Длиннее предела — не переводим на месте вовсе: иначе первые 20 страниц
+  // перевелись бы, а остальные молча остались бы на исходном языке
+  // (найдено полной проверкой модуля 20 сен 2026). Вызывающий код уходит на
+  // прежний путь; сама панель и так не принимает файлы длиннее MAX_PAGES.
+  if (pdf.numPages > MAX_PAGES) return null;
+  const pageCount = pdf.numPages;
   const pages = [];
   let translatableChars = 0;
   for (let index = 1; index <= pageCount; index += 1) {

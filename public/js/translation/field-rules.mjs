@@ -30,6 +30,7 @@ const LATIN_SINGLE = {
   a: 'а', b: 'б', c: 'к', d: 'д', e: 'е', f: 'ф', g: 'г', h: 'х', i: 'и', j: 'дж', k: 'к', l: 'л', m: 'м',
   n: 'н', o: 'о', p: 'п', q: 'к', r: 'р', s: 'с', t: 'т', u: 'у', v: 'в', w: 'в', x: 'кс', y: 'и', z: 'з'
 };
+const CONSONANT = /^[bcdfghjklmnpqrstvwxz]$/;
 function transliterateLatinWord(word) {
   if (!/[a-zà-ÿ]/i.test(word)) return word; // не буквенный токен (пробел, дефис) — как есть
   const isUpper = word === word.toUpperCase() && word !== word.toLowerCase();
@@ -41,6 +42,13 @@ function transliterateLatinWord(word) {
     const rest = lower.slice(i);
     const digraph = LATIN_DIGRAPHS.find(([lat]) => rest.startsWith(lat));
     if (digraph) { out += digraph[1]; i += digraph[0].length; continue; }
+    // "y" между двумя согласными — "ы" (Adylovich → Адылович, Bektybek →
+    // Бектыбек, Sadyrbaeva → Садырбаева); Ethan, 19 сен 2026: "ADYLOVICH"
+    // превращалось в "АДИЛОВИЧ". В начале/конце слова и рядом с гласной — по-
+    // прежнему "и" (Mary → Мари, Kimberly → Кимбёрли). Цена правила: у
+    // английских имён вида Lynn/Tyler/Cynthia "y" между согласными даст "ы"
+    // (Лынн вместо Линн) — для документов Центральной Азии это верный выбор.
+    if (lower[i] === 'y' && CONSONANT.test(lower[i - 1] || '') && CONSONANT.test(lower[i + 1] || '')) { out += 'ы'; i += 1; continue; }
     const single = LATIN_SINGLE[lower[i]];
     out += single !== undefined ? single : lower[i];
     i += 1;

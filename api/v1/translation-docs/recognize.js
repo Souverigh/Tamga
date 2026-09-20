@@ -21,7 +21,7 @@ const { readRequestBody } = require('../../../lib/multipart');
 // Тип документа определяется автоматически моделью — doc_type параметром не
 // передаётся.
 // Ответ: { doc_type, language, fields: [{ key, label, value, raw_text,
-//          confidence, translated }] }
+//          confidence, translated }], paragraphs, tables, familyMembers }
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -58,6 +58,28 @@ module.exports = async (req, res) => {
         key: f.key, label: f.label, targetLabel: f.targetLabel, value: f.value, raw_text: f.rawText, confidence: f.confidence, translated: f.translated, translationStatus: f.translationStatus,
         requiresReview: f.requiresReview, reviewReason: f.reviewReason, verificationCandidate: f.verificationCandidate
       })),
+      // paragraphs/tables/familyMembers — то же, что отдаёт веб-панель
+      // (api/translation-docs/client-recognize.js). Раньше здесь были только
+      // fields: у Аттестата предметы и оценки лежат ТОЛЬКО в tables, у
+      // "Информации о составе семьи" — только в familyMembers, у "Другое" —
+      // в paragraphs, то есть клиент API получал документ без основного
+      // содержимого (найдено полной проверкой модуля 20 сен 2026).
+      paragraphs: Array.isArray(recognition.paragraphs)
+        ? recognition.paragraphs.map(p => ({ text: p.text, translated: p.translated }))
+        : [],
+      tables: Array.isArray(recognition.tables)
+        ? recognition.tables.map(table => ({
+          section: table.section,
+          rows: table.rows.map(row => ({ subject: row.subject, grade: row.grade, translatedSubject: row.translatedSubject, translatedGrade: row.translatedGrade, confidence: row.confidence }))
+        }))
+        : [],
+      familyMembers: Array.isArray(recognition.familyMembers)
+        ? recognition.familyMembers.map(m => ({
+          fullName: m.fullName, relationship: m.relationship, birthDate: m.birthDate,
+          translatedFullName: m.translatedFullName, translatedRelationship: m.translatedRelationship, translatedBirthDate: m.translatedBirthDate,
+          confidence: m.confidence
+        }))
+        : [],
       ...(Array.isArray(recognition.elements) ? { elements: recognition.elements.map(e => ({
         key: e.key, type: e.elementType, number: e.number || null, label: e.label,
         targetLabel: e.targetLabel, value: e.value, translated: e.translated,

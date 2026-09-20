@@ -18,7 +18,17 @@
 // osdetect.h: "the values refer to the amount of clockwise rotation to be
 // applied to the page for the text to be upright and readable") — инвертировать
 // не нужно, ровно это значение и передаём в rotateImage ниже.
+import { pageToCanvas } from './imageCanvas.js';
+import { withDeadline } from '../utils/fileSafety.js';
+
 const ROTATIONS = [0, 90, 180, 270];
+// Тот же предел, что PDF_TARGET_LONG_SIDE в utils/fileSafety.js: на меньшем
+// разрешении OSD ошибается (проверено), на большем — лишнее время без выигрыша.
+const DETECTION_MAX_SIDE = 2500;
+// Проба — вспомогательная: если Tesseract завис/не отвечает (загрузка
+// osd.traineddata ~4 МБ по медленной сети, сбой воркера), распознавание не
+// должно ждать вечно — уходим без поворота, как при любой другой ошибке пробы.
+const DETECTION_TIMEOUT_MS = 60000;
 
 let activeWorker = null;
 
@@ -27,11 +37,19 @@ let activeWorker = null;
 export async function detectRotation(pageImage) {
   const worker = Tesseract.createWorker({ logger: () => {} });
   activeWorker = worker;
+  // Tesseract получает canvas, а не <img> (см. ocr/imageCanvas.js: <img> с
+  // уже отозванным blob-URL ронял его внутри и promise не завершался никогда).
+  let prepared = null;
   try {
-    await worker.load();
-    await worker.loadLanguage('osd');
-    await worker.initialize('osd');
-    const { data } = await worker.detect(pageImage);
+    prepared = pageToCanvas(pageImage, DETECTION_MAX_SIDE);
+    const detection = (async () => {
+      await worker.load();
+      await worker.loadLanguage('osd');
+      await worker.initialize('osd');
+      return worker.detect(prepared.canvas);
+    })();
+    detection.catch(() => {}); // если сработает таймаут, поздняя ошибка не должна стать необработанной
+    const { data } = await withDeadline(detection, () => {}, DETECTION_TIMEOUT_MS);
     if (!ROTATIONS.includes(data?.orientation_degrees)) {
       console.warn('detectRotation: неожиданный ответ OSD, пропускаем поворот', data);
       return 0;
@@ -47,6 +65,7 @@ export async function detectRotation(pageImage) {
   } finally {
     if (activeWorker === worker) activeWorker = null;
     try { await worker.terminate(); } catch (_) { /* могло уже остановиться */ }
+    if (prepared) prepared.release();
   }
 }
 

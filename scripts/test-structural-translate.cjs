@@ -115,3 +115,42 @@ test('a lone self-closing empty <w:p/> with nothing after it is simply ignored',
     assert.equal(paragraphs[0].text, 'Kyrgyz Republic');
   });
 });
+
+// --- Найдено полной проверкой модуля "Перевод", 20 сен 2026 -----------------
+// 1) Текстовый блок (<w:txbxContent>) содержит СВОИ <w:p> ВНУТРИ <w:p>
+// внешнего абзаца: ленивый регэксп находил закрытие внутреннего и принимал его
+// за закрытие внешнего — после склейки XML становился невалидным (Word
+// отказывается открывать файл).
+// 2) Абзац с текстом И картинкой (логотип/QR, привязанные к первому абзацу) —
+// склейка заменяла весь <w:p> одним новым run с текстом, и <w:drawing>
+// пропадал вместе с оригинальными run'ами.
+const DRAWING_RUN = '<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:docPr id="1" name="logo"/></wp:inline></w:drawing></w:r>';
+const TEXTBOX_PARAGRAPH =
+  '<w:p><w:r><w:t>Outer text</w:t></w:r><w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml"><v:textbox><w:txbxContent>' +
+  '<w:p><w:r><w:t>Inside the box</w:t></w:r></w:p>' +
+  '</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>';
+
+test('a text box (paragraph nested inside a paragraph) keeps the XML well-formed and only its inner text is translated', async () => {
+  await withStructuralDocx(async ({ extractStructuralParagraphs, spliceTranslatedParagraphs }) => {
+    const buf = await buildDocx(REAL_PARAGRAPH + TEXTBOX_PARAGRAPH + REAL_PARAGRAPH.replace('Kyrgyz Republic', 'Last'));
+    const { documentXml, paragraphs } = await extractStructuralParagraphs(buf);
+    const texts = paragraphs.map(p => p.text);
+    assert.ok(texts.includes('Kyrgyz Republic') && texts.includes('Last') && texts.includes('Inside the box'), texts.join(' | '));
+    const newXml = spliceTranslatedParagraphs(documentXml, paragraphs, new Map(paragraphs.map(p => [p.id, '[RU] ' + p.text])));
+    assertWellFormedXml(newXml);
+    assert.ok(newXml.includes('[RU] Inside the box') && newXml.includes('[RU] Last'));
+  });
+});
+
+test('an image anchored inside a paragraph that also has text survives translation', async () => {
+  await withStructuralDocx(async ({ extractStructuralParagraphs, spliceTranslatedParagraphs }) => {
+    const paragraph = `<w:p><w:pPr><w:jc w:val="center"/></w:pPr>${DRAWING_RUN}<w:r><w:t>Title</w:t></w:r></w:p>`;
+    const buf = await buildDocx(paragraph);
+    const { documentXml, paragraphs } = await extractStructuralParagraphs(buf);
+    const newXml = spliceTranslatedParagraphs(documentXml, paragraphs, new Map(paragraphs.map(p => [p.id, 'Заголовок'])));
+    assertWellFormedXml(newXml);
+    assert.ok(newXml.includes('<w:drawing>') && newXml.includes('name="logo"'), 'картинка потеряна');
+    assert.ok(newXml.includes('Заголовок') && !newXml.includes('>Title<'));
+    assert.ok(newXml.includes('<w:jc w:val="center"/>'), 'свойства абзаца потеряны');
+  });
+});

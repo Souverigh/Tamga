@@ -54,6 +54,25 @@ async function getUploadFile(doc) {
   return doc.__uploadFile;
 }
 
+// Ответ API читаем как текст и разбираем сами: при 413 (тело больше лимита
+// платформы) и таймауте функции сервер отдаёт НЕ JSON, и res.json() бросал
+// человеку "Unexpected token 'R', "Request En"..." вместо понятного
+// сообщения (найдено полной проверкой модуля 20 сен 2026).
+async function readApiResponse(res) {
+  const text = await res.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch (_) { /* не JSON — обработаем по статусу ниже */ }
+  return data && typeof data === 'object' ? data : { __nonJson: true };
+}
+function apiErrorMessage(res, data, messages, fallback) {
+  if (data.code && messages[data.code]) return messages[data.code];
+  if (typeof data.error === 'string' && data.error) return data.error;
+  if (res.status === 413) return 'Файл слишком большой для отправки. Уменьшите размер файла или число страниц.';
+  if (res.status === 504 || res.status === 408) return 'Сервер не успел обработать документ. Повторите попытку или загрузите файл поменьше.';
+  return `${fallback} (код ${res.status}).`;
+}
+const MAX_PAGES_PER_DOCUMENT = 20; // тот же предел, что MAX_PDF_PAGES в ocr/pdfLoader.js и потолок списания на сервере
+
 // content — { base64, mimeType } (фото/PDF/скан из .docx) ИЛИ { sourceText }
 // (настоящий текст .docx, извлечённый docxLoader.js на клиенте) — ровно одно
 // из двух, см. translateOne ниже.
@@ -73,8 +92,8 @@ async function recognizeViaApi(token, slug, content, language, pageCount) {
       clientSlug: slug, language, pageCount
     })
   });
-  const data = await res.json();
-  if (!res.ok) {
+  const data = await readApiResponse(res);
+  if (!res.ok || data.__nonJson) {
     const messages = {
       QUOTA_EXCEEDED: 'Лимит страниц по вашему тарифу исчерпан.',
       QUOTA_UNAVAILABLE: 'Сервис учёта лимита временно недоступен. Повторите попытку позже.',
@@ -82,7 +101,7 @@ async function recognizeViaApi(token, slug, content, language, pageCount) {
       insufficient_data: 'В документе недостаточно данных для перевода.',
       invalid_request: 'Проверьте файл и выбранный язык перевода.'
     };
-    throw new Error(messages[data.code] || data.error || `Не удалось обработать документ (код ${res.status}).`);
+    throw new Error(apiErrorMessage(res, data, messages, 'Не удалось обработать документ'));
   }
   return data;
 }
@@ -361,6 +380,11 @@ export async function initTranslationDocs() {
   // --- состояние и обработчики (по образцу public/js/accounting/panel.js) --
   let docs = [];
   let activeIndex = -1;
+  // Пока идёт перевод пачки, кнопку "Перевести" нельзя включать обратно
+  // (удаление файла, смена языка, "Очистить список" раньше делали именно это —
+  // второй параллельный запуск списывал страницы повторно, найдено полной
+  // проверкой модуля 20 сен 2026).
+  let translating = false;
 
   function refreshFileList() {
     renderFileList(fileListEl, docs, activeIndex, selectDoc, removeDoc);
@@ -396,7 +420,7 @@ export async function initTranslationDocs() {
     docs = docs.concat(createDocsFromFiles(fileList));
     tdError.style.display = 'none';
     refreshFileList();
-    translateBtn.disabled = false;
+    translateBtn.disabled = translating;
   }
 
   function deselectActive() {
@@ -425,7 +449,7 @@ export async function initTranslationDocs() {
     }
     tdError.style.display = 'none';
     refreshFileList();
-    translateBtn.disabled = !docs.length;
+    translateBtn.disabled = translating || !docs.length;
   }
 
   // "и одна кнопка которая очищает весь список" — сброс всего сразу.
@@ -437,7 +461,7 @@ export async function initTranslationDocs() {
     refreshFileList();
     translateBtn.disabled = true;
   }
-  clearAllBtn.addEventListener('click', clearAll);
+  clearAllBtn.addEventListener('click', () => { if (!translating) clearAll(); });
 
   function resetDoneDocsAndRefresh() {
     if (!docs.length) return;
@@ -454,12 +478,14 @@ export async function initTranslationDocs() {
     originalArea.style.display = 'none';
     tdError.style.display = 'none';
     refreshFileList();
-    translateBtn.disabled = false;
+    translateBtn.disabled = translating;
   }
 
   langSelect.addEventListener('change', () => {
     selectedLanguage = langSelect.value;
-    resetDoneDocsAndRefresh();
+    // переводы идущей сейчас пачки выполняются на прежнем языке — сбрасывать
+    // результаты, которые вот-вот придут, нечем; язык применится к следующему запуску
+    if (!translating) resetDoneDocsAndRefresh();
   });
   // Смена режима меняет то, КАК переводится .docx — уже переведённые
   // документы нужно перевести заново тем путём, что выбран сейчас.
@@ -704,13 +730,13 @@ export async function initTranslationDocs() {
       headers: { 'Content-Type': 'application/json', 'x-client-token': token },
       body: JSON.stringify({ segments, clientSlug: slug, language, ...(pageCount ? { pageCount } : {}) })
     });
-    const data = await res.json();
-    if (!res.ok) {
+    const data = await readApiResponse(res);
+    if (!res.ok || !Array.isArray(data.segments)) {
       const messages = {
         QUOTA_EXCEEDED: 'Лимит страниц по вашему тарифу исчерпан.',
         QUOTA_UNAVAILABLE: 'Сервис учёта лимита временно недоступен. Повторите попытку позже.'
       };
-      throw new Error(messages[data.code] || data.error || `Не удалось перевести документ (код ${res.status}).`);
+      throw new Error(apiErrorMessage(res, data, messages, 'Не удалось перевести документ'));
     }
     return data.segments;
   }
@@ -785,6 +811,9 @@ export async function initTranslationDocs() {
         ? await extractDocxContent(doc.file)
         : { base64: await fileToBase64(uploadFile), mimeType: uploadFile.type };
       const pageCount = await getPageCount(uploadFile);
+      if (pageCount > MAX_PAGES_PER_DOCUMENT) {
+        throw new Error(`В файле ${pageCount} страниц — за один раз можно перевести не больше ${MAX_PAGES_PER_DOCUMENT}. Разделите документ на части.`);
+      }
       const data = await recognizeViaApi(token, slug, content, language, pageCount);
       doc.status = 'done';
       doc.result = data;
@@ -798,7 +827,8 @@ export async function initTranslationDocs() {
   }
 
   translateBtn.addEventListener('click', async () => {
-    if (!docs.length) return;
+    if (!docs.length || translating) return;
+    translating = true;
     const language = selectedLanguage;
     tdError.style.display = 'none';
     translateBtn.disabled = true;
@@ -806,29 +836,36 @@ export async function initTranslationDocs() {
     progressWrap.style.display = '';
     progressFill.style.width = '0%';
 
-    const pending = docs.map((doc, index) => ({ doc, index })).filter(({ doc }) => doc.status === 'pending' || doc.status === 'error');
-    let firstDoneIndex = -1;
+    const pending = docs.filter(doc => doc.status === 'pending' || doc.status === 'error');
+    // Запоминаем сам документ, а не его индекс: пока идёт перевод, файл
+    // можно удалить из списка, и индексы сместятся.
+    let firstDoneDoc = null;
     let anyError = false;
     let done = 0;
 
-    await runWithConcurrency(pending, MAX_TRANSLATION_CONCURRENCY, async ({ doc, index }) => {
-      progressText.textContent = `Переводим ${done + 1} из ${pending.length}...`;
-      await translateOne(doc, language);
-      done += 1;
-      progressFill.style.width = `${Math.round((done / pending.length) * 100)}%`;
-      if (doc.status === 'done' && firstDoneIndex === -1) firstDoneIndex = index;
-      if (doc.status === 'error') anyError = true;
-    });
-
-    progressWrap.style.display = 'none';
-    translateBtn.disabled = false;
+    try {
+      await runWithConcurrency(pending, MAX_TRANSLATION_CONCURRENCY, async doc => {
+        progressText.textContent = `Переводим ${done + 1} из ${pending.length}...`;
+        await translateOne(doc, language);
+        done += 1;
+        progressFill.style.width = `${Math.round((done / pending.length) * 100)}%`;
+        if (doc.status === 'done' && !firstDoneDoc) firstDoneDoc = doc;
+        if (doc.status === 'error') anyError = true;
+      });
+    } finally {
+      // finally: иначе любое исключение выше оставляло translating = true, и
+      // кнопка "Перевести" больше не включалась до перезагрузки страницы
+      progressWrap.style.display = 'none';
+      translating = false;
+      translateBtn.disabled = !docs.length;
+    }
     if (anyError) {
       const errored = docs.filter(d => d.status === 'error').length;
       tdError.textContent = `Не удалось перевести ${errored} из ${docs.length} файлов — см. статус в списке файлов.`;
       tdError.style.display = '';
     }
 
-    const showIndex = firstDoneIndex !== -1 ? firstDoneIndex : (docs.length ? 0 : -1);
+    const showIndex = firstDoneDoc && docs.includes(firstDoneDoc) ? docs.indexOf(firstDoneDoc) : (docs.length ? 0 : -1);
     if (showIndex !== -1) await selectDoc(showIndex);
   });
 

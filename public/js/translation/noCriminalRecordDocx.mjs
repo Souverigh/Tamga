@@ -59,10 +59,6 @@ export const QR_INSTRUCTION = {
   uz: 'Ma’lumotlarni tekshirish uchun quyidagi QR-kodni skanerlang:', tr: 'Verileri doğrulamak için aşağıdaki QR kodunu tarayın:',
   zh: '如需验证数据，请扫描下方二维码：', de: 'Zur Datenüberprüfung scannen Sie bitte den untenstehenden QR-Code:'
 };
-export const QR_PLACEHOLDER = {
-  ru: '/QR-код/', ky: '/QR-код/', en: '/QR code/', kk: '/QR-код/',
-  uz: '/QR-kod/', tr: '/QR kodu/', zh: '/二维码/', de: '/QR-Code/'
-};
 export const ESIGNATURE_NOTICE = {
   ru: 'На документ наложена электронная подпись Государственного портала электронных услуг.',
   ky: 'Документке Мамлекеттик электрондук кызматтар порталынын электрондук колу коюлган.',
@@ -89,9 +85,10 @@ export function buildNoCriminalRecordDocumentXml(translation, certification) {
   const title = TITLE[lang] || TITLE.en;
   const serviceResultHeading = SERVICE_RESULT_HEADING[lang] || SERVICE_RESULT_HEADING.en;
   const qrInstruction = QR_INSTRUCTION[lang] || QR_INSTRUCTION.en;
-  const qrPlaceholder = QR_PLACEHOLDER[lang] || QR_PLACEHOLDER.en;
   const esigNotice = ESIGNATURE_NOTICE[lang] || ESIGNATURE_NOTICE.en;
 
+  // stampText — читаемая отметка поверх бланка (см. birthCertificateDocx.mjs).
+  const stampXml = map.stampText?.value ? para(map.stampText.value, { align: 'center', bold: true, italic: true }) + para('') : '';
   const header = (map.country?.value ? para(map.country.value, { align: 'center', size: 24 }) : '')
     + para('') + para(title, { align: 'center', size: 22 }) + para('');
 
@@ -122,7 +119,12 @@ export function buildNoCriminalRecordDocumentXml(translation, certification) {
     .map(f => para(f.value, { align: 'both' }) + para(''))
     .join('');
 
-  const qrXml = para(qrInstruction, { align: 'right' }) + para(qrPlaceholder, { italic: true, align: 'right' }) + para('');
+  // QR — только если модель увидела его на документе (map.qrCode.value —
+  // локализованный маркер "[QR code]", см. localizeMarkers), а не безусловно
+  // (Ethan, 19 сен 2026: "печати, подписи, QR-коды — обрабатывать так же").
+  const qrXml = map.qrCode?.value
+    ? para(qrInstruction, { align: 'right' }) + para(map.qrCode.value, { italic: true, align: 'right' }) + para('')
+    : '';
   const formedByXml = map.formedByAuthority?.value ? fieldLine(map.formedByAuthority) + para('') : '';
 
   // --- рамка-бокс с уведомлением об электронной подписи (дата+код) — как
@@ -134,6 +136,6 @@ export function buildNoCriminalRecordDocumentXml(translation, certification) {
   }
 
   const certParas = certificationBlocks(certification, lang).map(b => para(b.text, { size: 20 })).join('');
-  const documentBody = header + mainTableXml + para('') + notesXml + qrXml + formedByXml + esigXml + certParas;
+  const documentBody = stampXml + header + mainTableXml + para('') + notesXml + qrXml + formedByXml + esigXml + certParas;
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + documentBody + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
 }

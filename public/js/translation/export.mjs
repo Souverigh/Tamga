@@ -352,10 +352,14 @@ function documentTitle(name, translation, paired) {
   return paired ? name : translation.name;
 }
 const txtCell = c => (c && c.__bi) ? `${c.a} → ${c.b}` : String(c);
+// title блока (у апостиля — слово "APOSTILLE" над таблицей) раньше в .txt не
+// попадал вообще: при удалении дублирующей строки-заголовка документа
+// (см. documentTitle выше) заодно потерялось и само слово — печатался только
+// subtitle (найдено полной проверкой модуля 20 сен 2026).
 export function buildTranslationTxt(original,translation,paired,certification) {
   const title = documentTitle(original.name, translation, paired);
   const blocks = [...buildBlocks(original,translation,paired), ...certificationBlocks(certification, translation.language)];
-  const body = blocks.map(b=>(b.subtitle ? b.subtitle+'\n' : '')+(b.table?b.table.map(row=>row.map(txtCell).join('\t')).join('\n'):(b.heading||b.text))).join('\n');
+  const body = blocks.map(b=>(b.title ? b.title+'\n' : '')+(b.subtitle ? b.subtitle+'\n' : '')+(b.table?b.table.map(row=>row.map(txtCell).join('\t')).join('\n'):(b.heading||b.text))).join('\n');
   return title ? `${title}\n\n${body}` : body;
 }
 export function downloadBlob(blob,name) {
@@ -402,7 +406,17 @@ const table = (rows, widths, options = {}) => {
   const body = rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row.map((cell,index)=>'<w:tc><w:tcPr>'+(widths ? `<w:tcW w:w="${widths[index]}" w:type="dxa"/>` : '<w:tcW w:w="0" w:type="auto"/>')+'<w:vAlign w:val="center"/></w:tcPr>'+(options.apostille ? alignedParagraph(cell, false, index === 1) : cellXml(cell))+'</w:tc>').join('')+'</w:tr>').join('');
   return '<w:tbl><w:tblPr>'+properties+'<w:tblBorders>'+borders+'</w:tblBorders><w:tblCellMar><w:top w:w="100" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>'+grid+header+body+'</w:tbl>';
 };
+// Тело документа не должно заканчиваться таблицей: по формату Word ожидает
+// абзац после последней таблицы (перед w:sectPr). Проверка всех вёрсток
+// (20 сен 2026) показала, что так заканчивается почти каждый тип без блока
+// заверения — Word такой файл обычно молча достраивает, но строгие
+// парсеры/старые версии — нет. Вставляем пустой абзац одним местом, а не в
+// каждой из ~14 вёрсток.
+const ensureParagraphAfterTable = xml => xml.replace(/<\/w:tbl>(<w:sectPr)/, '</w:tbl><w:p/>$1');
 export function buildDocumentXml(original,translation,paired,certification) {
+  return ensureParagraphAfterTable(buildDocumentXmlRaw(original,translation,paired,certification));
+}
+function buildDocumentXmlRaw(original,translation,paired,certification) {
   // Аттестат в .docx получает свою настоящую вёрстку (шрифт Times New
   // Roman, пунктирные рамки таблиц предметов/экзаменов) вместо общего
   // рендера — см. attestatDocx.mjs. Только для непарного экспорта: именно

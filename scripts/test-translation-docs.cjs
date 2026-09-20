@@ -635,6 +635,58 @@ async function main() {
     assert.ok(!xml.includes('QR') && !xml.includes('Степень родства'));
   });
 
+  // Найдено полной проверкой модуля "Перевод", 20 сен 2026.
+  await scenario('Аттестат: ссылка проверки (URL) не уходит в перевод, а значение поля длиннее лимита запроса режется на чанки и склеивается обратно', async () => {
+    translateSegmentsCalls = [];
+    reverseTranslations = true;
+    translateText = text => `[TR:${text.length}]`;
+    const longNote = 'слово '.repeat(500).trim(); // ~2999 символов — больше лимита в 2000
+    const url = 'https://portal.edu.kg/verify?code=ABC-123';
+    callGeminiImpl = async () => ({
+      result: {
+        doc_type: 'Справка о несудимости', source_language: 'ru', paragraphs: [],
+        fields: [
+          { label: 'Примечание об источнике данных', value: longNote, raw_text: longNote, page: 1, confidence: 90 },
+          { label: 'Примечание об актуальности данных', value: 'Короткое примечание', raw_text: 'Короткое примечание', page: 1, confidence: 90 }
+        ]
+      },
+      usage: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 }
+    });
+    const attestatRun = async () => {
+      callGeminiImpl = async () => ({
+        result: { doc_type: 'Аттестат', source_language: 'ru', paragraphs: [], tables: [], fields: [{ label: 'QR-код/ссылка проверки', value: url, raw_text: url, page: 1, confidence: 90 }] },
+        usage: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 }
+      });
+      return recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'ru' });
+    };
+    try {
+      const attestat = await attestatRun();
+      const urlField = attestat.fields.find(f => f.key === 'verificationUrl');
+      assert.strictEqual(urlField.translated, url);
+      assert.strictEqual(urlField.translationStatus, 'preserved');
+      assert.ok(!translateSegmentsCalls.flatMap(c => c.request.segments).some(s => s.text === url), 'URL не должен уходить в модель перевода');
+
+      translateSegmentsCalls = [];
+      callGeminiImpl = async () => ({
+        result: { doc_type: 'Справка о несудимости', source_language: 'ru', paragraphs: [], tables: [], fields: [
+          { label: 'Примечание об источнике данных', value: longNote, raw_text: longNote, page: 1, confidence: 90 },
+          { label: 'Примечание об актуальности данных', value: 'Короткое примечание', raw_text: 'Короткое примечание', page: 1, confidence: 90 }
+        ] },
+        usage: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 }
+      });
+      const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', language: 'ru' });
+      const sent = translateSegmentsCalls.flatMap(c => c.request.segments);
+      assert.ok(sent.every(s => s.text.length <= 1800), 'ни один сегмент не превышает лимит чанка');
+      assert.ok(translateSegmentsCalls.every(c => c.request.segments.reduce((n, s) => n + s.text.length, 0) <= 2000), 'запрос не превышает 2000 символов');
+      const note = result.fields.find(f => f.key === 'sourceSystemNote');
+      const chunkSegments = sent.filter(s => s.id.startsWith('field_') && /_c\d+$/.test(s.id));
+      assert.ok(chunkSegments.length >= 2);
+      assert.strictEqual(chunkSegments.map(s => s.text).join(''), longNote, 'чанки покрывают значение без потерь');
+      assert.strictEqual(note.translated, chunkSegments.map(s => `[TR:${s.text.length}]`).join(''), 'склейка по индексу чанка, а не по порядку ответов');
+      assert.strictEqual(result.fields.find(f => f.key === 'actualityNote').translated, '[TR:19]');
+    } finally { reverseTranslations = false; translateText = text => `[TR]${text}`; }
+  });
+
   console.log('\n=== Регрессия модуля "Перевод" (recognizeAndTranslateDocument) ===');
   results.forEach(r => {
     console.log(`  ${r.ok ? '✓' : '✗'} ${r.label}`);

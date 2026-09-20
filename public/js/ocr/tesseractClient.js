@@ -10,6 +10,8 @@
 // распознавание, которое уже идёт: Tesseract.recognize() не принимает
 // AbortSignal и никак не отменяется снаружи, только через worker.terminate().
 
+import { pageToCanvas } from './imageCanvas.js';
+
 let activeWorker = null;
 
 export async function recognizeWithTesseract(pageImage, lang, onProgress) {
@@ -21,15 +23,18 @@ export async function recognizeWithTesseract(pageImage, lang, onProgress) {
     }
   });
   activeWorker = worker;
+  // canvas, а не <img> с отозванным blob-URL — см. ocr/imageCanvas.js
+  const prepared = pageToCanvas(pageImage);
   try {
     await worker.load();
     await worker.loadLanguage(lang);
     await worker.initialize(lang);
-    const { data } = await worker.recognize(pageImage);
+    const { data } = await worker.recognize(prepared.canvas);
     return data.text.trim();
   } finally {
     if (activeWorker === worker) activeWorker = null;
     try { await worker.terminate(); } catch (_) { /* уже остановлен через cancelTesseract() — это нормально */ }
+    prepared.release();
   }
 }
 
