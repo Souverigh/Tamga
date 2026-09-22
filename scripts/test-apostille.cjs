@@ -65,11 +65,17 @@ test('certification footer (translator\'s note) is absent by default, and — on
     assert.doesNotMatch(withoutFooter, /Достоверность перевода подтверждается|特此证明翻译准确无误|Иванова А\.Б\./);
     // doc.language === 'zh' (target), sourceLanguage passed below is 'ky' (original)
     const withFooter = render(doc, doc, false, { translatorName: 'Иванова А.Б.', sourceLanguage: 'ky' });
-    assert.match(withFooter, /Иванова А\.Б\./);
+    // Ethan, 22 сен 2026: ФИО (и компания/адрес/e-mail, см. отдельный тест
+    // ниже) теперь транслитерируется ПОД АЛФАВИТ КАЖДОГО абзаца — китайский
+    // считается "латинской" целью для транслитерации (та же логика, что уже
+    // применяется к ФИО в самом документе, field-rules.mjs), поэтому в
+    // китайском абзаце имя выходит как "Ivanova A.B.", а не сырой кириллицей.
+    assert.match(withFooter, /Ivanova A\.B\./);
+    assert.doesNotMatch(withFooter, /本翻译由译者Иванова А\.Б\./, 'zh paragraph must not keep the raw Cyrillic name');
     // Целевой язык (zh) первым: имя языков в самом предложении на китайском,
     // не жёстко на русском (иначе получилось бы "from Кыргызский into
     // Китайский" посреди китайского/английского текста).
-    assert.match(withFooter, /本翻译由译者Иванова А\.Б\.将吉尔吉斯语译为中文/);
+    assert.match(withFooter, /本翻译由译者Ivanova A\.B\.将吉尔吉斯语译为中文/);
     assert.match(withFooter, /特此证明翻译准确无误/);
     // Язык оригинала (ky) вторым.
     assert.match(withFooter, /Бул котормо кыргыз тилинен кытай тилине котормочу Иванова А\.Б\. тарабынан аткарылды/);
@@ -86,6 +92,33 @@ test('certification footer (translator\'s note) is absent by default, and — on
     assert.doesNotMatch(withFooter, /Котормочунун колу/);
     assert.doesNotMatch(withFooter, /译者签名/);
   }
+});
+
+test('certification footer: company name/address/e-mail are transliterated to match EACH paragraph\'s own alphabet, not left as raw Cyrillic in the Latin-target paragraph', async () => {
+  // Реальный репорт, Ethan, 22 сен 2026: в абзаце на английском языке
+  // компания/адрес/e-mail оставались кириллицей как есть, хотя ФИО
+  // переводчика в остальном документе уже транслитерируется.
+  const { certificationBlocks } = await import('../public/js/translation/export.mjs');
+  const certification = {
+    translatorName: 'Иванова А.Б.',
+    sourceLanguage: 'ru',
+    companyName: 'Компания Тест',
+    address: 'Бишкек, ул. Тестовая 1',
+    email: 'тест'
+  };
+  const [targetParagraph, sourceParagraph] = certificationBlocks(certification, 'en');
+  // Целевой абзац — английский: латиница везде, ни одной кириллической буквы
+  // в транслитерируемых полях не должно остаться.
+  assert.match(targetParagraph.text, /Kompaniia Test/);
+  assert.match(targetParagraph.text, /Bishkek, ul\. Testovaia 1/);
+  assert.match(targetParagraph.text, /E-mail: test\b/);
+  assert.match(targetParagraph.text, /Ivanova A\.B\./);
+  assert.doesNotMatch(targetParagraph.text, /Компания Тест|Бишкек|тест[^A-Za-z]/, 'no raw Cyrillic should remain in the Latin-target paragraph');
+  // Абзац языка оригинала — русский: значения остаются как были введены
+  // (уже кириллица, транслитерировать в кириллицу из кириллицы — no-op).
+  assert.match(sourceParagraph.text, /Компания Тест/);
+  assert.match(sourceParagraph.text, /Бишкек, ул\. Тестовая 1/);
+  assert.match(sourceParagraph.text, /Иванова А\.Б\./);
 });
 
 test('buildExportDocs threads doc.result.paragraphs through to original/translation.paragraphs, in order, and the paired bilingual export renders them side by side', async () => {

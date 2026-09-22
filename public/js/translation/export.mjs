@@ -1,5 +1,6 @@
 import { validateApostille } from './apostille.mjs';
 import { LANGUAGES } from './model.mjs';
+import { transliterateName } from './field-rules.mjs';
 import { buildAttestatDocumentXml } from './attestatDocx.mjs';
 import { buildIdCardDocumentXml } from './idCardDocx.mjs';
 import { buildPassportCanadaDocumentXml } from './passportCanadaDocx.mjs';
@@ -112,16 +113,30 @@ const CERTIFICATION_STATEMENT = {
   ]
 };
 export function certificationBlocks({ translatorName, sourceLanguage, companyName, taxId, registrationId, address, phone, email } = {}, targetLanguage) {
-  const name = String(translatorName || '').trim();
+  const rawName = String(translatorName || '').trim();
   // Без ФИО переводчика приписывать нечего — блок не появляется вообще (то
   // же поведение, что и раньше: чекбокс в панели требует заполненного ФИО).
-  if (!name) return [];
+  if (!rawName) return [];
+  // ФИО/компания/адрес/e-mail транслитерируются ПОД АЛФАВИТ КАЖДОГО абзаца
+  // отдельно (Ethan, 22 сен 2026: реальный кейс — в абзаце на английском
+  // языке компания/адрес/e-mail оставались кириллицей как есть). Та же
+  // функция, что уже транслитерирует ФИО в самом документе
+  // (field-rules.mjs:transliterateName) — не новый механизм: кириллица →
+  // латиница для латинских целевых языков, латиница → кириллица для
+  // кириллических, любой другой алфавит (напр. уже латиница на латинском
+  // абзаце) остаётся как есть. Телефон не трогаем — это цифры, транслитерации
+  // не подлежат.
   const buildParagraph = lang => {
     const L = CERTIFICATION_LABELS[lang] || CERTIFICATION_LABELS.en;
-    const line1 = [companyName, [taxId && `${L.tin}: ${taxId}`, registrationId && `${L.reg}: ${registrationId}`].filter(Boolean).join(' / ')].filter(Boolean).join(', ');
+    const tl = value => transliterateName(value, lang);
+    const name = tl(rawName);
+    const tCompanyName = tl(companyName);
+    const tAddress = tl(address);
+    const tEmail = tl(email);
+    const line1 = [tCompanyName, [taxId && `${L.tin}: ${taxId}`, registrationId && `${L.reg}: ${registrationId}`].filter(Boolean).join(' / ')].filter(Boolean).join(', ');
     // Адрес идёт как есть, без лейбла "Адрес:" — в реальном примере бюро
     // (см. ниже) адрес просто продолжает строку с телефоном/e-mail.
-    const contactBits = [address, phone && `${L.phone}: ${phone}`, email && `E-mail: ${email}`].filter(Boolean).join(', ');
+    const contactBits = [tAddress, phone && `${L.phone}: ${phone}`, tEmail && `E-mail: ${tEmail}`].filter(Boolean).join(', ');
     const [sentence1, sentence2] = (CERTIFICATION_STATEMENT[lang] || CERTIFICATION_STATEMENT.en)(sourceLanguage, targetLanguage, name);
     const line2 = contactBits ? `${contactBits}   ${sentence1}` : sentence1;
     return [line1, line2, sentence2].filter(Boolean).join('\n');
