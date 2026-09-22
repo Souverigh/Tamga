@@ -33,6 +33,7 @@ const noSlugSection = document.getElementById('noSlug');
 const loadError = document.getElementById('loadError');
 const noPasswordSection = document.getElementById('noPassword');
 const mainSection = document.getElementById('settingsMain');
+const translatorProfileSection = document.getElementById('translatorProfile');
 
 
 const fDisplayName = document.getElementById('fDisplayName');
@@ -913,6 +914,75 @@ addUserBtn.addEventListener('click', async () => {
   }
 });
 
+// --- Персональный профиль переводчика (Ethan, 21 сен 2026) ---
+// См. api/client-profile.js — доступен любой роли, но всегда только для
+// СВОЕЙ записи (username берётся из токена на сервере, не из этого кода).
+
+const pfTranslatorName = document.getElementById('pfTranslatorName');
+const pfCompanyName = document.getElementById('pfCompanyName');
+const pfTaxId = document.getElementById('pfTaxId');
+const pfRegistrationId = document.getElementById('pfRegistrationId');
+const pfAddress = document.getElementById('pfAddress');
+const pfPhone = document.getElementById('pfPhone');
+const pfEmail = document.getElementById('pfEmail');
+const saveTranslatorProfileBtn = document.getElementById('saveTranslatorProfileBtn');
+const clearTranslatorProfileBtn = document.getElementById('clearTranslatorProfileBtn');
+const translatorProfileStatus = document.getElementById('translatorProfileStatus');
+const translatorProfileError = document.getElementById('translatorProfileError');
+const CERTIFICATION_FIELD_INPUTS = { companyName: pfCompanyName, taxId: pfTaxId, registrationId: pfRegistrationId, address: pfAddress, phone: pfPhone, email: pfEmail };
+
+async function fetchTranslatorProfile(token) {
+  const res = await fetch(`/api/client-profile?slug=${encodeURIComponent(slug)}`, { cache: 'no-store', headers: token ? { 'x-client-token': token } : {} });
+  const body = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, body };
+}
+
+function applyTranslatorProfile(data) {
+  pfTranslatorName.value = data.translatorName || '';
+  const cert = data.certification || {};
+  Object.entries(CERTIFICATION_FIELD_INPUTS).forEach(([key, input]) => { input.value = cert[key] || ''; });
+}
+
+async function saveTranslatorProfile(certification) {
+  translatorProfileError.style.display = 'none';
+  translatorProfileStatus.textContent = '';
+  saveTranslatorProfileBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/client-profile?slug=${encodeURIComponent(slug)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-client-token': getToken() },
+      body: JSON.stringify({ translatorName: pfTranslatorName.value.trim(), certification })
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      translatorProfileError.textContent = body.error || 'Не удалось сохранить';
+      translatorProfileError.style.display = 'block';
+      return;
+    }
+    applyTranslatorProfile(body);
+    translatorProfileStatus.textContent = 'Сохранено ✓';
+    setTimeout(() => { translatorProfileStatus.textContent = ''; }, 2000);
+  } catch (_) {
+    translatorProfileError.textContent = 'Не удалось связаться с сервером';
+    translatorProfileError.style.display = 'block';
+  } finally {
+    saveTranslatorProfileBtn.disabled = false;
+  }
+}
+
+saveTranslatorProfileBtn.addEventListener('click', () => {
+  const certification = {};
+  Object.entries(CERTIFICATION_FIELD_INPUTS).forEach(([key, input]) => { if (input.value.trim()) certification[key] = input.value.trim(); });
+  saveTranslatorProfile(certification);
+});
+// "Убрать свой вариант" — очищает поля приписки (ФИО остаётся, оно нужно
+// всегда) и сохраняет пустой certification, что на сервере (lib/clientUsers.js)
+// превращается в null — панель снова берёт общий вариант компании.
+clearTranslatorProfileBtn.addEventListener('click', () => {
+  Object.values(CERTIFICATION_FIELD_INPUTS).forEach(input => { input.value = ''; });
+  saveTranslatorProfile({});
+});
+
 // --- Вход и первичная загрузка ---
 
 function returnToClient() {
@@ -925,6 +995,7 @@ async function loadAndShow(token) {
   const { ok, status, body } = await fetchSettings(token);
   if (ok) {
     noPasswordSection.style.display = 'none';
+    translatorProfileSection.style.display = 'none';
     mainSection.style.display = 'block';
     applyLoadedConfig(body);
     mountGlossaryEditor(document.getElementById('glossarySettingsPanel'));
@@ -934,8 +1005,18 @@ async function loadAndShow(token) {
   mainSection.style.display = 'none';
   if (status === 403) {
     // Пароль вообще не задан ИЛИ роль не 'owner' (переводчик пытается
-    // открыть настройки, см. api/client-settings.js) — текст в обоих
-    // случаях приходит от сервера, см. lib/clientAuth.js.
+    // открыть общие настройки, см. api/client-settings.js) — текст в обоих
+    // случаях приходит от сервера, см. lib/clientAuth.js. Если это именно
+    // переводчик с персональной учётной записью — у него есть СВОЙ, более
+    // узкий профиль (api/client-profile.js, Ethan, 21 сен 2026) вместо
+    // общего "Настройки недоступны".
+    const profile = await fetchTranslatorProfile(token);
+    if (profile.ok) {
+      noPasswordSection.style.display = 'none';
+      applyTranslatorProfile(profile.body);
+      translatorProfileSection.style.display = 'block';
+      return;
+    }
     document.getElementById('noPasswordText').textContent = body.error || 'Настройки недоступны.';
     noPasswordSection.style.display = 'block';
     return;

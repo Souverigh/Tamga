@@ -76,7 +76,10 @@ module.exports = async (req, res) => {
       // username пустой (никакой персонализации, как и раньше). translatorName
       // здесь — только у пользователей с ролью 'translator'; используется
       // панелью перевода для автоподстановки в удостоверение переводчика.
-      currentUser: { username: gate.username || '', role: gate.role || 'owner', translatorName: gate.translatorName || null }
+      // certification — личный вариант приписки переводчика (Ethan, 21 сен
+      // 2026, см. api/client-profile.js) — null, если свой вариант не задан
+      // (панель тогда использует общую приписку клиента, certification выше).
+      currentUser: { username: gate.username || '', role: gate.role || 'owner', translatorName: gate.translatorName || null, certification: gate.certification || null }
     });
   } catch (err) {
     // Fail-open — как и вся остальная кастомизация: сбой не должен мешать

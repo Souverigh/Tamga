@@ -160,7 +160,6 @@ export async function initTranslationDocs() {
   panelTitle.append(panelIcon(), el('h2', 'Перевод документов'));
   panelHeader.append(panelTitle);
   root.append(panelHeader);
-  root.append(el('p', 'Апостиль — распознавание и перевод на выбранный язык. Расходует тот же пакет страниц, что и обычное распознавание.', 'admin-note'));
 
   if (!registerTab('translation-docs', 'Перевод', root)) return; // защитно — без #recognizeFlow регистрировать нечего
 
@@ -224,10 +223,23 @@ export async function initTranslationDocs() {
   const currentUser = getClientBranding()?.currentUser;
   const isPersonalTranslator = currentUser?.role === 'translator';
 
-  let clientCertification = {
-    ...(getClientBranding()?.certification || {}),
-    companyName: getClientBranding()?.displayName || getClientBranding()?.certification?.companyName || ''
-  };
+  // Личный вариант приписки переводчика (Ethan, 21 сен 2026: "чтобы
+  // переводчики сами могли изменить, иметь свой вариант приписки", см.
+  // api/client-profile.js и /settings) — если переводчик задал СВОЙ
+  // вариант (хотя бы одно поле), используется ОН ЦЕЛИКОМ вместо общей
+  // приписки клиента, а не смешивается с ней по полям — предсказуемее для
+  // человека, который явно настраивал "свой" вариант. companyName падает
+  // на название компании клиента, только если сам переводчик его не задал.
+  const ownCertification = isPersonalTranslator && currentUser.certification && Object.keys(currentUser.certification).length
+    ? currentUser.certification
+    : null;
+
+  let clientCertification = ownCertification
+    ? { ...ownCertification, companyName: ownCertification.companyName || getClientBranding()?.displayName || '' }
+    : {
+        ...(getClientBranding()?.certification || {}),
+        companyName: getClientBranding()?.displayName || getClientBranding()?.certification?.companyName || ''
+      };
   if (isPersonalTranslator && currentUser.translatorName) {
     translatorInput.value = currentUser.translatorName;
     certToggle.checked = true;
@@ -279,7 +291,7 @@ export async function initTranslationDocs() {
   dropzone.append(
     el('div', '📄', 'icon'),
     el('div', 'Нажмите здесь или перетащите файл', 'main'),
-    el('div', 'Фото, скан или PDF — можно сразу несколько', 'sub'),
+    el('div', 'Фото, скан, PDF или Word (.docx) — можно сразу несколько', 'sub'),
     // Ethan, 21 сен 2026: "нужно добавить текст, что для перевода будет
     // расходоваться в 2 раза [больше]" — перевод (в отличие от обычного
     // распознавания) списывает страницу пакета клиента вдвое, потому что
@@ -711,6 +723,14 @@ export async function initTranslationDocs() {
     const regulationList = document.createElement('ul');
     regulationList.style.margin = '6px 0 0';
     regulationList.style.paddingLeft = '20px';
+    // Ethan, 21 сен 2026: модель иногда уверенно ошибается при чтении
+    // рукописного текста (реальный случай — отчество матери в свидетельстве
+    // о рождении прочитано неверно, при этом confidence был высоким) —
+    // явное предупреждение красным, что для документов с рукописными
+    // записями нужна финальная проверка человеком перед подачей.
+    const handwritingWarning = el('li', 'Для документов с рукописными записями (заполненные от руки бланки, архивные свидетельства и т.п.) обязательно сверьте распознанные данные с оригиналом вручную перед подачей — автоматическое распознавание может неверно прочитать почерк.');
+    handwritingWarning.style.color = 'var(--danger)';
+    handwritingWarning.style.fontWeight = '600';
     [
       `Регуляция: ${regulationTitle}`,
       regulationNoteText,
@@ -718,6 +738,7 @@ export async function initTranslationDocs() {
       'Перед подачей проверьте требования принимающего органа',
       'При необходимости заверьте перевод у уполномоченного переводчика или нотариуса'
     ].forEach(item => regulationList.append(el('li', item)));
+    regulationList.prepend(handwritingWarning);
     regulationNote.append(el('strong', 'Важная информация'), regulationList);
     renderFieldsTable(data.fields);
     renderSubjectTables(data.tables);

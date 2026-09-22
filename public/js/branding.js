@@ -355,7 +355,9 @@ export async function initBranding() {
         // пользователей (легаси, ничего не меняется). translatorName — только
         // у роли 'translator', используется панелью перевода для
         // автоподстановки в удостоверение переводчика без ручного ввода.
-        currentUser: config.currentUser || { username: '', role: 'owner', translatorName: null }
+        // certification — личный вариант приписки переводчика (Ethan, 21 сен
+        // 2026, см. api/client-profile.js) — null, если свой вариант не задан.
+        currentUser: config.currentUser || { username: '', role: 'owner', translatorName: null, certification: null }
       };
     }
   } catch (err) {
