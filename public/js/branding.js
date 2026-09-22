@@ -44,9 +44,25 @@ export function getClientBranding() {
   return cachedBranding;
 }
 
+const LAST_CLIENT_KEY = 'tamga_last_client';
+
+// Запоминает slug последнего клиента на этом браузере (Ethan, 21 сен 2026:
+// "нужно помнить ссылку") — при заходе без ?client=... в URL используется
+// запомненный slug вместо обычного бесплатного сайта. Адресную строку уже
+// поправил анти-флэш скрипт в index.html (см. там же), здесь просто читаем
+// её ещё раз — на случай, если localStorage там был недоступен.
 function resolveClientSlug() {
   const params = new URLSearchParams(window.location.search);
-  return (params.get('client') || '').trim() || null;
+  const fromUrl = (params.get('client') || '').trim() || null;
+  if (fromUrl) {
+    try { localStorage.setItem(LAST_CLIENT_KEY, fromUrl); } catch (_) {}
+    return fromUrl;
+  }
+  try {
+    return localStorage.getItem(LAST_CLIENT_KEY) || null;
+  } catch (_) {
+    return null;
+  }
 }
 
 export async function refreshClientToken(slug, token) {
@@ -208,7 +224,7 @@ async function fetchClientConfig(slug, token) {
   const headers = token ? { 'x-client-token': token } : {};
   const res = await fetch(`/api/client-config?slug=${encodeURIComponent(slug)}`, { headers });
   const body = await res.json().catch(() => ({}));
-  return { ok: res.ok, gateRequired: !!body.gateRequired, config: res.ok ? body : null };
+  return { ok: res.ok, gateRequired: !!body.gateRequired, usernameRequired: !!body.usernameRequired, config: res.ok ? body : null };
 }
 
 function applyCustomDocTypes(config) {
@@ -225,12 +241,15 @@ function applyCustomDocTypes(config) {
 // формы в промис, чтобы initBranding мог просто await'нуть результат.
 //
 // Поле логина (17 сен 2026, мультипользовательские аккаунты клиента, см.
-// lib/clientAuth.js) скрыто по умолчанию — большинство клиентов ещё без
-// отдельных пользователей, им нужен только пароль, как раньше. Если сервер
-// отвечает code:'USERNAME_REQUIRED' (у клиента уже есть пользователи, но
-// логин не был передан) — показываем поле логина и просим повторить попытку,
-// не пугая обычным "неверный пароль".
-function showGate(slug) {
+// lib/clientAuth.js) — показывается сразу, если сервер уже знает, что у
+// клиента есть отдельные пользователи (usernameRequired, см. fetchClientConfig
+// и lib/clientAuth.js:checkClientGate), иначе остаётся скрытым — легаси-клиентам
+// без отдельных пользователей нужен только пароль, как раньше. Раньше это
+// узнавалось только ПОСЛЕ первой неудачной попытки (code:'USERNAME_REQUIRED'),
+// что превращало вход в два шага — Ethan, 21 сен 2026: "2 шага это много".
+// Обработка USERNAME_REQUIRED в catch ниже оставлена как подстраховка на
+// случай гонки (клиент обзавёлся первым пользователем между двумя запросами).
+function showGate(slug, usernameRequired) {
   const gate = document.getElementById('clientGate');
   const usernameInput = document.getElementById('clientGateUsername');
   const input = document.getElementById('clientGatePassword');
@@ -238,7 +257,12 @@ function showGate(slug) {
   const errorEl = document.getElementById('clientGateError');
 
   gate.style.display = 'flex';
-  input.focus();
+  if (usernameRequired) {
+    usernameInput.style.display = '';
+    usernameInput.focus();
+  } else {
+    input.focus();
+  }
 
   return new Promise(resolve => {
     async function trySubmit() {
@@ -299,10 +323,10 @@ export async function initBranding() {
 
   try {
     let token = getClientToken();
-    let { ok, gateRequired, config } = await fetchClientConfig(slug, token);
+    let { ok, gateRequired, usernameRequired, config } = await fetchClientConfig(slug, token);
 
     if (gateRequired) {
-      token = await showGate(slug); // ждём, пока человек не введёт верный пароль
+      token = await showGate(slug, usernameRequired); // ждём, пока человек не введёт верный пароль
       ({ ok, gateRequired, config } = await fetchClientConfig(slug, token));
     }
 

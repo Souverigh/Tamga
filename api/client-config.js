@@ -44,7 +44,9 @@ module.exports = async (req, res) => {
 
     const gate = await checkClientGate({ clientSlug: slug, passwordHash: config.passwordHash, token: req.headers['x-client-token'] });
     if (!gate.ok) {
-      res.status(gate.status).json({ gateRequired: true, error: gate.message });
+      // usernameRequired — см. lib/clientAuth.js:checkClientGate — позволяет
+      // branding.js показать поле логина сразу, за один шаг.
+      res.status(gate.status).json({ gateRequired: true, error: gate.message, usernameRequired: !!gate.usernameRequired });
       return;
     }
 

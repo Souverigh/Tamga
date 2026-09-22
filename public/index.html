@@ -18,6 +18,22 @@
   (function () {
     var params = new URLSearchParams(window.location.search);
     var slug = (params.get('client') || '').trim();
+    // Если ссылку не открывали явно (?client=...) — берём slug последнего
+    // клиента на этом браузере/устройстве (см. branding.js:resolveClientSlug,
+    // Ethan, 21 сен 2026: "нужно помнить ссылку" — теперь не нужно, только
+    // сам первый переход по ?client=slug). Правим адресную строку сразу же,
+    // чтобы остальной код (branding.js, анти-флэш ниже) видел тот же slug.
+    if (!slug) {
+      try {
+        var saved = localStorage.getItem('tamga_last_client');
+        if (saved) {
+          slug = saved;
+          var url = new URL(window.location.href);
+          url.searchParams.set('client', saved);
+          window.history.replaceState(null, '', url);
+        }
+      } catch (_) {}
+    }
     if (slug) document.documentElement.classList.add('tamga-gate-pending');
   })();
 </script>
