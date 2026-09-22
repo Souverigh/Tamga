@@ -29,6 +29,8 @@
 // npm-библиотека для "разбить/перевести/склеить" не нужна: всё делается
 // напрямую над XML текстовыми узлами <w:t>, ровно то, что описывал Ethan.
 
+import { certificationBlocks } from './export.mjs';
+
 function decodeXmlEntities(text) {
   // Тот же порядок замен, что уже используется в docxLoader.js — на
   // практике безопасно, т.к. document.xml не содержит двойного экранирования.
@@ -108,17 +110,15 @@ function preservedRuns(inner) {
   return { before, after };
 }
 
-// Распаковывает .docx и возвращает список переводимых абзацев с их
-// позициями в исходном word/document.xml (нужны для точечной замены на
-// этапе склейки) — вместе с самим zip и XML-строкой, которые splice-функция
-// ниже примет обратно.
-export async function extractStructuralParagraphs(file) {
-  if (!globalThis.JSZip) throw new Error('Модуль DOCX не загрузился. Обновите страницу.');
-  const zip = await globalThis.JSZip.loadAsync(file);
-  const documentXmlFile = zip.file('word/document.xml');
-  if (!documentXmlFile) throw new Error('Файл повреждён или не является документом Word (.docx)');
-  const documentXml = await documentXmlFile.async('string');
-
+// Извлекает переводимые абзацы из ОДНОЙ xml-строки части пакета .docx
+// (word/document.xml, ИЛИ word/headerN.xml/footerN.xml — структура <w:p>
+// внутри одинаковая что в <w:body>, что в <w:hdr>/<w:ftr>, регэкспы ниже не
+// завязаны на конкретный корневой узел). idPrefix — чтобы id абзацев из
+// РАЗНЫХ частей пакета не пересекались друг с другом при сборке одного
+// общего запроса на перевод (см. extractStructuralParagraphs ниже) — должен
+// содержать только [a-zA-Z0-9_-], тот же алфавит, что и весь id целиком
+// (см. SEGMENT_ID_RE в lib/translationDocs/structuralTranslate.js).
+function extractParagraphsFromXml(xml, idPrefix) {
   const paragraphs = [];
   // (?<!\/) перед финальным ">" — реальный кейс, Ethan 19 сен 2026, файл
   // "EN SULTANALIEV AMANEL Несудимости.docx" (справка с портала "Тундук"):
@@ -155,7 +155,7 @@ export async function extractStructuralParagraphs(file) {
   const open = [];
   const leaves = [];
   let tag;
-  while ((tag = tagRe.exec(documentXml))) {
+  while ((tag = tagRe.exec(xml))) {
     if (tag[0] === '</w:p>') {
       const paragraph = open.pop();
       if (paragraph && !paragraph.hasChild) leaves.push({ ...paragraph, end: tag.index + tag[0].length });
@@ -168,7 +168,7 @@ export async function extractStructuralParagraphs(file) {
   let index = 0;
   for (const leaf of leaves) {
     const attrs = leaf.openTag.slice('<w:p'.length, -1);
-    const inner = documentXml.slice(leaf.innerStart, leaf.end - '</w:p>'.length);
+    const inner = xml.slice(leaf.innerStart, leaf.end - '</w:p>'.length);
     const pprMatch = inner.match(/^(<w:pPr>[\s\S]*?<\/w:pPr>)/);
     const pPrXml = pprMatch ? pprMatch[1] : '';
     const bodyInner = pprMatch ? inner.slice(pprMatch[1].length) : inner;
@@ -176,7 +176,7 @@ export async function extractStructuralParagraphs(file) {
     if (text === null || !text.trim()) continue;
     const kept = preservedRuns(bodyInner);
     paragraphs.push({
-      id: `p${index}`,
+      id: `${idPrefix}${index}`,
       text,
       start: leaf.start,
       end: leaf.end,
@@ -187,14 +187,39 @@ export async function extractStructuralParagraphs(file) {
     });
     index += 1;
   }
+  return paragraphs;
+}
+
+// Распаковывает .docx и возвращает список переводимых абзацев по КАЖДОЙ
+// части пакета, где может быть видимый пользователю текст — не только
+// word/document.xml (основное тело), но и колонтитулы word/headerN.xml/
+// word/footerN.xml (Ethan, 22 сен 2026: реальный случай — текст в футере
+// документа "Тест модуля перевода • 1" оставался непереведённым, потому что
+// раньше эта функция смотрела только на document.xml). Части без единого
+// переводимого абзаца (обычная ситуация для колонтитула с одним номером
+// страницы через поле, без текста) просто не попадают в parts — как раньше
+// вело бы себя отсутствие текста в document.xml.
+export async function extractStructuralParagraphs(file) {
+  if (!globalThis.JSZip) throw new Error('Модуль DOCX не загрузился. Обновите страницу.');
+  const zip = await globalThis.JSZip.loadAsync(file);
+  const documentXmlFile = zip.file('word/document.xml');
+  if (!documentXmlFile) throw new Error('Файл повреждён или не является документом Word (.docx)');
+
+  const partFiles = [documentXmlFile, ...zip.file(/^word\/(?:header|footer)\d+\.xml$/)];
+  const parts = [];
+  for (let partIndex = 0; partIndex < partFiles.length; partIndex += 1) {
+    const xml = await partFiles[partIndex].async('string');
+    const paragraphs = extractParagraphsFromXml(xml, `part${partIndex}_p`);
+    if (paragraphs.length) parts.push({ path: partFiles[partIndex].name, documentXml: xml, paragraphs });
+  }
   // Сообщение этой ошибки — служебный маркер, по нему translateOne (см.
   // translationDocs/panel.js) молча откатывается на обычное распознавание
   // (умеет доставать картинку из .docx) вместо показа ошибки человеку —
   // текст ниже не должен меняться на что-то, что не содержит эту фразу.
-  if (!paragraphs.length) {
+  if (!parts.length) {
     throw new Error('В документе не найдено переводимого текста — возможно, это скан, вставленный как картинка.');
   }
-  return { zip, documentXml, paragraphs };
+  return { zip, parts };
 }
 
 function buildRun(text, rPrXml) {
@@ -220,7 +245,77 @@ export function spliceTranslatedParagraphs(documentXml, paragraphs, translatedBy
   return xml;
 }
 
-export async function assembleTranslatedDocx(zip, newDocumentXml) {
-  zip.file('word/document.xml', newDocumentXml);
+// Форсирует фиксированную раскладку таблиц (w:tblLayout type="fixed") —
+// реальный случай, Ethan, 22 сен 2026: таблица "съезжает" за край страницы
+// после перевода на английский, хотя структура (tblGrid/tcW — ширины колонок)
+// вообще не менялась. Причина — таблицы Word по умолчанию (или явно
+// w:tblLayout type="autofit"/отсутствие тега) пересчитывают ширины колонок
+// ПО СОДЕРЖИМОМУ при каждом открытии файла; более длинный английский текст в
+// переводимых ячейках (тот же "Amount, som" вместо "Сумма, сом") раздувает
+// таблицу шире печатной области. type="fixed" заставляет Word строго
+// уважать уже заданные в файле ширины — текст просто переносится внутри
+// ячейки, как и должно быть при переводе "как есть" без изменения вёрстки.
+function forceFixedTableLayout(xml) {
+  return xml.replace(/<w:tblPr>([\s\S]*?)<\/w:tblPr>/g, (match, inner) => {
+    if (/<w:tblLayout\b/.test(inner)) {
+      return `<w:tblPr>${inner.replace(/<w:tblLayout\b[^>]*\/>/, '<w:tblLayout w:type="fixed"/>')}</w:tblPr>`;
+    }
+    return `<w:tblPr>${inner}<w:tblLayout w:type="fixed"/></w:tblPr>`;
+  });
+}
+
+// Вставляет готовый XML абзацев ПЕРЕД свойствами раздела документа
+// (<w:sectPr>, прямой потомок <w:body>, должен оставаться ПОСЛЕДНИМ элементом
+// body) — если она распознана НЕПОСРЕДСТВЕННО перед </w:body> (стандартный
+// случай для простого документа с одним разделом). Иначе — просто перед
+// </w:body>: реже встречающиеся многораздельные документы (sectPr внутри
+// pPr абзаца посреди текста) не трогаем этим регэкспом намеренно — риск
+// сломать структуру выше пользы для редкого случая.
+function appendParagraphsToBody(documentXml, paragraphsXml) {
+  if (!paragraphsXml) return documentXml;
+  const m = documentXml.match(/(<w:sectPr(?:\s[^>]*)?>[\s\S]*?<\/w:sectPr>|<w:sectPr(?:\s[^>]*)?\/>)(\s*<\/w:body>)/);
+  if (m) {
+    const idx = documentXml.indexOf(m[0]);
+    return documentXml.slice(0, idx) + paragraphsXml + m[1] + m[2] + documentXml.slice(idx + m[0].length);
+  }
+  const bodyEnd = documentXml.lastIndexOf('</w:body>');
+  if (bodyEnd === -1) return documentXml; // защитно — неожиданная структура, не трогаем вообще
+  return documentXml.slice(0, bodyEnd) + paragraphsXml + documentXml.slice(bodyEnd);
+}
+
+// Приписка переводчика для режима "Перевести как есть" (Ethan, 22 сен 2026:
+// "для Word документов нужна в конце приписка... при этом сохраняя структуру
+// оригинала") — раньше этот режим был единственным во всём модуле "Перевод"
+// без блока заверения вообще (см. шапку файла, старое "без блока
+// нотариального заверения" было осознанным решением 19 сен, но не учитывало
+// этот запрос). certificationBlocks() — та же функция и тот же формат (два
+// абзаца: язык перевода, потом язык оригинала — компания/контакты + "Настоящий
+// перевод... выполнен переводчиком ИМЯ." + "Достоверность подтверждается."),
+// что использует остальной модуль (export.mjs) — только здесь она рендерится
+// в сырой OOXML и ДОБАВЛЯЕТСЯ в конец оригинального документа, а не строит
+// документ с нуля.
+function certificationParagraphXml(text) {
+  const rPr = '<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  return `<w:p>${buildRun(text, rPr)}</w:p>`;
+}
+function buildCertificationXml(certification, targetLanguage) {
+  const blocks = certificationBlocks(certification, targetLanguage);
+  if (!blocks.length) return '';
+  return '<w:p/>' + blocks.map(b => certificationParagraphXml(b.text)).join('');
+}
+
+// parts — [{path, xml}], уже склеенные вызывающим кодом через
+// spliceTranslatedParagraphs (по одному вызову на часть — word/document.xml
+// И каждый переведённый колонтитул). Приписка переводчика добавляется
+// ТОЛЬКО в основное тело документа (word/document.xml) — в колонтитуле ей
+// не место, она и так печатается на каждой странице сама по себе.
+export async function assembleTranslatedDocx(zip, parts, certification, targetLanguage) {
+  for (const { path, xml: partXml } of parts) {
+    let xml = forceFixedTableLayout(partXml);
+    if (path === 'word/document.xml') {
+      xml = appendParagraphsToBody(xml, buildCertificationXml(certification, targetLanguage));
+    }
+    zip.file(path, xml);
+  }
   return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
 }

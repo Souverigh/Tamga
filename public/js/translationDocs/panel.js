@@ -695,13 +695,13 @@ export async function initTranslationDocs() {
       regulationNote.replaceChildren();
       regulationNote.append(el(
         'div',
-        'В этом режиме документ переводится прямо внутри оригинальной структуры файла — без оформления по нашему шаблону и без блока нотариального заверения. Доступна только выгрузка .docx.',
+        'В этом режиме документ переводится прямо внутри оригинальной структуры файла, без оформления по нашему шаблону — приписка переводчика добавляется в конец, если заполнено ФИО (см. «Переводческое» в настройках). Доступна только выгрузка .docx — конвертации в PDF для этого режима нет.',
         'admin-note'
       ));
       renderFieldsTable([]);
       renderSubjectTables([]);
       renderFamilyMembers([]);
-      renderParagraphsTable(doc.structural.paragraphs.map(p => ({ text: p.text, translated: doc.structural.translatedById.get(p.id) || '' })));
+      renderParagraphsTable(doc.structural.parts.flatMap(part => part.paragraphs).map(p => ({ text: p.text, translated: doc.structural.translatedById.get(p.id) || '' })));
       resultPanel.style.display = '';
       exportDocxBtn.disabled = false;
       exportTxtBtn.disabled = true;
@@ -762,9 +762,10 @@ export async function initTranslationDocs() {
   }
 
   // Режим "Перевести как есть" — переводит абзацы, извлечённые ПРЯМО из
-  // word/document.xml (structuralDocx.mjs), и складывает результат в
-  // doc.structural (zip + documentXml + paragraphs + переводы по id),
-  // ничего не проходя через recognizeAndTranslateDocument/pipeline.js.
+  // word/document.xml И колонтитулов (structuralDocx.mjs), и складывает
+  // результат в doc.structural (zip + parts [{path, documentXml, paragraphs}]
+  // на каждую часть + общий translatedById по id), ничего не проходя через
+  // recognizeAndTranslateDocument/pipeline.js.
   // Списывает ту же страницу пакета клиента, что и обычный путь — см.
   // lib/translationDocs/structuralTranslate.js.
   // Перевод готовых сегментов текста (общий эндпоинт для "Перевести как есть"
@@ -789,10 +790,17 @@ export async function initTranslationDocs() {
   }
 
   async function translateStructural(doc, language) {
-    const { zip, documentXml, paragraphs } = await extractStructuralParagraphs(doc.file);
-    const translated = await requestSegmentTranslation(paragraphs.map(p => ({ id: p.id, text: p.text })), language);
+    // parts — не только word/document.xml, но и колонтитулы
+    // (word/headerN.xml/footerN.xml, см. structuralDocx.mjs) — реальный
+    // случай, Ethan, 22 сен 2026: текст в футере оставался непереведённым.
+    // Все абзацы всех частей переводятся ОДНИМ запросом (id уже уникальны
+    // между частями, см. extractStructuralParagraphs) — та же страница
+    // пакета клиента списывается один раз на документ, а не за каждую часть.
+    const { zip, parts } = await extractStructuralParagraphs(doc.file);
+    const allSegments = parts.flatMap(part => part.paragraphs.map(p => ({ id: p.id, text: p.text })));
+    const translated = await requestSegmentTranslation(allSegments, language);
     const translatedById = new Map(translated.map(s => [s.id, s.text]));
-    doc.structural = { zip, documentXml, paragraphs, translatedById };
+    doc.structural = { zip, parts, translatedById, language };
     doc.result = null;
   }
 
@@ -922,9 +930,9 @@ export async function initTranslationDocs() {
     exportError.style.display = 'none';
     try {
       if (doc.structural) {
-        const { documentXml, paragraphs, translatedById, zip } = doc.structural;
-        const newXml = spliceTranslatedParagraphs(documentXml, paragraphs, translatedById);
-        const blob = await assembleTranslatedDocx(zip, newXml);
+        const { parts, translatedById, zip, language } = doc.structural;
+        const splicedParts = parts.map(part => ({ path: part.path, xml: spliceTranslatedParagraphs(part.documentXml, part.paragraphs, translatedById) }));
+        const blob = await assembleTranslatedDocx(zip, splicedParts, currentCertification(doc), language);
         downloadBlob(blob, `${safeFileName(doc.file.name)}-translation.docx`);
         return;
       }
