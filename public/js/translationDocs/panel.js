@@ -635,7 +635,17 @@ export async function initTranslationDocs() {
     familyHeading.style.display = visible.length ? '' : 'none';
     if (!visible.length) return;
     const columns = ['№', 'Ф.И.О.', 'Степень родства', 'Дата рождения', 'Перевод Ф.И.О.', 'Перевод степени родства', 'Перевод даты рождения'];
-    const tableEl = el('table', null, 'admin-table acct-header-table');
+    // Раньше делила класс "acct-header-table" с ДВУХколоночной таблицей
+    // "Реквизиты" (renderFieldsTable) — её CSS жёстко расписывает ширины
+    // только для 1-3 и последней колонки (см. accounting.css), у этой
+    // таблицы их 7: три средних колонки оставались практически без ширины
+    // при table-layout:fixed, и длинный текст ("Перевод даты рождения")
+    // переносился по одной букве на строку. ".acct-table-scroll" — тот же
+    // приём, что уже используется для широких таблиц бухгалтерии
+    // (public/js/accounting/panel.js: itemsSection) — колонки не сжимаются
+    // насильно, вместо этого появляется горизонтальный скролл, если таблица
+    // не помещается по ширине.
+    const tableEl = el('table', null, 'admin-table');
     const head = el('thead'); const headRow = el('tr');
     columns.forEach(name => headRow.append(el('th', name)));
     head.append(headRow);
@@ -650,7 +660,9 @@ export async function initTranslationDocs() {
       body.append(tr);
     });
     tableEl.append(head, body);
-    familyContainer.append(tableEl);
+    const scrollWrap = el('div', null, 'acct-table-scroll family-members-scroll');
+    scrollWrap.append(tableEl);
+    familyContainer.append(scrollWrap);
   }
 
   async function selectDoc(index) {

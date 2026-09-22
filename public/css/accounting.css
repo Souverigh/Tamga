@@ -192,6 +192,14 @@
 .acct-table-scroll td{ white-space:nowrap; }
 .acct-table-scroll th:first-child,
 .acct-table-scroll td:first-child{ min-width:190px; white-space:normal; }
+/* Таблица "Члены семьи" (public/js/translationDocs/panel.js:renderFamilyMembers)
+   переиспользует .acct-table-scroll, но её первая колонка — номер по
+   порядку ("№"), а не длинное наименование, как у строк накладной/УПД —
+   190px под одну цифру выглядел бы пустой полосой. Выше по specificity
+   (два класса) — побеждает правило .acct-table-scroll вне зависимости от
+   порядка в файле. */
+.acct-table-scroll.family-members-scroll th:first-child,
+.acct-table-scroll.family-members-scroll td:first-child{ min-width:32px; white-space:nowrap; }
 
 @media (max-width: 760px){
   .acct-accounting-wrap .acct-accounting-workspace{ grid-template-columns:1fr; }
