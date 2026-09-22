@@ -71,7 +71,7 @@ function apiErrorMessage(res, data, messages, fallback) {
   if (res.status === 504 || res.status === 408) return 'Сервер не успел обработать документ. Повторите попытку или загрузите файл поменьше.';
   return `${fallback} (код ${res.status}).`;
 }
-const MAX_PAGES_PER_DOCUMENT = 20; // тот же предел, что MAX_PDF_PAGES в ocr/pdfLoader.js и потолок списания на сервере
+const MAX_PAGES_PER_DOCUMENT = 50; // потолок списания на сервере (lib/translationDocs/structuralTranslate.js и pipeline.js, Ethan, 21 сен 2026: поднято с 20). Отдельно от MAX_PDF_PAGES в ocr/pdfLoader.js — тот лимит для обычного распознавания, этот модуль его не использует.
 
 // content — { base64, mimeType } (фото/PDF/скан из .docx) ИЛИ { sourceText }
 // (настоящий текст .docx, извлечённый docxLoader.js на клиенте) — ровно одно
@@ -276,7 +276,19 @@ export async function initTranslationDocs() {
   // --- загрузка файлов — тот же .dropzone, что у главного экрана и у
   // модуля бухгалтерии, с drag&drop. -----------------------------------------
   const dropzone = el('label', null, 'dropzone');
-  dropzone.append(el('div', '📄', 'icon'), el('div', 'Нажмите здесь или перетащите файл', 'main'), el('div', 'Фото, скан или PDF — можно сразу несколько', 'sub'));
+  dropzone.append(
+    el('div', '📄', 'icon'),
+    el('div', 'Нажмите здесь или перетащите файл', 'main'),
+    el('div', 'Фото, скан или PDF — можно сразу несколько', 'sub'),
+    // Ethan, 21 сен 2026: "нужно добавить текст, что для перевода будет
+    // расходоваться в 2 раза [больше]" — перевод (в отличие от обычного
+    // распознавания) списывает страницу пакета клиента вдвое, потому что
+    // после перевода документ ещё раз проверяется более точной моделью на
+    // расхождения с оригиналом (см. lib/translation.js:verifyTranslationAccuracy,
+    // lib/translationDocs/structuralTranslate.js и pipeline.js — оба
+    // списывают baseUnits*2).
+    el('div', 'Перевод расходует вдвое больше страниц пакета, чем обычное распознавание — документ дополнительно проверяется более точной моделью на точность перевода', 'sub')
+  );
   const fileInput = el('input'); fileInput.type = 'file';
   // .docx — Ethan, 18 сен 2026: "чтобы человек тоже мог скидывать формат".
   // Настоящий текст из .docx идёт в Gemini напрямую, без OCR (см. docxLoader.js

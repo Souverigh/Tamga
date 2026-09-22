@@ -245,12 +245,18 @@ test('translateSegments: an exact legal-phrase glossary match is substituted dir
   assert.deepEqual(JSON.parse(JSON.stringify(result.segments)), [{ id: 'a', text: 'Нотариалдык жактан күбөлөндүрүлгөн', fromLegalPhrase: true, needsReview: true }]);
 });
 
-test('translateSegments: partial glossary hints reach the Gemini instruction, and only unmatched segments are sent', async () => {
-  let sentInstruction, sentSource;
+test('translateSegments: partial glossary hints reach the Gemini instruction, and only unmatched segments are sent; a second (verification) call runs and can pass', async () => {
+  const calls = [];
   const { translateSegments } = loadCommonJs('lib/translation.js', {
     './geminiClient': { callGemini: async (args) => {
-      sentInstruction = args.instruction; sentSource = JSON.parse(args.sourceText);
-      return { result: { segments: sentSource.map(s => ({ id: s.id, text: 'ky:' + s.text })) }, usage: { totalTokenCount: 5 } };
+      calls.push(args);
+      const source = JSON.parse(args.sourceText);
+      // Различаем перевод от проверки по требуемому полю схемы ответа —
+      // translateSegments просит 'segments', verifyTranslationAccuracy 'results'.
+      if (args.requiredFields.includes('results')) {
+        return { result: { results: source.map(p => ({ id: p.id, ok: true })) }, usage: { totalTokenCount: 3 } };
+      }
+      return { result: { segments: source.map(s => ({ id: s.id, text: 'ky:' + s.text })) }, usage: { totalTokenCount: 5 } };
     }, GEMINI_MODEL: 'test' },
     './usageAnalytics': { recordUsageEvent: async () => ({ ok: true }) },
     './legalPhrases': { lookupLegalPhrases: async () => ({
@@ -262,13 +268,53 @@ test('translateSegments: partial glossary hints reach the Gemini instruction, an
     { id: 'a', text: 'Нотариально удостоверено' },
     { id: 'b', text: 'Договор вступает в силу с момента подписания сторонами.' }
   ] }, 'client-a');
-  // Only the unmatched segment reaches Gemini — the exact match is never sent.
-  assert.deepEqual(sentSource, [{ id: 'b', text: 'Договор вступает в силу с момента подписания сторонами.' }]);
-  assert.ok(sentInstruction.includes('Вступает в силу с момента подписания'));
-  assert.ok(sentInstruction.includes('Кол коюлган күндөн тартып күчүнө кирет'));
+  assert.equal(calls.length, 2); // перевод + проверка — оба реально сходили в Gemini
+  const translateCall = calls.find(c => c.requiredFields.includes('segments'));
+  const verifyCall = calls.find(c => c.requiredFields.includes('results'));
+  // Only the unmatched segment reaches translation — the exact match is never sent.
+  assert.deepEqual(JSON.parse(translateCall.sourceText), [{ id: 'b', text: 'Договор вступает в силу с момента подписания сторонами.' }]);
+  assert.ok(translateCall.instruction.includes('Вступает в силу с момента подписания'));
+  assert.ok(translateCall.instruction.includes('Кол коюлган күндөн тартып күчүнө кирет'));
+  // Verification only receives the segment that actually went through Gemini translation.
+  assert.deepEqual(JSON.parse(verifyCall.sourceText), [{ id: 'b', source: 'Договор вступает в силу с момента подписания сторонами.', translated: 'ky:Договор вступает в силу с момента подписания сторонами.' }]);
   assert.deepEqual(JSON.parse(JSON.stringify(result.segments)), [
     { id: 'a', text: 'Нотариалдык жактан күбөлөндүрүлгөн', fromLegalPhrase: true, needsReview: false },
     { id: 'b', text: 'ky:Договор вступает в силу с момента подписания сторонами.' }
   ]);
+  // Оба вызова потратили токены — итоговый usage учитывает ОБА прогона, не только перевод.
+  assert.equal(result.usage.totalTokenCount, 8);
+});
+
+test('translateSegments: a confirmed semantic mismatch from the verification pass blocks the document', async () => {
+  const { translateSegments } = loadCommonJs('lib/translation.js', {
+    './geminiClient': { callGemini: async (args) => {
+      if (args.requiredFields.includes('results')) {
+        const source = JSON.parse(args.sourceText);
+        return { result: { results: source.map(p => ({ id: p.id, ok: false, reason: 'dropped a fact' })) }, usage: null };
+      }
+      const source = JSON.parse(args.sourceText);
+      return { result: { segments: source.map(s => ({ id: s.id, text: 'translated: ' + s.text })) }, usage: null };
+    }, GEMINI_MODEL: 'test' },
+    './usageAnalytics': { recordUsageEvent: async () => ({ ok: true }) },
+    './legalPhrases': { lookupLegalPhrases: async () => ({ exact: {}, hints: [] }) }
+  });
+  await assert.rejects(
+    translateSegments({ language: 'en', segments: [{ id: 'a', text: 'Текст' }] }, 'client-a'),
+    e => e.status === 502
+  );
+});
+
+test('translateSegments: the document is NOT blocked when the verification call itself fails (fail-open)', async () => {
+  const { translateSegments } = loadCommonJs('lib/translation.js', {
+    './geminiClient': { callGemini: async (args) => {
+      if (args.requiredFields.includes('results')) throw new Error('Gemini API вернул ошибку 503');
+      const source = JSON.parse(args.sourceText);
+      return { result: { segments: source.map(s => ({ id: s.id, text: 'translated: ' + s.text })) }, usage: null };
+    }, GEMINI_MODEL: 'test' },
+    './usageAnalytics': { recordUsageEvent: async () => ({ ok: true }) },
+    './legalPhrases': { lookupLegalPhrases: async () => ({ exact: {}, hints: [] }) }
+  });
+  const result = await translateSegments({ language: 'en', segments: [{ id: 'a', text: 'Текст' }] }, 'client-a');
+  assert.equal(result.segments[0].text, 'translated: Текст');
 });
 

@@ -21,7 +21,7 @@ import { buildBlocks, isTranslatable, fitBlock, coverRects, placeLines } from '.
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.worker.mjs';
 
-const MAX_PAGES = 20; // тот же предел, что MAX_PDF_PAGES в ocr/pdfLoader.js
+const MAX_PAGES = 50; // тот же потолок, что MAX_PAGES_PER_DOCUMENT в panel.js и baseUnits в structuralTranslate.js (Ethan, 21 сен 2026: поднято с 20)
 const MIN_TRANSLATABLE_CHARS = 30;
 const SAMPLE_SCALE = 2;
 
@@ -126,8 +126,8 @@ async function loadPdf(file) {
 // Достаёт блоки текста всех страниц + отрендеренные страницы для выборки
 // цветов. Возвращает null, если это не текстовый PDF (скан/пустой).
 async function extractPages(pdf, { render }) {
-  // Длиннее предела — не переводим на месте вовсе: иначе первые 20 страниц
-  // перевелись бы, а остальные молча остались бы на исходном языке
+  // Длиннее предела — не переводим на месте вовсе: иначе первые MAX_PAGES
+  // страниц перевелись бы, а остальные молча остались бы на исходном языке
   // (найдено полной проверкой модуля 20 сен 2026). Вызывающий код уходит на
   // прежний путь; сама панель и так не принимает файлы длиннее MAX_PAGES.
   if (pdf.numPages > MAX_PAGES) return null;

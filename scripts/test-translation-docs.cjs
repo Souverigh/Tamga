@@ -370,7 +370,10 @@ async function main() {
     callGeminiImpl = async () => fakeApostilleResponse();
     const result = await recognizeAndTranslateDocument({ base64: FAKE_BASE64, mimeType: 'image/png', apiKey: 'fake', language: 'en', clientApiKey: 'ext-key-123' });
     assert.strictEqual(result.docType, 'apostille');
-    assert.strictEqual(consumeUsageCalls.length, 1);
+    // Модуль "Перевод" теперь списывает вдвое больше страниц, чем размер
+    // документа (baseUnits * 2) — перевод здесь стоит дороже из-за
+    // проверочного прогона в translateSegments (Ethan, 21 сен 2026).
+    assert.strictEqual(consumeUsageCalls.length, 2, 'один загруженный документ = 2 списанные страницы (перевод вдвое дороже)');
     assert.strictEqual(consumeUsageCalls[0].apiKey, 'ext-key-123');
     assert.strictEqual(recordUsageEventCalls.length, 1);
     assert.strictEqual(recordUsageEventCalls[0].clientRef, 'ext-key-123');
