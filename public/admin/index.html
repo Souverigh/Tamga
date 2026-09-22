@@ -49,6 +49,66 @@
       </div>
     </div>
 
+    <div class="panel">
+      <div class="admin-panel-header">
+        <div class="step-label" style="margin:0;">Пользователи клиентов</div>
+        <button class="btn-secondary" id="newUserBtn" type="button">+ Создать пользователя</button>
+      </div>
+      <div class="admin-note">Пароли хранятся только хешем и не показываются даже здесь — вместо просмотра можно задать пользователю новый пароль.</div>
+      <div id="usersEmpty" class="admin-empty" style="display:none;">Пользователей пока нет — клиенты без них входят по общему паролю сайта.</div>
+      <div id="usersTableWrap" style="display:none;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Клиент</th>
+              <th>Логин</th>
+              <th>Роль</th>
+              <th>ФИО переводчика</th>
+              <th>Создан</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Форма пользователя — создание нового или редактирование (сброс пароля/роли) существующего -->
+    <section id="userFormPanel" class="panel" style="display:none;">
+      <div class="step-label" id="userFormTitle">Новый пользователь</div>
+
+      <div class="admin-field-group">
+        <label class="admin-label">Клиент</label>
+        <select id="ufClientSlug" class="admin-input"></select>
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Логин</label>
+        <input type="text" id="ufUsername" class="admin-input" placeholder="латиница/цифры/_/-">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label" id="ufPasswordLabel">Пароль</label>
+        <input type="password" id="ufPassword" class="admin-input" placeholder="от 8 символов" autocomplete="new-password">
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">Роль</label>
+        <select id="ufRole" class="admin-input">
+          <option value="owner">owner — полный доступ, включая настройки и других пользователей</option>
+          <option value="translator">translator — только распознавание/перевод/экспорт</option>
+        </select>
+      </div>
+      <div class="admin-field-group">
+        <label class="admin-label">ФИО переводчика <span class="admin-hint">необязательно — подставляется в удостоверение переводчика</span></label>
+        <input type="text" id="ufTranslatorName" class="admin-input">
+      </div>
+
+      <div class="admin-form-actions">
+        <button class="btn-primary" id="saveUserBtn" type="button">Сохранить</button>
+        <button class="btn-secondary" id="cancelUserFormBtn" type="button">Отмена</button>
+        <button class="admin-delete-btn" id="deleteUserBtn" type="button" style="display:none;">Удалить пользователя</button>
+      </div>
+      <div id="userFormError" class="admin-error" style="display:none;"></div>
+    </section>
+
     <!-- Форма создания/редактирования — скрыта, пока не нажали «Новый клиент»/«Изменить» -->
     <section id="formPanel" class="panel" style="display:none;">
       <div class="step-label" id="formTitle">Новый клиент</div>

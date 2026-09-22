@@ -27,6 +27,7 @@ import { createIdleSession } from '../js/idleSession.js';
 import { createChipEditor } from './chipEditor.js';
 import { splitFields, ruleSummaryText } from './format.js';
 import { renderClients as renderClientsList } from './clientsList.js';
+import { renderUsers as renderUsersTable } from './clientUsersList.js';
 import { ruleFieldCatalog, refreshRuleFieldPickers as refreshPickers } from './fieldPicker.js';
 
 const SECRET_KEY = 'tamga_admin_secret';
@@ -42,6 +43,24 @@ const newClientBtn = document.getElementById('newClientBtn');
 const clientsEmpty = document.getElementById('clientsEmpty');
 const clientsTableWrap = document.getElementById('clientsTableWrap');
 const clientsBody = document.getElementById('clientsBody');
+
+const newUserBtn = document.getElementById('newUserBtn');
+const usersEmpty = document.getElementById('usersEmpty');
+const usersTableWrap = document.getElementById('usersTableWrap');
+const usersBody = document.getElementById('usersBody');
+
+const userFormPanel = document.getElementById('userFormPanel');
+const userFormTitle = document.getElementById('userFormTitle');
+const userFormError = document.getElementById('userFormError');
+const saveUserBtn = document.getElementById('saveUserBtn');
+const cancelUserFormBtn = document.getElementById('cancelUserFormBtn');
+const deleteUserBtn = document.getElementById('deleteUserBtn');
+const ufClientSlug = document.getElementById('ufClientSlug');
+const ufUsername = document.getElementById('ufUsername');
+const ufPassword = document.getElementById('ufPassword');
+const ufPasswordLabel = document.getElementById('ufPasswordLabel');
+const ufRole = document.getElementById('ufRole');
+const ufTranslatorName = document.getElementById('ufTranslatorName');
 
 const formPanel = document.getElementById('formPanel');
 const formTitle = document.getElementById('formTitle');
@@ -166,6 +185,7 @@ async function tryEnter(secret, restoring = false) {
   gate.style.display = 'none';
   adminMain.style.display = 'block';
   renderClients(clients);
+  reloadUsers();
   return true;
 }
 
@@ -179,8 +199,12 @@ if (savedSecret) {
 
 // --- Список клиентов ---
 
+let clientsCache = []; // нужен для выпадающего списка "Клиент" в форме пользователя
+
 function renderClients(clients) {
+  clientsCache = clients;
   renderClientsList({ clientsEmpty, clientsTableWrap, clientsBody }, clients, openForm);
+  populateUserClientOptions(ufClientSlug.value);
 }
 
 async function reloadClients() {
@@ -188,6 +212,124 @@ async function reloadClients() {
   if (!res.ok) return;
   renderClients(await res.json());
 }
+
+// --- Пользователи клиентов (Ethan, 21 сен 2026: "видеть всех пользователей") ---
+// Пароли необратимо хешированы (lib/clientAuth.js) — здесь только логин/роль/
+// ФИО переводчика и возможность создать пользователя или задать ему новый
+// пароль, а не посмотреть старый.
+
+function populateUserClientOptions(selected) {
+  const slugs = clientsCache.map(c => c.client_slug).filter(Boolean);
+  ufClientSlug.innerHTML = '';
+  slugs.forEach(slug => {
+    const opt = document.createElement('option');
+    opt.value = slug;
+    opt.textContent = slug;
+    ufClientSlug.appendChild(opt);
+  });
+  if (selected && slugs.includes(selected)) ufClientSlug.value = selected;
+}
+
+async function reloadUsers() {
+  const res = await adminFetch('/api/admin/client-users');
+  if (!res.ok) return;
+  const data = await res.json();
+  renderUsersTable({ usersEmpty, usersTableWrap, usersBody }, data.users || [], openUserForm);
+}
+
+let editingUser = null; // null — создаём нового; иначе {clientSlug, username} редактируемого
+
+function resetUserForm() {
+  ufUsername.value = '';
+  ufUsername.disabled = false;
+  ufClientSlug.disabled = false;
+  ufPassword.value = '';
+  ufPasswordLabel.textContent = 'Пароль';
+  ufPassword.placeholder = 'от 8 символов';
+  ufRole.value = 'translator';
+  ufTranslatorName.value = '';
+  userFormError.style.display = 'none';
+}
+
+function openUserForm(user) {
+  resetUserForm();
+  populateUserClientOptions(user ? user.clientSlug : undefined);
+  if (user) {
+    editingUser = { clientSlug: user.clientSlug, username: user.username };
+    userFormTitle.textContent = `Пользователь: ${user.username} (${user.clientSlug})`;
+    ufClientSlug.value = user.clientSlug;
+    ufClientSlug.disabled = true; // сменить клиента у существующего пользователя не поддерживаем
+    ufUsername.value = user.username;
+    ufUsername.disabled = true; // логин — часть идентификатора записи, не редактируется
+    ufPasswordLabel.textContent = 'Новый пароль';
+    ufPassword.placeholder = 'Оставьте пустым, чтобы не менять';
+    ufRole.value = user.role;
+    ufTranslatorName.value = user.translatorName || '';
+    deleteUserBtn.style.display = 'inline-block';
+  } else {
+    editingUser = null;
+    userFormTitle.textContent = 'Новый пользователь';
+    deleteUserBtn.style.display = 'none';
+  }
+  userFormPanel.style.display = 'block';
+  userFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+newUserBtn.addEventListener('click', () => openUserForm(null));
+cancelUserFormBtn.addEventListener('click', () => { userFormPanel.style.display = 'none'; });
+
+saveUserBtn.addEventListener('click', async () => {
+  userFormError.style.display = 'none';
+  if (!ufClientSlug.value) {
+    userFormError.textContent = 'Сначала создайте клиента со slug — без него у пользователя нет сайта для входа.';
+    userFormError.style.display = 'block';
+    return;
+  }
+  if (!editingUser && !ufUsername.value.trim()) {
+    userFormError.textContent = 'Укажите логин.';
+    userFormError.style.display = 'block';
+    return;
+  }
+  const payload = {
+    clientSlug: ufClientSlug.value,
+    username: ufUsername.value.trim(),
+    role: ufRole.value,
+    translatorName: ufTranslatorName.value.trim() || null
+  };
+  if (ufPassword.value) payload.password = ufPassword.value;
+  if (!editingUser && !payload.password) {
+    userFormError.textContent = 'Укажите пароль для нового пользователя.';
+    userFormError.style.display = 'block';
+    return;
+  }
+
+  const res = await adminFetch('/api/admin/client-users', {
+    method: editingUser ? 'PATCH' : 'POST',
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    userFormError.textContent = data.error || `Сервер вернул ошибку ${res.status}`;
+    userFormError.style.display = 'block';
+    return;
+  }
+  userFormPanel.style.display = 'none';
+  await reloadUsers();
+});
+
+deleteUserBtn.addEventListener('click', async () => {
+  if (!editingUser) return;
+  if (!confirm(`Удалить пользователя «${editingUser.username}» у клиента «${editingUser.clientSlug}»?`)) return;
+  const res = await adminFetch('/api/admin/client-users', { method: 'DELETE', body: JSON.stringify(editingUser) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    userFormError.textContent = data.error || 'Не удалось удалить';
+    userFormError.style.display = 'block';
+    return;
+  }
+  userFormPanel.style.display = 'none';
+  await reloadUsers();
+});
 
 // --- Блок «Переопределение полей» ---
 
