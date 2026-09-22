@@ -255,12 +255,31 @@ export function spliceTranslatedParagraphs(documentXml, paragraphs, translatedBy
 // таблицу шире печатной области. type="fixed" заставляет Word строго
 // уважать уже заданные в файле ширины — текст просто переносится внутри
 // ячейки, как и должно быть при переводе "как есть" без изменения вёрстки.
+//
+// Одного w:tblLayout type="fixed" оказалось недостаточно (тот же баг всё
+// ещё воспроизводится, Ethan, 22 сен 2026, второй репорт: таблица всё ещё
+// съезжает за край страницы). По спецификации OOXML фиксированная раскладка
+// применяется только когда у самой таблицы (w:tblW) задана ЯВНАЯ ширина —
+// если w:tblW остаётся type="auto" (типичный экспорт из Word/LibreOffice),
+// Word игнорирует "fixed" и всё равно считает общую ширину таблицы по
+// содержимому. Поэтому здесь дополнительно считаем сумму ширин колонок из
+// w:tblGrid и прописываем её в w:tblW как явную ширину в твипах (dxa).
 function forceFixedTableLayout(xml) {
-  return xml.replace(/<w:tblPr>([\s\S]*?)<\/w:tblPr>/g, (match, inner) => {
-    if (/<w:tblLayout\b/.test(inner)) {
-      return `<w:tblPr>${inner.replace(/<w:tblLayout\b[^>]*\/>/, '<w:tblLayout w:type="fixed"/>')}</w:tblPr>`;
-    }
-    return `<w:tblPr>${inner}<w:tblLayout w:type="fixed"/></w:tblPr>`;
+  return xml.replace(/<w:tbl>([\s\S]*?)<\/w:tbl>/g, (fullMatch, tblInner) => {
+    const gridSum = [...tblInner.matchAll(/<w:gridCol\s+w:w="(\d+)"/g)]
+      .reduce((sum, m) => sum + parseInt(m[1], 10), 0);
+    const patchedInner = tblInner.replace(/<w:tblPr>([\s\S]*?)<\/w:tblPr>/, (match, inner) => {
+      let next = /<w:tblLayout\b/.test(inner)
+        ? inner.replace(/<w:tblLayout\b[^>]*\/>/, '<w:tblLayout w:type="fixed"/>')
+        : `${inner}<w:tblLayout w:type="fixed"/>`;
+      if (gridSum > 0) {
+        next = /<w:tblW\b/.test(next)
+          ? next.replace(/<w:tblW\b[^>]*\/>/, `<w:tblW w:type="dxa" w:w="${gridSum}"/>`)
+          : `${next}<w:tblW w:type="dxa" w:w="${gridSum}"/>`;
+      }
+      return `<w:tblPr>${next}</w:tblPr>`;
+    });
+    return `<w:tbl>${patchedInner}</w:tbl>`;
   });
 }
 
@@ -289,7 +308,7 @@ function appendParagraphsToBody(documentXml, paragraphsXml) {
 // без блока заверения вообще (см. шапку файла, старое "без блока
 // нотариального заверения" было осознанным решением 19 сен, но не учитывало
 // этот запрос). certificationBlocks() — та же функция и тот же формат (два
-// абзаца: язык перевода, потом язык оригинала — компания/контакты + "Настоящий
+// абзаца: язык оригинала, потом язык перевода — компания/контакты + "Настоящий
 // перевод... выполнен переводчиком ИМЯ." + "Достоверность подтверждается."),
 // что использует остальной модуль (export.mjs) — только здесь она рендерится
 // в сырой OOXML и ДОБАВЛЯЕТСЯ в конец оригинального документа, а не строит

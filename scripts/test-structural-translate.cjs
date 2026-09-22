@@ -201,6 +201,11 @@ test('table layout is forced to "fixed" — translated (longer) text can no long
     assert.ok(/<w:tblPr>[\s\S]*?<w:tblLayout w:type="fixed"\/>[\s\S]*?<\/w:tblPr>/.test(outXml));
     // Ширины колонок (tblGrid) — то, что вообще заставляет "fixed" работать — не тронуты.
     assert.ok(outXml.includes('<w:gridCol w:w="2000"/>'));
+    // tblW тоже форсируется в явную ширину (сумма tblGrid) — иначе Word
+    // игнорирует "fixed" при type="auto" и всё равно считает ширину таблицы
+    // по содержимому (второй репорт того же бага, Ethan, 22 сен 2026).
+    assert.ok(!/w:tblW\s+w:type="auto"/.test(outXml), 'tblW auto должен быть заменён на явную ширину');
+    assert.ok(/<w:tblW w:type="dxa" w:w="4000"\/>/.test(outXml), 'tblW должна получить сумму ширин колонок (2000+2000)');
   });
 });
 
