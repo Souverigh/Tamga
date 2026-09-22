@@ -74,6 +74,22 @@ test('response validation rejects omissions, duplicate IDs, changed numbers and 
   for (const result of [[],[{id:'b',text:'x'}],[{id:'a',text:'124'}],[{id:'a',text:'001-234: 12.50'},{id:'a',text:'x'}],[{id:'a',text:'x'.repeat(20000)}]]) assert.throws(()=>validateTranslationResponse(source,result));
 });
 
+test('response validation tolerates pure date reformatting (separator/order) but still rejects real digit changes', () => {
+  const { validateTranslationResponse } = require('../lib/translation');
+  // Реальный случай (Ethan, 21 сен 2026): Gemini "причесал" ISO-дату
+  // 2006-09-20 в 20.09.2006 при переводе — цифры те же, порядок другой.
+  const isoDate = [{id:'a',text:'2006-09-20'}];
+  assert.equal(validateTranslationResponse(isoDate,[{id:'a',text:'20.09.2006'}])[0].text,'20.09.2006');
+  assert.equal(validateTranslationResponse(isoDate,[{id:'a',text:'09/20/2006'}])[0].text,'09/20/2006');
+  // Настоящая порча (значение дня реально изменилось: 20 -> 21) — должна
+  // по-прежнему отклоняться, а не проходить как "просто другой формат".
+  // (Перестановка САМИХ групп цифр местами — например день и месяц местами —
+  // неотличима от легитимного переформатирования даты и намеренно
+  // допускается: это и есть цена смягчения проверки под реальный случай выше.)
+  assert.throws(()=>validateTranslationResponse(isoDate,[{id:'a',text:'2006-09-21'}]));
+  assert.throws(()=>validateTranslationResponse(isoDate,[{id:'a',text:'2007-09-20'}]));
+});
+
 test('requests reject unsupported languages and large payloads before calling provider', () => {
   const { validateTranslationRequest } = require('../lib/translation');
   assert.throws(()=>validateTranslationRequest({language:'bad',segments:[{id:'a',text:'x'}]}));
