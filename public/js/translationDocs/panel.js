@@ -24,7 +24,7 @@ import { TRANSLATION_STATUSES } from '../translation/field-rules.mjs';
 // public/admin/accounting/ (тот же список файлов, что уже показал, что
 // хорошо переиспользуется между панелями — ничего в них не знает про
 // бухгалтерию конкретно, только про форму {file, status, result, error}).
-import { getClientSlug, getClientToken, getClientBranding } from '../branding.js';
+import { getClientSlug, getClientToken, getClientBranding, touchClientSession } from '../branding.js';
 import { registerTab } from '../contentTabs.js';
 import { renderFileList, renderPreview } from '../../admin/accounting/render.js';
 import { createDocsFromFiles, fileToBase64 } from '../../admin/accounting/fileQueue.js';
@@ -77,6 +77,7 @@ const MAX_PAGES_PER_DOCUMENT = 50; // потолок списания на се�
 // (настоящий текст .docx, извлечённый docxLoader.js на клиенте) — ровно одно
 // из двух, см. translateOne ниже.
 async function recognizeViaApi(token, slug, content, language, pageCount) {
+  touchClientSession(); // продлевает сессию во время долгой автоматической обработки без кликов — см. branding.js
   const res = await fetch('/api/translation-docs/client-recognize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-client-token': token },
@@ -770,6 +771,7 @@ export async function initTranslationDocs() {
   // .docx и для перевода текстового PDF на месте). pageCount — сколько
   // страниц списать с пакета клиента (у .docx — одна).
   async function requestSegmentTranslation(segments, language, pageCount) {
+    touchClientSession(); // продлевает сессию во время долгой автоматической обработки без кликов — см. branding.js
     const res = await fetch('/api/translation-docs/structural-translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-client-token': token },

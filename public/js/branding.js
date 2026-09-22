@@ -76,7 +76,19 @@ export async function refreshClientToken(slug, token) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.token) {
-    if (res.status === 401) createIdleSession(TOKEN_KEY_PREFIX + slug).clear();
+    // Ethan, 21 сен 2026: реальный репорт — разлогинивало посреди активной
+    // работы. Раньше 401 здесь сразу стирал всю сессию (сlear()) — но
+    // resolveIdentity на сервере (lib/clientAuth.js) намеренно fail-CLOSED:
+    // ЛЮБАЯ кратковременная заминка Supabase при фоновом продлении токена
+    // (это происходит раз в TOKEN_REFRESH_INTERVAL_MS при обычной активности,
+    // не только при реальной невалидности) тоже отвечает 401. Сам токен на
+    // руках у человека при этом мог быть ещё полностью рабочим — фоновый
+    // пинг на продление просто не удался разово. Теперь НЕ трогаем сессию
+    // здесь вообще: следующая активность повторит попытку продления через
+    // TOKEN_REFRESH_INTERVAL_MS, а если токен ДЕЙСТВИТЕЛЬНО невалиден —
+    // это обнаружится на настоящем запросе (recognize/translate/config) и
+    // покажет форму входа штатно, через showGate(), а не тихим стиранием
+    // сессии в фоне без объяснения.
     return null;
   }
   return data.token;
@@ -179,6 +191,24 @@ export function getClientSlug() {
 export function getClientToken() {
   const slug = resolveClientSlug();
   return slug ? getClientSession(slug).get() : null;
+}
+
+// Продлевает сессию так же, как обычная активность (клик/скролл/движение
+// мыши, см. idleSession.js) — но для случаев, когда пользователь физически
+// не трогает страницу, потому что сайт САМ занят долгой работой (пачка
+// документов, перевод — особенно с 21 сен 2026, когда перевод стал делать
+// два прогона Gemini и подорожал по времени). Без этого через час
+// автоматической обработки без единого клика человека тихо разлогинивало
+// посреди работы (реальный репорт Ethan, 21 сен 2026) — идти к серверу
+// пачка файлов продолжала, но клиентская сессия истекала и страница
+// перезагружалась под гейт пароля. Вызывается перед КАЖДЫМ запросом к
+// защищённым эндпоинтам (см. app.js/accounting/panel.js/translationDocs/panel.js).
+export function touchClientSession() {
+  const slug = resolveClientSlug();
+  if (!slug) return;
+  const session = getClientSession(slug);
+  const token = session.get(false); // notify:false — не триггерить reload, если уже истекла
+  if (token) session.set(token);
 }
 
 function applyFacade(config) {

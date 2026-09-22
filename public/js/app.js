@@ -32,7 +32,7 @@ import { showToast, showConfirm } from './ui/notify.js';
 import { isTableType, DOC_TYPES } from './config/docSchema.js';
 import { runStreamWithConcurrency } from './utils/concurrencyPool.js';
 import { createRateLimiter } from './utils/rateLimiter.js';
-import { initBranding, refreshClientUsage, getClientSlug, getClientToken, getClientBranding } from './branding.js';
+import { initBranding, refreshClientUsage, getClientSlug, getClientToken, getClientBranding, touchClientSession } from './branding.js';
 
 // White-label фасад для клиентских пилотов (?client=slug в URL) — см. branding.js.
 // Не блокирует остальную инициализацию: fail-open при сбое сети.
@@ -266,6 +266,7 @@ async function recognizePage(pageImage, mode, lang, presetType, signal, onStatus
     };
     const clientSlug = getClientSlug(); // white-label пилот (?client=slug) — см. branding.js
     const clientToken = getClientToken(); // токен гейта паролем, если у клиента он задан — см. branding.js
+    touchClientSession(); // продлевает сессию во время долгой автоматической обработки без кликов — см. branding.js
     await geminiRateLimiter.acquire(signal);
     // includeTextCheckbox — "Настройки распознавания" (Ethan, 9 сен 2026: "что
     // если человеку не нужен полный текст"), читаем ЗДЕСЬ (не параметром функции)

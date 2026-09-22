@@ -25,7 +25,7 @@
 // его DOM-агностичные модули (render.js/fileQueue.js/labels.js принимают
 // элементы/данные параметрами — ничего не знают про admin-секрет), только
 // сетевой слой и гейт свои — под клиентский токен, не под x-admin-secret.
-import { getClientSlug, getClientToken } from '../branding.js';
+import { getClientSlug, getClientToken, touchClientSession } from '../branding.js';
 import { registerTab } from '../contentTabs.js';
 import { DOC_TYPE_LABELS } from '../../admin/accounting/labels.js';
 import { renderFileList, renderPreview, renderHeaderTable, renderItemsTable, renderRules } from '../../admin/accounting/render.js';
@@ -45,6 +45,7 @@ async function getUploadFile(doc) {
 }
 
 async function recognizeViaApi(token, slug, base64, mimeType) {
+  touchClientSession(); // продлевает сессию во время долгой автоматической обработки без кликов — см. branding.js
   const res = await fetch('/api/accounting/client-recognize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-client-token': token },
