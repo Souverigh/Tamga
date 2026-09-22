@@ -51,11 +51,13 @@ const COL_L = 5240, COL_R = 5216;
 
 const TITLE = {
   ru: 'СВИДЕТЕЛЬСТВО О РОЖДЕНИИ', ky: 'ТУУЛГАНДЫГЫ ЖӨНҮНДӨ КҮБӨЛҮК', en: 'BIRTH CERTIFICATE',
-  kk: 'ТУУ ТУРАЛЫ КУӘЛІК', uz: 'TUG‘ILGANLIK HAQIDA GUVOHNOMA', tr: 'DOĞUM BELGESİ', zh: '出生证明', de: 'GEBURTSURKUNDE'
+  kk: 'ТУУ ТУРАЛЫ КУӘЛІК', uz: 'TUG‘ILGANLIK HAQIDA GUVOHNOMA', tr: 'DOĞUM BELGESİ', zh: '出生证明', de: 'GEBURTSURKUNDE',
+  it: 'CERTIFICATO DI NASCITA', es: 'CERTIFICADO DE NACIMIENTO'
 };
 const PARENTS_HEADING = {
   ru: 'РОДИТЕЛИ', ky: 'АТА-ЭНЕСИ', en: 'PARENTS', kk: 'АТА-АНАСЫ',
-  uz: 'OTA-ONASI', tr: 'EBEVEYNLER', zh: '父母', de: 'ELTERN'
+  uz: 'OTA-ONASI', tr: 'EBEVEYNLER', zh: '父母', de: 'ELTERN',
+  it: 'GENITORI', es: 'PADRES'
 };
 function fieldBlock(field) {
   if (!field?.value) return '';

@@ -35,7 +35,9 @@ const CERTIFICATION_LABELS = {
   uz: { company: 'Kompaniya', tin: 'STIR', reg: 'OKPO/ro‘yxat raqami', address: 'Manzil', phone: 'Telefon', email: 'E-mail', translator: 'Tarjimon', source: 'Asl nusxa tili', target: 'Tarjima tili', date: 'Sana', signature: 'Tarjimon imzosi' },
   tr: { company: 'Şirket', tin: 'VKN', reg: 'OKPO/kayıt numarası', address: 'Adres', phone: 'Telefon', email: 'E-posta', translator: 'Çevirmen', source: 'Orijinal dil', target: 'Çeviri dili', date: 'Tarih', signature: 'Çevirmen imzası' },
   zh: { company: '公司', tin: '税号', reg: 'OKPO/注册号', address: '地址', phone: '电话', email: '电子邮箱', translator: '译者', source: '原文语言', target: '译文语言', date: '日期', signature: '译者签名' },
-  de: { company: 'Unternehmen', tin: 'Steuernummer', reg: 'OKPO/Registrierungsnummer', address: 'Adresse', phone: 'Telefon', email: 'E-Mail', translator: 'Übersetzer', source: 'Originalsprache', target: 'Übersetzungssprache', date: 'Datum', signature: 'Unterschrift des Übersetzers' }
+  de: { company: 'Unternehmen', tin: 'Steuernummer', reg: 'OKPO/Registrierungsnummer', address: 'Adresse', phone: 'Telefon', email: 'E-Mail', translator: 'Übersetzer', source: 'Originalsprache', target: 'Übersetzungssprache', date: 'Datum', signature: 'Unterschrift des Übersetzers' },
+  it: { company: 'Azienda', tin: 'P.IVA', reg: 'OKPO/numero di registrazione', address: 'Indirizzo', phone: 'Telefono', email: 'E-mail', translator: 'Traduttore', source: 'Lingua originale', target: 'Lingua di traduzione', date: 'Data', signature: 'Firma del traduttore' },
+  es: { company: 'Empresa', tin: 'NIF', reg: 'OKPO/número de registro', address: 'Dirección', phone: 'Teléfono', email: 'Correo electrónico', translator: 'Traductor', source: 'Idioma original', target: 'Idioma de traducción', date: 'Fecha', signature: 'Firma del traductor' }
 };
 
 // Название языка ДАЁТСЯ НА ЯЗЫКЕ САМОЙ ФРАЗЫ — LANGUAGES выше фиксированно
@@ -48,16 +50,18 @@ const CERTIFICATION_LABELS = {
 // про машинный перевод на ky), поэтому для остальных 7 языков используется
 // одна и та же словарная форма в обеих позициях.
 const LANGUAGE_NAME_IN = {
-  ru: { ru: 'русский', ky: 'кыргызский', en: 'английский', kk: 'казахский', uz: 'узбекский', tr: 'турецкий', zh: 'китайский', de: 'немецкий' },
-  ky: { ru: 'орус', ky: 'кыргыз', en: 'англис', kk: 'казак', uz: 'өзбек', tr: 'түрк', zh: 'кытай', de: 'немис' },
-  en: { ru: 'Russian', ky: 'Kyrgyz', en: 'English', kk: 'Kazakh', uz: 'Uzbek', tr: 'Turkish', zh: 'Chinese', de: 'German' },
-  kk: { ru: 'орыс', ky: 'қырғыз', en: 'ағылшын', kk: 'қазақ', uz: 'өзбек', tr: 'түрік', zh: 'қытай', de: 'неміс' },
-  uz: { ru: 'rus', ky: 'qirg‘iz', en: 'ingliz', kk: 'qozoq', uz: 'o‘zbek', tr: 'turk', zh: 'xitoy', de: 'nemis' },
-  tr: { ru: 'Rusça', ky: 'Kırgızca', en: 'İngilizce', kk: 'Kazakça', uz: 'Özbekçe', tr: 'Türkçe', zh: 'Çince', de: 'Almanca' },
-  zh: { ru: '俄语', ky: '吉尔吉斯语', en: '英语', kk: '哈萨克语', uz: '乌兹别克语', tr: '土耳其语', zh: '中文', de: '德语' },
-  de: { ru: 'Russisch', ky: 'Kirgisisch', en: 'Englisch', kk: 'Kasachisch', uz: 'Usbekisch', tr: 'Türkisch', zh: 'Chinesisch', de: 'Deutsch' }
+  ru: { ru: 'русский', ky: 'кыргызский', en: 'английский', kk: 'казахский', uz: 'узбекский', tr: 'турецкий', zh: 'китайский', de: 'немецкий', it: 'итальянский', es: 'испанский' },
+  ky: { ru: 'орус', ky: 'кыргыз', en: 'англис', kk: 'казак', uz: 'өзбек', tr: 'түрк', zh: 'кытай', de: 'немис', it: 'итальян', es: 'испан' },
+  en: { ru: 'Russian', ky: 'Kyrgyz', en: 'English', kk: 'Kazakh', uz: 'Uzbek', tr: 'Turkish', zh: 'Chinese', de: 'German', it: 'Italian', es: 'Spanish' },
+  kk: { ru: 'орыс', ky: 'қырғыз', en: 'ағылшын', kk: 'қазақ', uz: 'өзбек', tr: 'түрік', zh: 'қытай', de: 'неміс', it: 'итальян', es: 'испан' },
+  uz: { ru: 'rus', ky: 'qirg‘iz', en: 'ingliz', kk: 'qozoq', uz: 'o‘zbek', tr: 'turk', zh: 'xitoy', de: 'nemis', it: 'italyan', es: 'ispan' },
+  tr: { ru: 'Rusça', ky: 'Kırgızca', en: 'İngilizce', kk: 'Kazakça', uz: 'Özbekçe', tr: 'Türkçe', zh: 'Çince', de: 'Almanca', it: 'İtalyanca', es: 'İspanyolca' },
+  zh: { ru: '俄语', ky: '吉尔吉斯语', en: '英语', kk: '哈萨克语', uz: '乌兹别克语', tr: '土耳其语', zh: '中文', de: '德语', it: '意大利语', es: '西班牙语' },
+  de: { ru: 'Russisch', ky: 'Kirgisisch', en: 'Englisch', kk: 'Kasachisch', uz: 'Usbekisch', tr: 'Türkisch', zh: 'Chinesisch', de: 'Deutsch', it: 'Italienisch', es: 'Spanisch' },
+  it: { ru: 'russo', ky: 'kirghiso', en: 'inglese', kk: 'kazako', uz: 'uzbeco', tr: 'turco', zh: 'cinese', de: 'tedesco', it: 'italiano', es: 'spagnolo' },
+  es: { ru: 'ruso', ky: 'kirguís', en: 'inglés', kk: 'kazajo', uz: 'uzbeko', tr: 'turco', zh: 'chino', de: 'alemán', it: 'italiano', es: 'español' }
 };
-const RU_LANGUAGE_GENITIVE = { ru: 'русского', ky: 'кыргызского', en: 'английского', kk: 'казахского', uz: 'узбекского', tr: 'турецкого', zh: 'китайского', de: 'немецкого' };
+const RU_LANGUAGE_GENITIVE = { ru: 'русского', ky: 'кыргызского', en: 'английского', kk: 'казахского', uz: 'узбекского', tr: 'турецкого', zh: 'китайского', de: 'немецкого', it: 'итальянского', es: 'испанского' };
 function languageNameIn(lang, code) {
   if (!code) return '—';
   return (LANGUAGE_NAME_IN[lang] || LANGUAGE_NAME_IN.en)[code] || LANGUAGES[code] || code;
@@ -97,6 +101,14 @@ const CERTIFICATION_STATEMENT = {
   de: (source, target, name) => [
     `Diese Übersetzung aus dem ${languageNameIn('de', source)} ins ${languageNameIn('de', target)} wurde von der Übersetzerin/dem Übersetzer ${name} angefertigt.`,
     'Die Richtigkeit der Übersetzung wird hiermit bestätigt.'
+  ],
+  it: (source, target, name) => [
+    `La presente traduzione dal ${languageNameIn('it', source)} al ${languageNameIn('it', target)} è stata effettuata dal traduttore ${name}.`,
+    "L'esattezza della traduzione è qui certificata."
+  ],
+  es: (source, target, name) => [
+    `La presente traducción del ${languageNameIn('es', source)} al ${languageNameIn('es', target)} fue realizada por el traductor ${name}.`,
+    'Por la presente se certifica la exactitud de la traducción.'
   ]
 };
 export function certificationBlocks({ translatorName, sourceLanguage, companyName, taxId, registrationId, address, phone, email } = {}, targetLanguage) {
@@ -149,7 +161,9 @@ export const ATTESTAT_LABELS = {
   uz: { holder: 'Ushbu hujjat berilgan', bornAt: 'Tug‘ilgan joyi va sanasi', graduated: 'Bitirgan muassasa va yili', other: 'Imzolar, muhr va tasdiqlash', number: '№' },
   tr: { holder: 'Bu belge şu kişiye verilmiştir', bornAt: 'Doğum yeri ve tarihi', graduated: 'Mezun olduğu kurum ve yıl', other: 'İmzalar, mühür ve doğrulama', number: 'No.' },
   zh: { holder: '本证书颁发给', bornAt: '出生地及出生日期', graduated: '毕业院校及毕业年份', other: '签字、印章及核验信息', number: '编号' },
-  de: { holder: 'Dieses Dokument wurde ausgestellt für', bornAt: 'Geburtsort und -datum', graduated: 'Bildungseinrichtung und Abschlussjahr', other: 'Unterschriften, Siegel und Verifizierung', number: 'Nr.' }
+  de: { holder: 'Dieses Dokument wurde ausgestellt für', bornAt: 'Geburtsort und -datum', graduated: 'Bildungseinrichtung und Abschlussjahr', other: 'Unterschriften, Siegel und Verifizierung', number: 'Nr.' },
+  it: { holder: 'Il presente documento è stato rilasciato a', bornAt: 'Luogo e data di nascita', graduated: 'Istituto e anno di diploma', other: 'Firme, timbro e verifica', number: 'N.' },
+  es: { holder: 'El presente documento ha sido expedido a', bornAt: 'Lugar y fecha de nacimiento', graduated: 'Institución educativa y año de graduación', other: 'Firmas, sello y verificación', number: 'N.º' }
 };
 const ATTESTAT_NARRATIVE_KEYS = ['country', 'documentType', 'documentNumber', 'fullName', 'birthPlace', 'birthDate', 'institution', 'graduationYear'];
 function attestatBlocks(doc) {
@@ -184,7 +198,9 @@ export const TABLE_LABELS = {
   uz: { subject: 'Fan', grade: 'Baho', subjects: 'Fanlar va baholar', finals: 'Yakuniy davlat imtihonlari' },
   tr: { subject: 'Ders', grade: 'Not', subjects: 'Dersler ve Notlar', finals: 'Final Devlet Sınavları' },
   zh: { subject: '科目', grade: '成绩', subjects: '科目及成绩', finals: '国家毕业考试成绩' },
-  de: { subject: 'Fach', grade: 'Note', subjects: 'Fächer und Noten', finals: 'Staatliche Abschlussprüfungen' }
+  de: { subject: 'Fach', grade: 'Note', subjects: 'Fächer und Noten', finals: 'Staatliche Abschlussprüfungen' },
+  it: { subject: 'Materia', grade: 'Voto', subjects: 'Materie e voti', finals: 'Esami di stato finali' },
+  es: { subject: 'Asignatura', grade: 'Calificación', subjects: 'Asignaturas y calificaciones', finals: 'Exámenes estatales finales' }
 };
 // table.section приходит от Gemini как один из двух канонических русских
 // лейблов полей (см. lib/translationDocs/documentStructures.js) независимо
@@ -210,7 +226,9 @@ export const FAMILY_TABLE_LABELS = {
   uz: { heading: 'Oila a’zolari', number: '№', fullName: 'F.I.Sh.', relationship: 'Qarindoshlik darajasi', birthDate: 'Tug‘ilgan sana' },
   tr: { heading: 'Aile üyeleri', number: 'No.', fullName: 'Ad Soyad', relationship: 'Yakınlık derecesi', birthDate: 'Doğum tarihi' },
   zh: { heading: '家庭成员', number: '序号', fullName: '姓名', relationship: '亲属关系', birthDate: '出生日期' },
-  de: { heading: 'Familienmitglieder', number: 'Nr.', fullName: 'Vollständiger Name', relationship: 'Verwandtschaftsverhältnis', birthDate: 'Geburtsdatum' }
+  de: { heading: 'Familienmitglieder', number: 'Nr.', fullName: 'Vollständiger Name', relationship: 'Verwandtschaftsverhältnis', birthDate: 'Geburtsdatum' },
+  it: { heading: 'Membri della famiglia', number: 'N.', fullName: 'Nome completo', relationship: 'Grado di parentela', birthDate: 'Data di nascita' },
+  es: { heading: 'Miembros de la familia', number: 'N.º', fullName: 'Nombre completo', relationship: 'Parentesco', birthDate: 'Fecha de nacimiento' }
 };
 // Presentation only: retain every text fragment; remove redundant empty OCR
 // lines from layout rather than treating them as Word line breaks plus margins.
@@ -253,7 +271,9 @@ export function apostilleConvention(language) {
     uz: '(1961-yil 5-oktabrdagi Gaaga konventsiyasi)',
     tr: '(5 Ekim 1961 tarihli Lahey Sözleşmesi)',
     zh: '(1961年10月5日《海牙公约》)',
-    de: '(Haager Übereinkommen vom 5. Oktober 1961)'
+    de: '(Haager Übereinkommen vom 5. Oktober 1961)',
+    it: "(Convenzione dell'Aja del 5 ottobre 1961)",
+    es: '(Convenio de La Haya del 5 de octubre de 1961)'
   }[language] || '(Convention de La Haye du 5 octobre 1961)';
 }
 

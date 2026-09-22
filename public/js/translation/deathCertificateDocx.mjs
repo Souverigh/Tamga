@@ -54,7 +54,8 @@ const TOTAL = 9500;
 
 const TITLE = {
   ru: 'СВИДЕТЕЛЬСТВО О СМЕРТИ', ky: 'ӨЛГӨНДҮГҮ ЖӨНҮНДӨ КҮБӨЛҮК', en: 'CERTIFICATE OF DEATH',
-  kk: 'ҚАЙТЫС БОЛУ ТУРАЛЫ КУӘЛІК', uz: 'VAFOT ETGANLIK HAQIDA GUVOHNOMA', tr: 'ÖLÜM BELGESİ', zh: '死亡证明', de: 'STERBEURKUNDE'
+  kk: 'ҚАЙТЫС БОЛУ ТУРАЛЫ КУӘЛІК', uz: 'VAFOT ETGANLIK HAQIDA GUVOHNOMA', tr: 'ÖLÜM BELGESİ', zh: '死亡证明', de: 'STERBEURKUNDE',
+  it: 'CERTIFICATO DI MORTE', es: 'CERTIFICADO DE DEFUNCIÓN'
 };
 // Лейбл обычным начертанием, значение жирным И подчёркнутым, на одной
 // строке — как в образце (в отличие от stacked-полей свидетельства о

@@ -49,11 +49,13 @@ const COL_A = 4991, COL_B = 4634;
 
 const PHOTO_PLACEHOLDER = {
   ru: '/ФОТО ВЛАДЕЛЬЦА/', ky: '/КАРТ ЭЭСИНИН СҮРӨТҮ/', en: '/PHOTO OF THE HOLDER/', kk: '/ИЕСІНІҢ СУРЕТІ/',
-  uz: '/EGASINING FOTOSI/', tr: '/SAHİBİNİN FOTOĞRAFI/', zh: '/持有人照片/', de: '/FOTO DES INHABERS/'
+  uz: '/EGASINING FOTOSI/', tr: '/SAHİBİNİN FOTOĞRAFI/', zh: '/持有人照片/', de: '/FOTO DES INHABERS/',
+  it: '/FOTO DEL TITOLARE/', es: '/FOTO DEL TITULAR/'
 };
 const SIGNATURE_PLACEHOLDER = {
   ru: '/подпись/', ky: '/кол коюлган/', en: '/signature/', kk: '/қолы/',
-  uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/'
+  uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/',
+  it: '/firma/', es: '/firma/'
 };
 // Статический заголовок на случай, если Gemini не смог извлечь documentType
 // (например часть образца оказалась нечитаемой) — country само по себе уже
@@ -62,7 +64,7 @@ const SIGNATURE_PLACEHOLDER = {
 const FALLBACK_TITLE = {
   ru: 'Документ, удостоверяющий личность', ky: 'Инсандыкты тастыктоочу документ', en: 'Identity document',
   kk: 'Жеке басын куәландыратын құжат', uz: 'Shaxsni tasdiqlovchi hujjat', tr: 'Kimlik belgesi',
-  zh: '身份证件', de: 'Personaldokument'
+  zh: '身份证件', de: 'Personaldokument', it: 'Documento di identità', es: 'Documento de identidad'
 };
 
 // Декоративная полоса + фотоблок слева от инфо-строки — вертикально

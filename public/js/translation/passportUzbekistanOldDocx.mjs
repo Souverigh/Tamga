@@ -51,15 +51,18 @@ const THIN = { style: 'single', sz: 4 };
 // в idCardDocx.mjs).
 const COUNTRY_NAME = {
   ru: 'РЕСПУБЛИКА УЗБЕКИСТАН', ky: 'ӨЗБЕКСТАН РЕСПУБЛИКАСЫ', en: 'REPUBLIC OF UZBEKISTAN', kk: 'ӨЗБЕКСТАН РЕСПУБЛИКАСЫ',
-  uz: 'OʻZBEKISTON RESPUBLIKASI', tr: 'ÖZBEKİSTAN CUMHURİYETİ', zh: '乌兹别克斯坦共和国', de: 'REPUBLIK USBEKISTAN'
+  uz: 'OʻZBEKISTON RESPUBLIKASI', tr: 'ÖZBEKİSTAN CUMHURİYETİ', zh: '乌兹别克斯坦共和国', de: 'REPUBLIK USBEKISTAN',
+  it: 'REPUBBLICA DELL\'UZBEKISTAN', es: 'REPÚBLICA DE UZBEKISTÁN'
 };
 const SIGNATURE_TITLE = {
   ru: 'ПОДПИСЬ ВЛАДЕЛЬЦА', ky: 'КАРТ ЭЭСИНИН КОЛУ', en: "HOLDER'S SIGNATURE", kk: 'ИЕСІНІҢ ҚОЛЫ',
-  uz: 'EGASINING IMZOSI', tr: 'SAHİBİNİN İMZASI', zh: '持证人签名', de: 'UNTERSCHRIFT DES INHABERS'
+  uz: 'EGASINING IMZOSI', tr: 'SAHİBİNİN İMZASI', zh: '持证人签名', de: 'UNTERSCHRIFT DES INHABERS',
+  it: 'FIRMA DEL TITOLARE', es: 'FIRMA DEL TITULAR'
 };
 const SIGNATURE_PLACEHOLDER = {
   ru: '/подпись/', ky: '/кол коюлган/', en: '/signature/', kk: '/қолы/',
-  uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/'
+  uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/',
+  it: '/firma/', es: '/firma/'
 };
 
 // Лейбл обычным начертанием, значение жирным — двумя абзацами внутри одной

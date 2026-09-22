@@ -35,7 +35,8 @@ const FAMILY_COLS = [700, 3800, 2500, 2500];
 const TITLE = {
   ru: 'ИНФОРМАЦИЯ О СОСТАВЕ СЕМЬИ', ky: 'ҮЙ-БҮЛӨНҮН КУРАМЫ ЖӨНҮНДӨ МААЛЫМАТ', en: 'INFORMATION ON FAMILY COMPOSITION',
   kk: 'ОТБАСЫ ҚҰРАМЫ ТУРАЛЫ АҚПАРАТ', uz: 'OILA TARKIBI HAQIDA MA’LUMOT', tr: 'AİLE BİREYLERİ HAKKINDA BİLGİ',
-  zh: '家庭成员信息', de: 'INFORMATION ÜBER DIE ZUSAMMENSETZUNG DER FAMILIE'
+  zh: '家庭成员信息', de: 'INFORMATION ÜBER DIE ZUSAMMENSETZUNG DER FAMILIE',
+  it: 'INFORMAZIONI SULLA COMPOSIZIONE FAMILIARE', es: 'INFORMACIÓN SOBRE LA COMPOSICIÓN FAMILIAR'
 };
 
 function fieldLine(field) {

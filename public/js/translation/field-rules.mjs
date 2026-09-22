@@ -9,7 +9,7 @@
 // сверено с носителем, см. TECH_DEBT.md).
 const TRANSLIT = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: 'ie', ы: 'y', ь: '', э: 'e', ю: 'iu', я: 'ia', ң: 'ng', ү: 'u', ө: 'o', ў: 'oʻ', қ: 'q', ғ: 'gʻ', ҳ: 'h' };
 const CYRILLIC_TARGET_LANGUAGES = ['ru', 'ky', 'kk'];
-const LATIN_TARGET_LANGUAGES = ['en', 'de', 'tr', 'uz', 'zh'];
+const LATIN_TARGET_LANGUAGES = ['en', 'de', 'tr', 'uz', 'zh', 'it', 'es'];
 
 // Обратное направление (латиница → кириллица) — нужно, когда исходный
 // документ уже на латинице (иностранный, напр. канадский паспорт), а язык
@@ -218,7 +218,8 @@ export function localizeMarkers(value, language) {
     zh: ['【印章】', '【签字】', '【二维码】'], en: ['[seal]', '[signature]', '[QR code]'],
     ru: ['[печать]', '[подпись]', '[QR-код]'], ky: ['[мөөр]', '[кол тамга]', '[QR-код]'],
     kk: ['[мөр]', '[қолтаңба]', '[QR-код]'], de: ['[Siegel]', '[Unterschrift]', '[QR-Code]'],
-    tr: ['[mühür]', '[imza]', '[QR kodu]'], uz: ['[muhr]', '[imzo]', '[QR-kod]']
+    tr: ['[mühür]', '[imza]', '[QR kodu]'], uz: ['[muhr]', '[imzo]', '[QR-kod]'],
+    it: ['[timbro]', '[firma]', '[codice QR]'], es: ['[sello]', '[firma]', '[código QR]']
   }[language] || ['[seal]', '[signature]', '[QR code]'];
   return value.replace(/\[seal\]/gi, markers[0]).replace(/\[signature\]/gi, markers[1]).replace(/\[qr\]/gi, markers[2]);
 }

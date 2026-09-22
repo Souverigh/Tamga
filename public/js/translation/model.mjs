@@ -1,4 +1,4 @@
-export const LANGUAGES = {ru:'Русский',ky:'Кыргызский',en:'Английский',kk:'Казахский',uz:'Узбекский',tr:'Турецкий',zh:'Китайский',de:'Немецкий'};
+export const LANGUAGES = {ru:'Русский',ky:'Кыргызский',en:'Английский',kk:'Казахский',uz:'Узбекский',tr:'Турецкий',zh:'Китайский',de:'Немецкий',it:'Итальянский',es:'Испанский'};
 
 export function splitText(text, max = 2000) {
   if (!Number.isInteger(max) || max < 2) throw new Error('Invalid chunk size');

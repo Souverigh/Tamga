@@ -45,11 +45,14 @@ const TITLE = {
   uz: 'QIRG‘IZISTON RESPUBLIKASI HUDUDIDA SHAXSNING SUDLANGANLIGI BOR (YO‘Q)LIGI HAQIDA MA’LUMOTNOMA',
   tr: 'KIRGIZ CUMHURİYETİ TOPRAKLARINDA BİR KİŞİNİN SABIKA KAYDININ VARLIĞI (YOKLUĞU) HAKKINDA BELGE',
   zh: '关于该人在吉尔吉斯共和国境内是否有犯罪记录的证明',
-  de: 'BESCHEINIGUNG ÜBER DAS VORHANDENSEIN (NICHTVORHANDENSEIN) EINES VORSTRAFENREGISTERS EINER PERSON AUF DEM GEBIET DER KIRGISISCHEN REPUBLIK'
+  de: 'BESCHEINIGUNG ÜBER DAS VORHANDENSEIN (NICHTVORHANDENSEIN) EINES VORSTRAFENREGISTERS EINER PERSON AUF DEM GEBIET DER KIRGISISCHEN REPUBLIK',
+  it: 'CERTIFICATO DI ESISTENZA (ASSENZA) DI PRECEDENTI PENALI DI UNA PERSONA SUL TERRITORIO DELLA REPUBBLICA DEL KIRGHIZISTAN',
+  es: 'CERTIFICADO DE EXISTENCIA (AUSENCIA) DE ANTECEDENTES PENALES DE UNA PERSONA EN EL TERRITORIO DE LA REPÚBLICA KIRGUISA'
 };
 const SERVICE_RESULT_HEADING = {
   ru: 'РЕЗУЛЬТАТ УСЛУГИ', ky: 'КЫЗМАТТЫН ЖЫЙЫНТЫГЫ', en: 'SERVICE RESULT', kk: 'ҚЫЗМЕТ НӘТИЖЕСІ',
-  uz: 'XIZMAT NATIJASI', tr: 'HİZMET SONUCU', zh: '服务结果', de: 'DIENSTLEISTUNGSERGEBNIS'
+  uz: 'XIZMAT NATIJASI', tr: 'HİZMET SONUCU', zh: '服务结果', de: 'DIENSTLEISTUNGSERGEBNIS',
+  it: 'RISULTATO DEL SERVIZIO', es: 'RESULTADO DEL SERVICIO'
 };
 // Ethan, 19 сен 2026: экспортируется для familyCompositionDocx.mjs — та же
 // процедурная фраза портала "Тундук", не дублируем 8 переводов.
@@ -57,7 +60,9 @@ export const QR_INSTRUCTION = {
   ru: 'Для проверки данных отсканируйте QR-код ниже:', ky: 'Маалыматты текшерүү үчүн төмөнкү QR-кодду сканерлеңиз:',
   en: 'For data verification, it is necessary to scan the QR code below:', kk: 'Деректерді тексеру үшін төмендегі QR-кодты сканерлеңіз:',
   uz: 'Ma’lumotlarni tekshirish uchun quyidagi QR-kodni skanerlang:', tr: 'Verileri doğrulamak için aşağıdaki QR kodunu tarayın:',
-  zh: '如需验证数据，请扫描下方二维码：', de: 'Zur Datenüberprüfung scannen Sie bitte den untenstehenden QR-Code:'
+  zh: '如需验证数据，请扫描下方二维码：', de: 'Zur Datenüberprüfung scannen Sie bitte den untenstehenden QR-Code:',
+  it: 'Per verificare i dati, si prega di scansionare il codice QR sottostante:',
+  es: 'Para verificar los datos, escanee el código QR que aparece a continuación:'
 };
 export const ESIGNATURE_NOTICE = {
   ru: 'На документ наложена электронная подпись Государственного портала электронных услуг.',
@@ -67,7 +72,9 @@ export const ESIGNATURE_NOTICE = {
   uz: 'Hujjatga Davlat elektron xizmatlar portalining elektron imzosi qo‘yilgan.',
   tr: 'Belgeye Devlet Elektronik Hizmetler Portalının e-imzası eklenmiştir.',
   zh: '本文件已加盖国家电子服务门户的电子签名。',
-  de: 'Das Dokument wurde mit der elektronischen Signatur des Staatlichen Portals für elektronische Dienstleistungen versehen.'
+  de: 'Das Dokument wurde mit der elektronischen Signatur des Staatlichen Portals für elektronische Dienstleistungen versehen.',
+  it: 'Il documento è stato munito della firma elettronica del Portale Statale dei Servizi Elettronici.',
+  es: 'El documento ha sido provisto de la firma electrónica del Portal Estatal de Servicios Electrónicos.'
 };
 
 function fieldLine(field) {

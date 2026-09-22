@@ -73,15 +73,18 @@ const THIN = { style: 'single', sz: 4 };
 // общие константы не импортируют, см. комментарий в idCardDocx.mjs).
 const COUNTRY_NAME = {
   ru: 'РЕСПУБЛИКА УЗБЕКИСТАН', ky: 'ӨЗБЕКСТАН РЕСПУБЛИКАСЫ', en: 'REPUBLIC OF UZBEKISTAN', kk: 'ӨЗБЕКСТАН РЕСПУБЛИКАСЫ',
-  uz: 'OʻZBEKISTON RESPUBLIKASI', tr: 'ÖZBEKİSTAN CUMHURİYETİ', zh: '乌兹别克斯坦共和国', de: 'REPUBLIK USBEKISTAN'
+  uz: 'OʻZBEKISTON RESPUBLIKASI', tr: 'ÖZBEKİSTAN CUMHURİYETİ', zh: '乌兹别克斯坦共和国', de: 'REPUBLIK USBEKISTAN',
+  it: 'REPUBBLICA DELL\'UZBEKISTAN', es: 'REPÚBLICA DE UZBEKISTÁN'
 };
 const PASSPORT_WORD = {
   ru: 'ПАСПОРТ', ky: 'ПАСПОРТ', en: 'PASSPORT', kk: 'ПАСПОРТ',
-  uz: 'PASPORT', tr: 'PASAPORT', zh: '护照', de: 'REISEPASS'
+  uz: 'PASPORT', tr: 'PASAPORT', zh: '护照', de: 'REISEPASS',
+  it: 'PASSAPORTO', es: 'PASAPORTE'
 };
 const PHOTO_PLACEHOLDER = {
   ru: '/ФОТО ВЛАДЕЛЬЦА/', ky: '/КАРТ ЭЭСИНИН СҮРӨТҮ/', en: '/PHOTO OF THE HOLDER/', kk: '/ИЕСІНІҢ СУРЕТІ/',
-  uz: '/EGASINING FOTOSI/', tr: '/SAHİBİNİN FOTOĞRAFI/', zh: '/持有人照片/', de: '/FOTO DES INHABERS/'
+  uz: '/EGASINING FOTOSI/', tr: '/SAHİBİNİN FOTOĞRAFI/', zh: '/持有人照片/', de: '/FOTO DES INHABERS/',
+  it: '/FOTO DEL TITOLARE/', es: '/FOTO DEL TITULAR/'
 };
 
 function labelPara(field) {

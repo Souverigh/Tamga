@@ -59,7 +59,8 @@ const { run, para, paraRuns, LINE_BREAK } = createTextHelpers(FONT);
 // вместо реальных имён директора/завуча/классного руководителя).
 const SIGNATURE_PLACEHOLDER = {
   ru: '/подпись/', ky: '/кол коюлган/', en: '/signature/', kk: '/қолы/',
-  uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/'
+  uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/',
+  it: '/firma/', es: '/firma/'
 };
 
 function signatureTable(rows) {

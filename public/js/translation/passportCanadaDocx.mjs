@@ -60,26 +60,31 @@ const THIN = { style: 'single', sz: 4 };
 
 const COUNTRY_NAME = {
   ru: 'КАНАДА', ky: 'КАНАДА', en: 'CANADA', kk: 'КАНАДА',
-  uz: 'KANADA', tr: 'KANADA', zh: '加拿大', de: 'KANADA'
+  uz: 'KANADA', tr: 'KANADA', zh: '加拿大', de: 'KANADA',
+  it: 'CANADA', es: 'CANADÁ'
 };
 const PASSPORT_WORD = {
   ru: 'ПАСПОРТ', ky: 'ПАСПОРТ', en: 'PASSPORT', kk: 'ПАСПОРТ',
-  uz: 'PASPORT', tr: 'PASAPORT', zh: '护照', de: 'REISEPASS'
+  uz: 'PASPORT', tr: 'PASAPORT', zh: '护照', de: 'REISEPASS',
+  it: 'PASSAPORTO', es: 'PASAPORTE'
 };
 // Тот же плейсхолдер-конвент, что и в idCardDocx.mjs (own copy — файлы
 // вёрстки типов документов друг у друга общие константы не импортируют,
 // см. комментарий там же).
 const PHOTO_PLACEHOLDER = {
   ru: '/ФОТО ВЛАДЕЛЬЦА/', ky: '/КАРТ ЭЭСИНИН СҮРӨТҮ/', en: '/PHOTO OF THE HOLDER/', kk: '/ИЕСІНІҢ СУРЕТІ/',
-  uz: '/EGASINING FOTOSI/', tr: '/SAHİBİNİN FOTOĞRAFI/', zh: '/持有人照片/', de: '/FOTO DES INHABERS/'
+  uz: '/EGASINING FOTOSI/', tr: '/SAHİBİNİN FOTOĞRAFI/', zh: '/持有人照片/', de: '/FOTO DES INHABERS/',
+  it: '/FOTO DEL TITOLARE/', es: '/FOTO DEL TITULAR/'
 };
 const SIGNATURE_PLACEHOLDER = {
   ru: '/подпись/', ky: '/кол коюлган/', en: '/signature/', kk: '/қолы/',
-  uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/'
+  uz: '/imzo/', tr: '/imza/', zh: '/签名/', de: '/Unterschrift/',
+  it: '/firma/', es: '/firma/'
 };
 const OWNER_SIGNATURE_LABEL = {
   ru: 'Подпись владельца', ky: 'Ээсинин колу', en: "Holder's signature", kk: 'Иесінің қолы',
-  uz: 'Egasining imzosi', tr: 'Sahibinin imzası', zh: '持有人签名', de: 'Unterschrift des Inhabers'
+  uz: 'Egasining imzosi', tr: 'Sahibinin imzası', zh: '持有人签名', de: 'Unterschrift des Inhabers',
+  it: 'Firma del titolare', es: 'Firma del titular'
 };
 
 function fieldLine(field) {
