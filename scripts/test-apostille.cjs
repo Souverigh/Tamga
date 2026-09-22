@@ -55,7 +55,7 @@ test('PDF rejects invalid numbering before creating a canvas', async () => {
   const doc = document(); doc.elements[10].number = '11';
   await assert.rejects(downloadTranslationPdf(doc), /apostille|\u0430\u043f\u043e\u0441\u0442\u0438\u043b/i);
 });
-test('certification footer (translator\'s note) is absent by default, and — once a translator name is given — appears across all export formats as two compact paragraphs, target language first then source language, matching the real bureau reference ("аттестат 9.docx", Ethan, 18 сен 2026); the earlier per-field bilingual layout with the статья 87 legal citation and the notary-stamp placeholder box is gone', async () => {
+test('certification footer (translator\'s note) is absent by default, and — once a translator name is given — appears across all export formats as two compact paragraphs, source language first then target language, matching the real bureau reference (Ethan, 22 сен 2026, "ОсОО Silk Road" screenshot); the earlier per-field bilingual layout with the статья 87 legal citation and the notary-stamp placeholder box is gone', async () => {
   const { buildTranslationTxt, buildDocumentXml, buildTranslationHtmlBody, certificationBlocks } = await import('../public/js/translation/export.mjs');
   const doc = document();
   assert.deepEqual(certificationBlocks(undefined, 'zh'), [], 'no translator name → no footer at all');
@@ -72,17 +72,17 @@ test('certification footer (translator\'s note) is absent by default, and — on
     // китайском абзаце имя выходит как "Ivanova A.B.", а не сырой кириллицей.
     assert.match(withFooter, /Ivanova A\.B\./);
     assert.doesNotMatch(withFooter, /本翻译由译者Иванова А\.Б\./, 'zh paragraph must not keep the raw Cyrillic name');
-    // Целевой язык (zh) первым: имя языков в самом предложении на китайском,
+    // Язык оригинала (ky) первым.
+    assert.match(withFooter, /Бул котормо кыргыз тилинен кытай тилине котормочу Иванова А\.Б\. тарабынан аткарылды/);
+    assert.match(withFooter, /Котормонун тактыгы ушул менен күбөлөндүрүлөт/);
+    // Целевой язык (zh) вторым: имя языков в самом предложении на китайском,
     // не жёстко на русском (иначе получилось бы "from Кыргызский into
     // Китайский" посреди китайского/английского текста).
     assert.match(withFooter, /本翻译由译者Ivanova A\.B\.将吉尔吉斯语译为中文/);
     assert.match(withFooter, /特此证明翻译准确无误/);
-    // Язык оригинала (ky) вторым.
-    assert.match(withFooter, /Бул котормо кыргыз тилинен кытай тилине котормочу Иванова А\.Б\. тарабынан аткарылды/);
-    assert.match(withFooter, /Котормонун тактыгы ушул менен күбөлөндүрүлөт/);
-    // Порядок: язык перевода (реципиент документа) идёт первым абзацем, язык
-    // оригинала — вторым (см. комментарий в certificationBlocks выше).
-    assert.ok(withFooter.indexOf('特此证明翻译准确无误') < withFooter.indexOf('Котормонун тактыгы'), 'target-language paragraph must come before source-language paragraph');
+    // Порядок: язык оригинала идёт первым абзацем, язык перевода — вторым
+    // (см. комментарий в certificationBlocks выше).
+    assert.ok(withFooter.indexOf('Котормонун тактыгы') < withFooter.indexOf('特此证明翻译准确无误'), 'source-language paragraph must come before target-language paragraph');
     // Старый формат (заголовок, ссылка на статью закона, рамка под печать
     // нотариуса, отдельные подписи на ky/zh) полностью убран под реальный
     // образец бюро переводов — см. certificationBlocks выше.
@@ -106,7 +106,7 @@ test('certification footer: company name/address/e-mail are transliterated to ma
     address: 'Бишкек, ул. Тестовая 1',
     email: 'тест'
   };
-  const [targetParagraph, sourceParagraph] = certificationBlocks(certification, 'en');
+  const [sourceParagraph, targetParagraph] = certificationBlocks(certification, 'en');
   // Целевой абзац — английский: латиница везде, ни одной кириллической буквы
   // в транслитерируемых полях не должно остаться.
   assert.match(targetParagraph.text, /Kompaniia Test/);

@@ -141,14 +141,14 @@ export function certificationBlocks({ translatorName, sourceLanguage, companyNam
     const line2 = contactBits ? `${contactBits}   ${sentence1}` : sentence1;
     return [line1, line2, sentence2].filter(Boolean).join('\n');
   };
-  // Целевой язык первым (его читает получатель перевода), язык оригинала
-  // вторым (нужен нотариусу/бюро) — как в реальном образце переводческой
-  // компании (Ethan, 18 сен 2026, "аттестат 9.docx"), а не построчно
-  // попарно на двух языках сразу, как было раньше. Ссылку на статью 87
-  // закона о нотариате и место под печать нотариуса убрали — в этом
-  // реальном примере их нет; если понадобятся обратно, это отдельная
-  // просьба, а не часть этой приписки.
-  return [buildParagraph(targetLanguage), buildParagraph(sourceLanguage)].filter(Boolean).map(text => ({ text }));
+  // Язык оригинала первым, язык перевода вторым — как в реальном образце
+  // переводческой компании (Ethan, 22 сен 2026, скриншот "ОсОО Silk Road":
+  // "translation from English into Russian" — сначала английский абзац,
+  // потом русский), а не построчно попарно на двух языках сразу, как было
+  // раньше. Ссылку на статью 87 закона о нотариате и место под печать
+  // нотариуса убрали — в этом реальном примере их нет; если понадобятся
+  // обратно, это отдельная просьба, а не часть этой приписки.
+  return [buildParagraph(sourceLanguage), buildParagraph(targetLanguage)].filter(Boolean).map(text => ({ text }));
 }
 
 export function documentBlocks(doc) {
